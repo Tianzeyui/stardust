@@ -1,0 +1,20 @@
+{
+  "name": "brain-plus-web",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@stread/web-os": "latest",
+    "@supabase/supabase-js": "^2.104.0",
+    "pinia": "^3.0.4",
+    "vue": "^3.4.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.0",
+    "vite": "^5.0.0"
+  }
+}
