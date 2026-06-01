@@ -1,19 +1,28 @@
-import { Button } from '@/components/ui/button'
+import { AuthPage } from '@/components/auth/AuthPage'
+import { AppLayout } from '@/components/layout/AppLayout'
+import { useAuth } from '@/contexts/AuthContext'
+import { isSupabaseConfigured } from '@/lib/supabase'
 
 function App() {
-  return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6">
-      <h1 className="text-4xl font-bold tracking-tight">
-        BrainPlus Desktop
-      </h1>
-      <p className="text-lg text-muted-foreground">
-        Electron + React + TypeScript + shadcn/ui + CopilotKit
-      </p>
-      <Button onClick={() => alert('Hello World!')}>
-        Hello World
-      </Button>
-    </div>
-  )
+  const { user, loading } = useAuth()
+  const hasConfig = isSupabaseConfigured()
+
+  // 加载中
+  if (loading && hasConfig) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-muted-foreground">加载中...</p>
+      </div>
+    )
+  }
+
+  // 未登录或未配置 → 显示认证页
+  if (!user) {
+    return <AuthPage />
+  }
+
+  // 已登录 → 显示主应用布局
+  return <AppLayout />
 }
 
 export default App
