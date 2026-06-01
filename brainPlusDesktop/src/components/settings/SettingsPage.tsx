@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Settings, Cpu, Server, Eye, EyeOff, Trash2, Plus, RefreshCw, Check, Wifi } from 'lucide-react'
+import { Settings, Cpu, Server, Trash2, Plus, RefreshCw, Check, Wrench, FolderOpen, MessageSquare, Play, ChevronDown, Loader2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -8,9 +8,11 @@ import {
 } from '@/lib/supabase'
 import {
   getCloudinaryConfig, saveCloudinaryConfig, clearCloudinaryConfig,
-  getAIModels, saveAIModels, getMCPServers, saveMCPServers,
+  getAIModels, saveAIModels,
   type AIModelConfig, type MCPServerConfig,
 } from '@/lib/config'
+import { listTools, listResources, listPrompts, callTool, readResource, getPrompt, connect, addServer as addMcpServer, updateServer as updateMcpServer, removeServer as removeMcpServer } from '@/lib/mcpClient'
+import type { MCPTool, MCPResource, MCPPrompt } from '@/types/electron'
 
 type Tab = 'general' | 'ai' | 'mcp'
 
@@ -30,6 +32,16 @@ export function SettingsPage() {
 
   // MCP
   const [servers, setServers] = useState<MCPServerConfig[]>([])
+  const [expandedSrv, setExpandedSrv] = useState<string | null>(null)
+  const [srvDetailTab, setSrvDetailTab] = useState<'tools' | 'resources' | 'prompts'>('tools')
+  const [srvTools, setSrvTools] = useState<MCPTool[]>([])
+  const [srvResources, setSrvResources] = useState<MCPResource[]>([])
+  const [srvPrompts, setSrvPrompts] = useState<MCPPrompt[]>([])
+  const [loadingDetail, setLoadingDetail] = useState(false)
+  const [callModal, setCallModal] = useState<{ type: 'tool' | 'resource' | 'prompt'; target: any } | null>(null)
+  const [callArgs, setCallArgs] = useState('{}')
+  const [callResult, setCallResult] = useState<string | null>(null)
+  const [callLoading, setCallLoading] = useState(false)
 
   useEffect(() => {
     // 通用
@@ -40,8 +52,10 @@ export function SettingsPage() {
     setUploadPreset(cc.uploadPreset)
     // AI
     setModels(getAIModels())
-    // MCP
-    setServers(getMCPServers())
+    // MCP 服务器：从 Electron 主进程加载
+    if (window.electronAPI?.mcp) {
+      window.electronAPI.mcp.getServers().then(s => setServers(s as MCPServerConfig[])).catch(() => {})
+    }
   }, [])
 
   const flashSaved = () => { setSaved(true); setTimeout(() => setSaved(false), 1500) }
@@ -113,34 +127,83 @@ export function SettingsPage() {
   }
 
   // ===== MCP =====
-  const addServer = () => {
+  const addServer = async () => {
     const s: MCPServerConfig = { id: `srv_${Date.now()}`, name: '新服务器', url: '', type: 'sse', command: '', args: [], enabled: false }
-    const next = [...servers, s]
-    setServers(next)
-    saveMCPServers(next)
+    await addMcpServer(s)
+    setServers(await window.electronAPI!.mcp.getServers() as MCPServerConfig[])
   }
 
-  const updateServer = (id: string, patch: Partial<MCPServerConfig>) => {
-    setServers((prev) => {
-      const next = prev.map((s) => (s.id === id ? { ...s, ...patch } : s))
-      saveMCPServers(next)
-      return next
-    })
+  const updateServer = async (id: string, patch: Partial<MCPServerConfig>) => {
+    await updateMcpServer(id, patch)
+    setServers(await window.electronAPI!.mcp.getServers() as MCPServerConfig[])
   }
 
-  const deleteServer = (id: string) => {
+  const deleteServer = async (id: string) => {
     if (!confirm('确定删除？')) return
-    const next = servers.filter((s) => s.id !== id)
-    setServers(next)
-    saveMCPServers(next)
+    await removeMcpServer(id)
+    setServers(await window.electronAPI!.mcp.getServers() as MCPServerConfig[])
   }
 
-  const toggleServer = (id: string) => {
-    setServers((prev) => {
-      const next = prev.map((s) => (s.id === id ? { ...s, enabled: !s.enabled } : s))
-      saveMCPServers(next)
-      return next
-    })
+  const toggleServer = async (id: string) => {
+    const srv = servers.find((s) => s.id === id)
+    if (srv) {
+      await updateMcpServer(id, { enabled: !srv.enabled })
+      setServers(await window.electronAPI!.mcp.getServers() as MCPServerConfig[])
+    }
+  }
+
+  const loadServerDetail = async (serverId: string) => {
+    if (expandedSrv === serverId) { setExpandedSrv(null); return }
+    setExpandedSrv(serverId)
+    setLoadingDetail(true)
+    setSrvTools([])
+    setSrvResources([])
+    setSrvPrompts([])
+    try {
+      const connResult = await connect(serverId)
+      if (connResult.error) {
+        console.error('MCP connect error:', connResult.error)
+      }
+      const [tools, resources, prompts] = await Promise.all([
+        listTools(serverId).catch((e) => { console.error('listTools error:', e); return [] as MCPTool[] }),
+        listResources(serverId).catch((e) => { console.error('listResources error:', e); return [] as MCPResource[] }),
+        listPrompts(serverId).catch((e) => { console.error('listPrompts error:', e); return [] as MCPPrompt[] }),
+      ])
+      setSrvTools(tools)
+      setSrvResources(resources)
+      setSrvPrompts(prompts)
+      setSrvDetailTab('tools')
+    } catch (e: any) { console.error('loadServerDetail error:', e.message) }
+    finally { setLoadingDetail(false) }
+  }
+
+  const openCallModal = (type: 'tool' | 'resource' | 'prompt', target: any) => {
+    setCallModal({ type, target })
+    setCallArgs(type === 'resource' ? '' : '{}')
+    setCallResult(null)
+  }
+
+  const executeCall = async () => {
+    if (!callModal || !expandedSrv) return
+    setCallLoading(true)
+    setCallResult(null)
+    try {
+      let result: any
+      if (callModal.type === 'tool') {
+        const args = JSON.parse(callArgs || '{}')
+        result = await callTool(expandedSrv, callModal.target.name, args)
+        setCallResult(JSON.stringify(result, null, 2))
+      } else if (callModal.type === 'resource') {
+        result = await readResource(expandedSrv, callModal.target.uri)
+        setCallResult(JSON.stringify(result, null, 2))
+      } else if (callModal.type === 'prompt') {
+        const args = JSON.parse(callArgs || '{}')
+        result = await getPrompt(expandedSrv, callModal.target.name, args)
+        setCallResult(JSON.stringify(result, null, 2))
+      }
+    } catch (e: any) {
+      setCallResult(`错误: ${e.message}`)
+    } finally { setCallLoading(false) }
   }
 
   return (
@@ -292,12 +355,12 @@ export function SettingsPage() {
             ) : (
               servers.map((srv) => (
                 <div key={srv.id} className={`rounded-lg border transition-colors ${srv.enabled ? 'border-green-500 bg-green-50/50 dark:bg-green-950/10' : 'border-border'}`}>
-                  <div className="flex items-center justify-between px-4 py-3">
+                  <div className="flex items-center justify-between px-4 py-3 cursor-pointer" onClick={() => loadServerDetail(srv.id)}>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate">{srv.name}</p>
                       <p className="text-xs text-muted-foreground truncate">{srv.url || srv.command || '未配置'}</p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                       <button
                         className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${srv.enabled ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}
                         onClick={() => toggleServer(srv.id)}
@@ -307,6 +370,7 @@ export function SettingsPage() {
                       <button className="rounded p-1 text-muted-foreground hover:text-destructive" onClick={() => deleteServer(srv.id)}>
                         <Trash2 className="h-4 w-4" />
                       </button>
+                      <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${expandedSrv === srv.id ? 'rotate-180' : ''}`} />
                     </div>
                   </div>
                   {/* 详情编辑 */}
@@ -345,11 +409,136 @@ export function SettingsPage() {
                       </div>
                     )}
                   </div>
+
+                  {/* 工具/资源/提示 查看和测试 */}
+                  {expandedSrv === srv.id && (
+                    <div className="border-t border-border px-4 py-3">
+                      <div className="flex items-center gap-1 mb-3 border-b border-border pb-2">
+                        {(['tools', 'resources', 'prompts'] as const).map((t) => (
+                          <button
+                            key={t}
+                            className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${srvDetailTab === t ? 'bg-accent' : 'text-muted-foreground hover:text-foreground'}`}
+                            onClick={() => setSrvDetailTab(t)}
+                          >
+                            {t === 'tools' && <Wrench className="h-3 w-3" />}
+                            {t === 'resources' && <FolderOpen className="h-3 w-3" />}
+                            {t === 'prompts' && <MessageSquare className="h-3 w-3" />}
+                            {t === 'tools' ? `工具 (${srvTools.length})` : t === 'resources' ? `资源 (${srvResources.length})` : `提示 (${srvPrompts.length})`}
+                          </button>
+                        ))}
+                      </div>
+
+                      {loadingDetail ? (
+                        <p className="py-8 text-center text-xs text-muted-foreground"><Loader2 className="mr-1 inline h-3 w-3 animate-spin" />加载中...</p>
+                      ) : (
+                        <>
+                          {srvDetailTab === 'tools' && (
+                            srvTools.length === 0 ? (
+                              <p className="py-8 text-center text-xs text-muted-foreground">未发现工具</p>
+                            ) : (
+                              <div className="space-y-2 max-h-64 overflow-auto">
+                                {srvTools.map((tool) => (
+                                  <div key={tool.name} className="flex items-start justify-between rounded border border-border p-2">
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-xs font-medium">{tool.name}</p>
+                                      <p className="text-[10px] text-muted-foreground line-clamp-2">{tool.description || '无描述'}</p>
+                                    </div>
+                                    <Button size="sm" variant="outline" className="ml-2 h-6 text-[10px] shrink-0" onClick={() => openCallModal('tool', tool)}>
+                                      <Play className="mr-1 h-2.5 w-2.5" />调用
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            )
+                          )}
+                          {srvDetailTab === 'resources' && (
+                            srvResources.length === 0 ? (
+                              <p className="py-8 text-center text-xs text-muted-foreground">未发现资源</p>
+                            ) : (
+                              <div className="space-y-2 max-h-64 overflow-auto">
+                                {srvResources.map((res) => (
+                                  <div key={res.uri} className="flex items-start justify-between rounded border border-border p-2">
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-xs font-medium truncate">{res.name || res.uri}</p>
+                                      <p className="text-[10px] text-muted-foreground font-mono truncate">{res.uri}</p>
+                                    </div>
+                                    <Button size="sm" variant="outline" className="ml-2 h-6 text-[10px] shrink-0" onClick={() => openCallModal('resource', res)}>
+                                      <Play className="mr-1 h-2.5 w-2.5" />读取
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            )
+                          )}
+                          {srvDetailTab === 'prompts' && (
+                            srvPrompts.length === 0 ? (
+                              <p className="py-8 text-center text-xs text-muted-foreground">未发现提示</p>
+                            ) : (
+                              <div className="space-y-2 max-h-64 overflow-auto">
+                                {srvPrompts.map((prompt) => (
+                                  <div key={prompt.name} className="flex items-start justify-between rounded border border-border p-2">
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-xs font-medium">{prompt.name}</p>
+                                      <p className="text-[10px] text-muted-foreground line-clamp-2">{prompt.description || '无描述'}</p>
+                                    </div>
+                                    <Button size="sm" variant="outline" className="ml-2 h-6 text-[10px] shrink-0" onClick={() => openCallModal('prompt', prompt)}>
+                                      <Play className="mr-1 h-2.5 w-2.5" />执行
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            )
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))
             )}
           </div>
         )}
+
+        {/* 调用弹窗 */}
+        {callModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setCallModal(null)}>
+            <div className="max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="font-semibold text-sm">
+                  {callModal.type === 'tool' ? `调用工具: ${callModal.target.name}` :
+                   callModal.type === 'resource' ? `读取资源: ${callModal.target.name || callModal.target.uri}` :
+                   `执行提示: ${callModal.target.name}`}
+                </h3>
+                <button className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => setCallModal(null)}>
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {callModal.type !== 'resource' && (
+                <div className="mb-4">
+                  <Label className="text-xs">参数 (JSON)</Label>
+                  <textarea
+                    className="mt-1 h-24 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+                    value={callArgs}
+                    onChange={(e) => setCallArgs(e.target.value)}
+                  />
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 mb-4">
+                <Button size="sm" onClick={executeCall} disabled={callLoading}>
+                  {callLoading && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                  执行
+                </Button>
+              </div>
+
+              {callResult !== null && (
+                <pre className="max-h-48 overflow-auto rounded-md bg-muted p-3 font-mono text-xs whitespace-pre-wrap break-all">{callResult}</pre>
+              )}
+            </div>
+          </div>
+        )}
+        {/* end of call modal */}
       </div>
     </div>
   )

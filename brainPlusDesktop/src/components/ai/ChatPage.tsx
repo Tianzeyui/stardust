@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { Send, Loader2, Bot, User, ChevronDown, Wrench, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { chat, getChatModel } from '@/lib/chatService'
+import { chat, getChatModel, type ChatStreamEvent } from '@/lib/chatService'
 import { getAIModels, type AIModelConfig } from '@/lib/config'
 import type { ModelMessage } from 'ai'
 import ReactMarkdown from 'react-markdown'
@@ -48,17 +48,28 @@ export function ChatPage() {
         .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
 
       let streamed = ''
-      await chat(history, (chunk) => {
-        streamed += chunk
-        setMessages((prev) => {
-          const next = [...prev]
-          const last = next[next.length - 1]
-          if (last?.role === 'assistant') {
-            last.content = streamed
-            last.streaming = true
-          }
-          return [...next]
-        })
+      await chat(history, (event: ChatStreamEvent) => {
+        if (event.type === 'text-delta') {
+          streamed += event.text || ''
+          setMessages((prev) => {
+            const next = [...prev]
+            const last = next[next.length - 1]
+            if (last?.role === 'assistant') {
+              last.content = streamed
+              last.streaming = true
+            }
+            return [...next]
+          })
+        } else if (event.type === 'tool-call') {
+          setMessages((prev) => {
+            const next = [...prev]
+            const last = next[next.length - 1]
+            if (last?.role === 'assistant') {
+              last.content = streamed + `\n\n🔧 调用工具: ${event.toolName}...`
+            }
+            return [...next]
+          })
+        }
       })
 
       setMessages((prev) => {
