@@ -5,6 +5,7 @@ import { AIPage } from '@/components/ai/AIPage'
 import { DiaryPage } from '@/components/diary/DiaryPage'
 import { InspirationPage } from '@/components/inspiration/InspirationPage'
 import { SettingsPage } from '@/components/settings/SettingsPage'
+import { SkillsPage } from '@/components/skills/SkillsPage'
 
 export function AppLayout() {
   const [activeNav, setActiveNav] = useState<NavItem>('chat')
@@ -32,6 +33,7 @@ export function AppLayout() {
         {activeNav === 'ai' && <AIPage />}
         {activeNav === 'diary' && <DiaryPage />}
         {activeNav === 'inspiration' && <InspirationPage />}
+        {activeNav === 'skills' && <SkillsPage />}
         {activeNav === 'settings' && <SettingsPage />}
       </main>
     </div>

@@ -3,6 +3,7 @@ import {
   Bot,
   BookOpen,
   Lightbulb,
+  Package,
   Settings,
   LogOut,
   Brain,
@@ -13,7 +14,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
 
-export type NavItem = 'chat' | 'ai' | 'diary' | 'inspiration' | 'settings'
+export type NavItem = 'chat' | 'ai' | 'diary' | 'inspiration' | 'skills' | 'settings'
 
 interface SidebarProps {
   activeNav: NavItem
@@ -27,6 +28,7 @@ const navItems: { id: NavItem; label: string; icon: typeof BookOpen }[] = [
   { id: 'ai', label: 'AI 工具箱', icon: MessageSquare },
   { id: 'diary', label: '日记', icon: BookOpen },
   { id: 'inspiration', label: '灵感记录', icon: Lightbulb },
+  { id: 'skills', label: 'Skills', icon: Package },
   { id: 'settings', label: '设置', icon: Settings },
 ]
 
