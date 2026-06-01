@@ -5,7 +5,6 @@ import { DiaryTimeline } from './DiaryTimeline'
 import { DiaryContent } from './DiaryContent'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { fetchDiaryEntries, upsertDiaryEntry } from '@/lib/diaryService'
-import { AIPlaceholder } from '@/components/ai/AIPlaceholder'
 import type { DiaryEntry } from '@/types/diary'
 
 function todayStr(): string {
@@ -57,7 +56,11 @@ export function DiaryPage() {
   }
 
   if (!isSupabaseConfigured()) {
-    return <AIPlaceholder />
+    return (
+      <div className="flex h-full items-center justify-center text-muted-foreground">
+        <p className="text-sm">请先配置 Supabase 连接</p>
+      </div>
+    )
   }
 
   return (

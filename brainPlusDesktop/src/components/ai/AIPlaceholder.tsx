@@ -7,7 +7,7 @@ export function AIPlaceholder() {
         <MessageSquare className="h-10 w-10 text-primary/60" />
       </div>
       <div className="text-center">
-        <h2 className="text-xl font-semibold text-foreground">AI 助手</h2>
+        <h2 className="text-xl font-semibold text-foreground">AI 工具箱</h2>
         <p className="mt-2 text-sm">在左侧选择应用开始使用</p>
       </div>
     </div>

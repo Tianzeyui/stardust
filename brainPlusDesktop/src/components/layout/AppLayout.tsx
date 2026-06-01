@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Sidebar, type NavItem } from './Sidebar'
-import { AIPlaceholder } from '@/components/ai/AIPlaceholder'
+import { AIPage } from '@/components/ai/AIPage'
 import { DiaryPage } from '@/components/diary/DiaryPage'
 
 export function AppLayout() {
@@ -25,7 +25,7 @@ export function AppLayout() {
 
       {/* 右侧内容区 */}
       <main className="flex-1 overflow-auto relative">
-        {activeNav === 'ai' && <AIPlaceholder />}
+        {activeNav === 'ai' && <AIPage />}
         {activeNav === 'diary' && <DiaryPage />}
       </main>
     </div>

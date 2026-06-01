@@ -23,7 +23,7 @@ interface SidebarProps {
 }
 
 const navItems: { id: NavItem; label: string; icon: typeof BookOpen }[] = [
-  { id: 'ai', label: 'AI 助手', icon: MessageSquare },
+  { id: 'ai', label: 'AI 工具箱', icon: MessageSquare },
   { id: 'diary', label: '日记', icon: BookOpen },
 ]
 
