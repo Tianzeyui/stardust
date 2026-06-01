@@ -1,7 +1,11 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 import path from 'path'
+import fs from 'fs'
 import { fileURLToPath } from 'url'
 import { mcpService, type MCPServer } from './main/mcp/MCPService.js'
+import { executeJS, executePython, preInit } from './main/sandboxService.js'
+import { initWorkspace, getWorkspacePaths, listOutputFiles, openFile, deleteFile, clearOutputFiles } from './main/workspace.js'
+import { writeSkillFiles, readSkillFile, deleteSkillFiles } from './main/skillDiskStore.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -104,9 +108,137 @@ ipcMain.handle('mcp:getPrompt', async (_event, serverId: string, promptName: str
   return mcpService.getPrompt(serverId, promptName, args)
 })
 
+// ==================== Dialog IPC ====================
+
+ipcMain.handle('dialog:openDirectory', async () => {
+  try {
+    const result = await dialog.showOpenDialog(mainWindow!, {
+      properties: ['openDirectory'],
+      title: '选择 Skill 目录',
+    })
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, error: '用户取消选择' }
+    }
+    return { success: true, path: result.filePaths[0] }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+// ==================== File System IPC ====================
+
+ipcMain.handle('fs:readFile', async (_event, filePath: string) => {
+  try {
+    return { success: true, content: fs.readFileSync(filePath, 'utf-8') }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+ipcMain.handle('fs:exists', async (_event, filePath: string) => {
+  return fs.existsSync(filePath)
+})
+
+ipcMain.handle('fs:listDir', async (_event, dirPath: string) => {
+  try {
+    const files = fs.readdirSync(dirPath)
+    return { success: true, files }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+ipcMain.handle('fs:stat', async (_event, filePath: string) => {
+  try {
+    const stat = fs.statSync(filePath)
+    return {
+      success: true,
+      stat: {
+        isFile: stat.isFile(),
+        isDirectory: stat.isDirectory(),
+        size: stat.size,
+        mtime: stat.mtime.toISOString(),
+      },
+    }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+ipcMain.handle('fs:writeFile', async (_event, filePath: string, content: string) => {
+  try {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true })
+    fs.writeFileSync(filePath, content, 'utf-8')
+    return { success: true }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+ipcMain.handle('fs:mkdir', async (_event, dirPath: string) => {
+  try {
+    fs.mkdirSync(dirPath, { recursive: true })
+    return { success: true }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+ipcMain.handle('fs:unlink', async (_event, filePath: string) => {
+  try {
+    if (fs.existsSync(filePath)) {
+      const stat = fs.statSync(filePath)
+      if (stat.isDirectory()) {
+        fs.rmSync(filePath, { recursive: true, force: true })
+      } else {
+        fs.unlinkSync(filePath)
+      }
+    }
+    return { success: true }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+// ==================== Skills Disk IPC ====================
+
+ipcMain.handle('skills:writeFiles', async (_event, skillId: string, files: Record<string, string>) => {
+  return writeSkillFiles(skillId, files)
+})
+
+ipcMain.handle('skills:readFile', async (_event, skillId: string, filePath: string) => {
+  return readSkillFile(skillId, filePath)
+})
+
+ipcMain.handle('skills:deleteFiles', async (_event, skillId: string) => {
+  return deleteSkillFiles(skillId)
+})
+
+// ==================== Sandbox IPC ====================
+
+ipcMain.handle('sandbox:executeJS', async (_event, code: string, packages?: string[]) => {
+  return executeJS(code, packages)
+})
+
+ipcMain.handle('sandbox:executePython', async (_event, code: string, packages?: string[]) => {
+  return executePython(code, packages)
+})
+
+// ==================== Workspace IPC ====================
+
+ipcMain.handle('workspace:getPaths', () => getWorkspacePaths())
+ipcMain.handle('workspace:listOutputs', () => listOutputFiles())
+ipcMain.handle('workspace:openFile', (_event, filePath: string) => openFile(filePath))
+ipcMain.handle('workspace:deleteFile', (_event, filePath: string) => deleteFile(filePath))
+ipcMain.handle('workspace:clearOutputs', () => clearOutputFiles())
+
 // ==================== App Lifecycle ====================
 
-app.whenReady().then(createWindow)
+app.whenReady().then(() => {
+  preInit()
+  initWorkspace()
+  createWindow()
+})
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

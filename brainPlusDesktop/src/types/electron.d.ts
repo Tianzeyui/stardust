@@ -39,6 +39,34 @@ export interface MCPPrompt {
 
 export interface ElectronAPI {
   platform: string
+  dialog: {
+    openDirectory: () => Promise<{ success: boolean; path?: string; error?: string }>
+  }
+  workspace: {
+    getPaths: () => Promise<{ root: string; output: string; input: string }>
+    listOutputs: () => Promise<Array<{ name: string; path: string; size: number }>>
+    openFile: (filePath: string) => Promise<void>
+    deleteFile: (filePath: string) => Promise<boolean>
+    clearOutputs: () => Promise<number>
+  }
+  sandbox: {
+    executeJS: (code: string, packages?: string[]) => Promise<{ success: boolean; result?: string; error?: string }>
+    executePython: (code: string, packages?: string[]) => Promise<{ success: boolean; result?: string; error?: string }>
+  }
+  fs: {
+    readFile: (filePath: string) => Promise<{ success: boolean; content?: string; error?: string }>
+    exists: (filePath: string) => Promise<boolean>
+    listDir: (dirPath: string) => Promise<{ success: boolean; files?: string[]; error?: string }>
+    stat: (filePath: string) => Promise<{ success: boolean; stat?: { isFile: boolean; isDirectory: boolean; size: number; mtime: string }; error?: string }>
+    writeFile: (filePath: string, content: string) => Promise<{ success: boolean; error?: string }>
+    mkdir: (dirPath: string) => Promise<{ success: boolean; error?: string }>
+    unlink: (filePath: string) => Promise<{ success: boolean; error?: string }>
+  }
+  skills: {
+    writeFiles: (skillId: string, files: Record<string, string>) => Promise<{ success: boolean; error?: string }>
+    readFile: (skillId: string, filePath: string) => Promise<{ success: boolean; content?: string; error?: string }>
+    deleteFiles: (skillId: string) => Promise<{ success: boolean; error?: string }>
+  }
   mcp: {
     getServers: () => Promise<MCPServerConfig[]>
     addServer: (config: MCPServerConfig) => Promise<{ success: boolean }>

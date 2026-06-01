@@ -146,6 +146,235 @@ type AgentEvent =
   | { type: 'done' }
 ```
 
+### 3.5 Skills 体系实现
+
+Skills 是扩展 AI 能力的可安装模块。每个 Skill 本质上是一个 **MCP Server 包**，通过 `npx` 或 `uvx` 作为 stdio 进程运行。
+
+#### 3.5.1 Skills 形态
+
+```
+Skill = MCP Server (stdio)
+
+  用户从 GitHub 下载安装
+        │
+        ▼
+  ┌─────────────────────────────┐
+  │  skill-pdf-extractor/        │
+  │  ├── SKILL.md                │  ← 可选：知识指令
+  │  ├── package.json            │  ← JS/TS skill
+  │  │   (或 pyproject.toml)     │  ← Python skill
+  │  ├── src/                    │
+  │  └── scripts/                │
+  └─────────────────────────────┘
+        │
+        ▼ 安装 = 注册为 stdio MCP Server
+  {
+    id: "skill-pdf-extractor",
+    name: "PDF 提取",
+    type: "stdio",
+    command: "npx",           ← 或 uvx
+    args: ["-y", "/path/to/skill-pdf-extractor"]
+  }
+```
+
+**为什么包装为 MCP Server 而非直接执行脚本？**
+
+| 方式 | 问题 | MCP Server 优势 |
+|------|------|------|
+| 直接执行 `.py` | 依赖用户环境、无隔离 | uv 自动隔离 Python 环境 |
+| 直接执行 `.js` | 无工具发现机制 | listTools() 自动暴露能力 |
+| SKILL.md 纯文本 | AI 只能读指令，不能执行 | 有工具可调用，能实际做事 |
+
+SKILL.md 是**知识层**，MCP Server 是**执行层**，一个 Skill 可以同时包含两者。
+
+#### 3.5.2 运行时环境
+
+Electron 内置 Node.js，再嵌入 `uv` 单二进制文件（~20MB），覆盖几乎所有 Skill：
+
+```
+Electron App
+├── Node.js (内置)    → npx / npx -y <pkg>     覆盖 ~60% (JS/TS Skills)
+└── binaries/uv       → uvx <pkg>               覆盖 ~35% (Python Skills)
+    (首次运行时自动下载 python-standalone)
+```
+
+用户无需安装任何额外环境。
+
+```ts
+// electron/main/skillRuntime.ts
+import { spawn } from 'child_process'
+import { app } from 'electron'
+import path from 'path'
+
+const UV_BIN = path.join(app.getAppPath(), 'binaries', 'uv')
+
+export function runSkill(
+  runtime: 'npx' | 'uvx',
+  pkgPath: string,
+  env?: Record<string, string>,
+) {
+  const cmd = runtime === 'uvx' ? UV_BIN : 'npx'
+  const args = runtime === 'uvx'
+    ? ['run', '--with', pkgPath, ...(env?.ARGS?.split(' ') || [])]
+    : ['-y', pkgPath]
+  
+  return spawn(cmd, args, {
+    env: {
+      ...process.env,
+      UV_PYTHON_INSTALL_DIR: path.join(app.getPath('userData'), 'python'),
+      ...env,
+    },
+  })
+}
+```
+
+#### 3.5.3 安装流程
+
+```
+用户操作                         系统行为
+────────                        ────────
+1. 从 GitHub 下载 skill 目录
+   或 git clone
+                                2. 解析 skill 目录：
+                                   - 有 package.json → runtime = npx
+                                   - 有 pyproject.toml → runtime = uvx
+
+3. 在设置页点"安装 Skill"
+   选择本地目录
+                                4. addMcpServer({
+                                     name: 从 package.json 读取,
+                                     type: "stdio",
+                                     command: runtime,
+                                     args: [pkgPath]
+                                   })
+
+                                5. MCPService.spawn(runtime, args)
+                                6. connect() → listTools()
+                                7. 工具自动出现在聊天中
+```
+
+#### 3.5.4 SKILL.md 渐进式加载
+
+如果 Skill 包含 `SKILL.md`，Skill Registry 在初始化时解析它：
+
+```
+skillRegistry.init()
+  → 扫描所有已安装 skills 的 SKILL.md
+  → 提取 name + description (frontmatter)
+  → 注入 system prompt: "可用技能: [pdf-extractor: 提取PDF表格数据]"
+  → (仅 ~50 tokens，不占上下文)
+
+AI 判断需要时:
+  → 调用 read_skill("pdf-extractor")
+  → 加载完整 SKILL.md 指令
+  → 按指令调用 MCP 工具完成任务
+```
+
+#### 3.5.5 与 Phase 1 MCP 架构的关系
+
+Skill 体系完全复用 Phase 1 的 MCP 基础设施：
+
+```
+Skill Registry（新增）
+    │
+    ▼
+MCPService（Phase 1，已有）          chatService（Phase 1，已有）
+    │                                    │
+    ▼                                    ▼
+Skill 安装 = addMcpServer()        工具注入 = getMCPSdkTools()
+Skill 运行 = stdio transport       工具调用 = AI SDK tool_call
+```
+
+不需要改动 MCPService 或 chatService，Skill 只是一个新入口。
+
+### 3.6 沙箱执行 (Sandbox)
+
+让 AI 动态写代码并安全执行的能力。与 MCP stdio（预包装工具）互补——MCP 负责确定性重计算，沙箱负责 AI 临时生成的小代码片段。
+
+#### 3.6.1 三层沙箱策略
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                     Skill 执行策略                        │
+│                                                         │
+│  简单脚本 (JS/TS)     → QuickJS WASM    ~2MB, 5ms      │
+│  例: JSON 变换、API 调用、文本处理       AI 可动态写代码 │
+│                                                         │
+│  复杂脚本 (Python)    → @runno/sandbox   WASM Python     │
+│  例: 数据分析、图表     (库受限，按需扩展)              │
+│                                                         │
+│  重计算 (任意语言)    → MCP stdio        npx/uvx 进程   │
+│  例: PDF、ML 推理      完整环境、已实现                  │
+└─────────────────────────────────────────────────────────┘
+```
+
+#### 3.6.2 QuickJS WASM 沙箱
+
+轻量 JS 运行时，编译为 ~2MB 的 `.wasm` 文件，嵌入 Electron。
+
+```ts
+// electron/main/sandboxService.ts
+import { loadQuickJs } from '@sebastianwessel/quickjs'
+
+class SandboxService {
+  private runSandboxed: any
+
+  async init() {
+    const { runSandboxed } = await loadQuickJs()
+    this.runSandboxed = runSandboxed
+  }
+
+  async executeJS(code: string, opts?: {
+    allowFetch?: boolean    // 是否允许 HTTP 请求
+    allowFs?: boolean       // 是否允许虚拟文件系统
+    env?: Record<string, string>
+    timeout?: number        // 超时 (ms)
+  }) {
+    return this.runSandboxed(
+      async ({ evalCode }) => evalCode(code),
+      {
+        allowFetch: opts?.allowFetch ?? false,
+        allowFs: opts?.allowFs ?? false,
+        env: opts?.env ?? {},
+        timeout: opts?.timeout ?? 30000,
+      }
+    )
+  }
+}
+```
+
+#### 3.6.3 安全模型
+
+| 层级 | 机制 |
+|------|------|
+| 内存隔离 | WASM 无法访问宿主内存 |
+| 能力授权 | `allowFetch`/`allowFs` 按需开启 |
+| 资源限制 | 超时 30s + 内存配额 |
+| 用户确认 | 高风险操作（写文件、发网络）弹窗确认 |
+| 进程隔离 | MCP stdio 天然独立进程，崩溃不影响主程序 |
+
+#### 3.6.4 与 SKILL.md 配合
+
+```markdown
+## 步骤 2：处理数据
+使用 `sandbox_execute` 工具：
+```js
+const data = await mcp__filesystem__read_file("data.json")
+const parsed = JSON.parse(data)
+return parsed.filter(item => item.active)
+```
+```
+
+AI 读 SKILL.md → 理解意图 → 自己写 JS 代码 → 调 `sandbox_execute` 执行 → 沙箱安全运行 → 返回结果。
+
+#### 3.6.5 分阶段
+
+| 阶段 | 内容 |
+|------|------|
+| **Phase 2** | QuickJS WASM 沙箱 + `sandbox_execute` 工具 |
+| **Phase 2+** | @runno/sandbox Python 支持 |
+| **Phase 9** | AI 动态脚本执行与 MCP 工具自动编排 |
+
 ## 4. 渐进式披露 (Progressive Disclosure)
 
 ### 3.1 问题
@@ -552,11 +781,25 @@ Phase 1: MCP 基础（当前）
 ├── 设置页面完善（工具/提示/资源测试）
 └── 工具注入到聊天
 
-Phase 2: Skill Registry
-├── Skill 统一接口
-├── SkillRegistry 实现
-├── MCP tools 自动注册为 Skill
-└── 内置 Skills（日记、灵感）
+Phase 2a: Skills 安装与混合支持（当前）
+├── 知识型 Skill：解析 SKILL.md，AI 按需 read_skill 读取指令
+├── 工具型 Skill：检测 package.json/pyproject.toml → 注册为 stdio MCP server
+├── 安装表单优化（路径输入 + 自动检测类型）
+├── Skills 页面完善（类型徽章、详情面板、工具列表加载）
+└── skillRuntime.ts（npx/uvx 进程管理、首次自动下载 Python）
+
+Phase 2b: Skill 工具化 + 内置 Skills
+├── 安装时自动扫描 scripts/ → 每个脚本生成 MCP wrapper tool
+├── Skill 启用时在 system prompt 注入 name+desc（渐进式披露）
+├── 内置 Skills（diary_read/write、inspiration_search/create）
+├── chatService 统一从 SkillRegistry.getEnabled() 获取所有工具
+└── SKILL.md 中声明 MCP 工具调用和脚本执行的标准格式
+
+Phase 2c: 沙箱执行
+├── 嵌入 QuickJS WASM（~2MB），AI 可动态写 JS 代码安全执行
+├── sandbox_execute 工具注册（allowFetch/allowFs 按需授权 + 超时 + 用户确认弹窗）
+├── @runno/sandbox Python 支持（按需，库受限场景的补充）
+└── 安全模型：WASM 内存隔离 + 能力白名单 + 资源配额
 
 Phase 3: 记忆系统 v1-v2
 ├── 会话内事实提取（Memory Extractor）
