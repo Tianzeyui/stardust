@@ -13,7 +13,7 @@ function requireClient() {
 export async function fetchFolders(): Promise<InspirationFolder[]> {
   const supabase = requireClient()
   const { data, error } = await supabase
-    .from('bp_folders')
+    .from('inspiration_folders')
     .select('*')
     .order('created_at', { ascending: false })
   if (error) throw error
@@ -25,7 +25,7 @@ export async function createFolder(name: string): Promise<InspirationFolder> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('未登录')
   const { data, error } = await supabase
-    .from('bp_folders')
+    .from('inspiration_folders')
     .insert({ name: name.trim(), user_id: user.id })
     .select()
     .single()
@@ -36,7 +36,7 @@ export async function createFolder(name: string): Promise<InspirationFolder> {
 export async function deleteFolder(id: string): Promise<void> {
   const supabase = requireClient()
   const { error } = await supabase
-    .from('bp_folders')
+    .from('inspiration_folders')
     .delete()
     .eq('id', id)
   if (error) throw error
@@ -47,7 +47,7 @@ export async function deleteFolder(id: string): Promise<void> {
 export async function fetchInspirations(folderId?: string | null): Promise<Inspiration[]> {
   const supabase = requireClient()
   let query = supabase
-    .from('bp_inspirations')
+    .from('inspirations')
     .select('*')
     .order('created_at', { ascending: false })
 
@@ -67,13 +67,13 @@ export async function searchInspirations(query: string): Promise<Inspiration[]> 
 
   // 尝试用 RPC 全文搜索
   const { data, error } = await supabase
-    .rpc('search_bp_inspirations', { search_query: query, user_uuid: user.id })
+    .rpc('search_inspirations', { search_query: query, user_uuid: user.id })
 
   if (!error && data) return data as Inspiration[]
 
   // 回退到 ILIKE 模糊搜索
   const { data: fallback } = await supabase
-    .from('bp_inspirations')
+    .from('inspirations')
     .select('*')
     .eq('user_id', user.id)
     .or(`title.ilike.%${query}%,description.ilike.%${query}%`)
@@ -88,7 +88,7 @@ export async function insertInspiration(item: InspirationInsert): Promise<Inspir
   if (!user) throw new Error('未登录')
 
   const { data, error } = await supabase
-    .from('bp_inspirations')
+    .from('inspirations')
     .insert({ ...item, user_id: user.id })
     .select()
     .single()
@@ -100,7 +100,7 @@ export async function insertInspiration(item: InspirationInsert): Promise<Inspir
 export async function updateInspiration(id: string, update: InspirationUpdate): Promise<Inspiration> {
   const supabase = requireClient()
   const { data, error } = await supabase
-    .from('bp_inspirations')
+    .from('inspirations')
     .update(update)
     .eq('id', id)
     .select()
@@ -113,7 +113,7 @@ export async function updateInspiration(id: string, update: InspirationUpdate): 
 export async function deleteInspiration(id: string): Promise<void> {
   const supabase = requireClient()
   const { error } = await supabase
-    .from('bp_inspirations')
+    .from('inspirations')
     .delete()
     .eq('id', id)
 
