@@ -9,12 +9,13 @@ import {
   Brain,
   PanelLeftClose,
   PanelLeftOpen,
+  FolderOpen,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
 
-export type NavItem = 'chat' | 'ai' | 'diary' | 'inspiration' | 'skills' | 'settings'
+export type NavItem = 'chat' | 'ai' | 'diary' | 'inspiration' | 'skills' | 'files' | 'settings'
 
 interface SidebarProps {
   activeNav: NavItem
@@ -29,6 +30,7 @@ const navItems: { id: NavItem; label: string; icon: typeof BookOpen }[] = [
   { id: 'diary', label: '日记', icon: BookOpen },
   { id: 'inspiration', label: '灵感记录', icon: Lightbulb },
   { id: 'skills', label: 'Skills', icon: Package },
+  { id: 'files', label: '文件', icon: FolderOpen },
   { id: 'settings', label: '设置', icon: Settings },
 ]
 
