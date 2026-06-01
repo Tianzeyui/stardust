@@ -2,6 +2,7 @@ import { useState } from 'react'
 import {
   MessageSquare,
   BookOpen,
+  Lightbulb,
   Settings,
   LogOut,
   Brain,
@@ -13,7 +14,7 @@ import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
 import { SettingsDialog } from '@/components/auth/SettingsDialog'
 
-export type NavItem = 'ai' | 'diary'
+export type NavItem = 'ai' | 'diary' | 'inspiration'
 
 interface SidebarProps {
   activeNav: NavItem
@@ -25,6 +26,7 @@ interface SidebarProps {
 const navItems: { id: NavItem; label: string; icon: typeof BookOpen }[] = [
   { id: 'ai', label: 'AI 工具箱', icon: MessageSquare },
   { id: 'diary', label: '日记', icon: BookOpen },
+  { id: 'inspiration', label: '灵感记录', icon: Lightbulb },
 ]
 
 export function Sidebar({ activeNav, onNavChange, collapsed, onToggleCollapse }: SidebarProps) {

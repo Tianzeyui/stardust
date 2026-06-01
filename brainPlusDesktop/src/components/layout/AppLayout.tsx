@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Sidebar, type NavItem } from './Sidebar'
 import { AIPage } from '@/components/ai/AIPage'
 import { DiaryPage } from '@/components/diary/DiaryPage'
+import { InspirationPage } from '@/components/inspiration/InspirationPage'
 
 export function AppLayout() {
   const [activeNav, setActiveNav] = useState<NavItem>('ai')
@@ -27,6 +28,7 @@ export function AppLayout() {
       <main className="flex-1 overflow-auto relative">
         {activeNav === 'ai' && <AIPage />}
         {activeNav === 'diary' && <DiaryPage />}
+        {activeNav === 'inspiration' && <InspirationPage />}
       </main>
     </div>
   )
