@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { Sidebar, type NavItem } from './Sidebar'
+import { ChatPage } from '@/components/ai/ChatPage'
 import { AIPage } from '@/components/ai/AIPage'
 import { DiaryPage } from '@/components/diary/DiaryPage'
 import { InspirationPage } from '@/components/inspiration/InspirationPage'
+import { SettingsPage } from '@/components/settings/SettingsPage'
 
 export function AppLayout() {
-  const [activeNav, setActiveNav] = useState<NavItem>('ai')
+  const [activeNav, setActiveNav] = useState<NavItem>('chat')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   return (
@@ -26,9 +28,11 @@ export function AppLayout() {
 
       {/* 右侧内容区 */}
       <main className="flex-1 overflow-auto relative">
+        {activeNav === 'chat' && <ChatPage />}
         {activeNav === 'ai' && <AIPage />}
         {activeNav === 'diary' && <DiaryPage />}
         {activeNav === 'inspiration' && <InspirationPage />}
+        {activeNav === 'settings' && <SettingsPage />}
       </main>
     </div>
   )
