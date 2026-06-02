@@ -8,6 +8,48 @@ import { getAllTools } from './mcpClient'
 import { getInstalledSkills } from './skillService'
 import type { SectionIndex } from '@/types/skill'
 
+// ====== Agent 自带工具的事件类型 ======
+
+export interface AskUserEvent {
+  type: 'ask_user'
+  question: string
+  options?: string[]
+  inputType: 'select' | 'input' | 'confirm'
+  resolve: (answer: string) => void
+}
+
+export interface ProgressEvent {
+  type: 'show_progress'
+  message: string
+  current?: number
+  total?: number
+}
+
+export interface NotifyCompleteEvent {
+  type: 'notify_complete'
+  message: string
+  result?: string
+}
+
+export interface TaskItem {
+  id: string
+  title: string
+  status: 'pending' | 'running' | 'done' | 'cancelled'
+}
+
+export interface TaskListEvent {
+  type: 'update_task_list'
+  tasks: TaskItem[]
+}
+
+export type AgentUIEvent = AskUserEvent | ProgressEvent | NotifyCompleteEvent | TaskListEvent
+
+let onAgentUIEvent: ((event: AgentUIEvent) => void) | null = null
+
+export function setAgentUIHandler(handler: ((event: AgentUIEvent) => void) | null) {
+  onAgentUIEvent = handler
+}
+
 function getProvider(model: AIModelConfig) {
   const apiKey = model.apiKey || 'dummy'
   const baseURL = model.baseUrl || undefined
@@ -156,6 +198,125 @@ export async function getMCPSdkTools(): Promise<Record<string, any>> {
       }
     }
 
+    // ====== Agent 自带工具（始终可用） ======
+
+    sdkTools['ask_user'] = {
+      description:
+        '向用户提问，获取决策、选择或确认。尽量一次问清楚所有需要的信息，减少往返。' +
+        'inputType: "select" 让用户从 options 中选择一个；"input" 让用户自由输入；"confirm" 让用户确认/取消。' +
+        '用于：技能需要用户决策时（如选择文件格式、确认操作）、信息不足需要补充时。' +
+        '注意：收集到足够信息后立即开始执行任务，不要在信息完备时继续提问。',
+      inputSchema: jsonSchema({
+        type: 'object',
+        properties: {
+          question: { type: 'string', description: '向用户提出的问题' },
+          options: { type: 'array', items: { type: 'string' }, description: 'select 模式下的选项列表' },
+          inputType: { type: 'string', enum: ['select', 'input', 'confirm'], description: '交互类型' },
+        },
+        required: ['question', 'inputType'],
+      }),
+      execute: async (args: { question: string; options?: string[]; inputType: string }) => {
+        return new Promise<string>((resolve) => {
+          if (onAgentUIEvent) {
+            onAgentUIEvent({
+              type: 'ask_user',
+              question: args.question,
+              options: args.options,
+              inputType: (args.inputType as 'select' | 'input' | 'confirm') || 'confirm',
+              resolve,
+            })
+          } else {
+            resolve('用户不在线，请自行决策。' + (args.options ? ` 可选: ${args.options.join(', ')}` : ''))
+          }
+        })
+      },
+    }
+
+    sdkTools['show_progress'] = {
+      description:
+        '显示长时间任务的进度。调用后告知用户当前进展，避免用户焦虑等待。' +
+        'current/total 用于百分比进度，仅传 message 则显示不确定进度条。',
+      inputSchema: jsonSchema({
+        type: 'object',
+        properties: {
+          message: { type: 'string', description: '进度描述，如 "正在生成 PPT 第 2/5 页..."' },
+          current: { type: 'number', description: '当前进度（可选）' },
+          total: { type: 'number', description: '总进度（可选）' },
+        },
+        required: ['message'],
+      }),
+      execute: async (args: { message: string; current?: number; total?: number }) => {
+        onAgentUIEvent?.({
+          type: 'show_progress',
+          message: args.message,
+          current: args.current,
+          total: args.total,
+        })
+        return '进度已更新'
+      },
+    }
+
+    sdkTools['notify_complete'] = {
+      description:
+        '通知用户任务完成。用于异步任务结束时告知结果。' +
+        'message 为完成消息，result 为可选的结果摘要（如文件路径、数据统计）。',
+      inputSchema: jsonSchema({
+        type: 'object',
+        properties: {
+          message: { type: 'string', description: '完成消息，如 "PPT 生成完成"' },
+          result: { type: 'string', description: '结果摘要（可选），如文件路径' },
+        },
+        required: ['message'],
+      }),
+      execute: async (args: { message: string; result?: string }) => {
+        onAgentUIEvent?.({
+          type: 'notify_complete',
+          message: args.message,
+          result: args.result,
+        })
+        return '已通知用户: ' + args.message
+      },
+    }
+
+    sdkTools['update_task_list'] = {
+      description:
+        '管理复杂任务的任务清单。首次调用时传入完整任务列表（全部 pending），' +
+        '之后每次只需传入状态有变化的任务项即可增量更新。' +
+        'id 为唯一标识，title 为任务描述，status: pending(待执行)/running(执行中)/done(已完成)/cancelled(取消)。' +
+        '用法：接到复杂任务时先创建清单 → 开始某项时标记 running → 完成后标记 done。',
+      inputSchema: jsonSchema({
+        type: 'object',
+        properties: {
+          tasks: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', description: '唯一标识，如 "1"/"2"/"3"' },
+                title: { type: 'string', description: '任务描述' },
+                status: { type: 'string', enum: ['pending', 'running', 'done', 'cancelled'], description: '任务状态' },
+              },
+              required: ['id', 'title', 'status'],
+            },
+          },
+        },
+        required: ['tasks'],
+      }),
+      execute: async (args: { tasks: Array<{ id: string; title: string; status: string }> }) => {
+        onAgentUIEvent?.({
+          type: 'update_task_list',
+          tasks: args.tasks.map(t => ({
+            id: t.id,
+            title: t.title,
+            status: t.status as TaskItem['status'],
+          })),
+        })
+        const done = args.tasks.filter(t => t.status === 'done').length
+        const total = args.tasks.length
+        return `任务清单已更新 (${done}/${total} 完成)`
+      },
+    }
+
     // 注册沙箱执行工具（始终可用，不依赖 Skills）
     if (window.electronAPI?.sandbox) {
       const wsPaths = window.electronAPI?.workspace
@@ -232,14 +393,23 @@ export async function chat(
       }).join('\n')
     : undefined
 
-  const systemPrompt = skillInjection || undefined
+  // Agent 行为规则（始终注入）
+  const agentRules =
+    '【重要】你是用户的工作助手。你必须严格遵守以下规则：\n' +
+    '1. 需要用户输入时，必须调用 ask_user 工具，绝不在文字回复中写问题等待用户回答。\n' +
+    '   - 选项中包含明确选项时用 select 模式，需要自由输入时用 input 模式，确认操作时用 confirm 模式。\n' +
+    '   - 错误示例："请问你想用什么主题？A.科技 B.自然 C.教育" → 这是错的，必须用 ask_user 工具。\n' +
+    '2. 长时间任务调用 show_progress，任务完成后调用 notify_complete。\n' +
+    '3. 信息收集够了立即执行，不反复确认。每次对话最多调用 ask_user 1-2 次，尽量一次问清所有需求。\n'
+
+  const systemPrompt = [agentRules, skillInjection].filter(Boolean).join('\n\n') || undefined
 
   const result = streamText({
     model: model.instance,
     system: systemPrompt || undefined,
     messages,
     tools: Object.keys(mcpTools).length > 0 ? mcpTools : undefined,
-    stopWhen: stepCountIs(5),
+    stopWhen: stepCountIs(15),
   })
 
   let fullText = ''

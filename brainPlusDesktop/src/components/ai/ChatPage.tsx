@@ -1,42 +1,23 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Loader2, Bot, User, ChevronDown, Check, X, Shield, ShieldCheck, Cable, File, FolderOpen, ExternalLink, Trash2, BookOpen, Package } from 'lucide-react'
+import {
+  Send, Loader2, Bot, File, FolderOpen,
+  ExternalLink, Trash2, X, ListTodo, Circle, CheckCircle2,
+} from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { chat, getChatModel, type ChatStreamEvent } from '@/lib/chatService'
+import { chat, setAgentUIHandler, type ChatStreamEvent, type AskUserEvent } from '@/lib/chatService'
 import { getAIModels, type AIModelConfig } from '@/lib/config'
 import type { ModelMessage } from 'ai'
-import ReactMarkdown from 'react-markdown'
-
-type ToolType = 'sandbox' | 'skill' | 'mcp'
-
-interface ToolCallStatus {
-  id: string
-  name: string
-  type: ToolType
-  status: 'running' | 'done' | 'error'
-  result?: string
-}
-
-function detectToolType(name: string): ToolType {
-  if (name.startsWith('sandbox_')) return 'sandbox'
-  if (name === 'read_skill') return 'skill'
-  return 'mcp'
-}
-
-interface UIMessage {
-  role: 'user' | 'assistant'
-  content: string
-  streaming?: boolean
-  toolCalls?: ToolCallStatus[]
-}
-
-interface ConsoleLine {
-  id: number
-  time: string
-  icon: string
-  msg: string
-  status: 'ok' | 'running' | 'error' | 'info'
-}
+import { useKonamiCode } from '@/hooks/useKonamiCode'
+import { ChatMessage } from './ChatMessage'
+import { AskUserBar } from './AskUserBar'
+import { ChatConsole } from './ChatConsole'
+import {
+  type ToolCallStatus,
+  type UIMessage,
+  type ConsoleLine,
+  detectToolType,
+} from '@/types/chat'
 
 export function ChatPage() {
   const [messages, setMessages] = useState<UIMessage[]>([])
@@ -48,16 +29,21 @@ export function ChatPage() {
   const [outputFiles, setOutputFiles] = useState<Array<{ name: string; path: string; size: number }>>([])
   const [statusText, setStatusText] = useState('')
   const [consoleLog, setConsoleLog] = useState<ConsoleLine[]>([])
-  const [showConsole, setShowConsole] = useState(true)
+  const [showConsole, setShowConsole] = useState(false)
+  const [askUser, setAskUser] = useState<AskUserEvent | null>(null)
+  const [askUserAnswer, setAskUserAnswer] = useState('')
+  const [progressMsg, setProgressMsg] = useState('')
+  const [taskList, setTaskList] = useState<Array<{ id: string; title: string; status: string }>>([])
   const logId = useRef(0)
   const endRef = useRef<HTMLDivElement>(null)
 
   const pushLog = (icon: string, msg: string, status: ConsoleLine['status'] = 'info') => {
     const id = ++logId.current
     const time = new Date().toLocaleTimeString('zh-CN', { hour12: false })
-    setConsoleLog(prev => [...prev.slice(-50), { id, time, icon, msg, status }])
+    setConsoleLog(prev => [...prev.slice(-200), { id, time, icon, msg, status }])
   }
 
+  // 模型列表
   useEffect(() => {
     const all = getAIModels()
     const withKeys = all.filter((m) => m.apiKey)
@@ -68,96 +54,134 @@ export function ChatPage() {
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
-  // 刷新输出文件列表
+  // 刷新输出文件
   const refreshOutputs = useCallback(async () => {
     if (window.electronAPI?.workspace) {
       try { setOutputFiles(await window.electronAPI.workspace.listOutputs()) } catch {}
     }
   }, [])
-
   useEffect(() => { refreshOutputs() }, [messages, refreshOutputs])
 
+  // Konami 码
+  useKonamiCode(useCallback(() => setShowConsole(v => !v), []))
+
+  // Agent UI 事件
+  useEffect(() => {
+    setAgentUIHandler((event) => {
+      if (event.type === 'ask_user') {
+        setAskUser(event)
+        setAskUserAnswer('')
+      } else if (event.type === 'show_progress') {
+        const pct = event.current != null && event.total != null
+          ? ` (${event.current}/${event.total})` : ''
+        setProgressMsg(event.message + pct)
+      } else if (event.type === 'notify_complete') {
+        setProgressMsg('')
+        pushLog('OK', event.message + (event.result ? ` -- ${event.result}` : ''), 'ok')
+      } else if (event.type === 'update_task_list') {
+        setTaskList((prev) => {
+          const map = new Map(prev.map(t => [t.id, t]))
+          for (const t of event.tasks) map.set(t.id, t)
+          return Array.from(map.values())
+        })
+      }
+    })
+    return () => setAgentUIHandler(null)
+  }, [])
+
+  // 发送消息核心
   const handleSend = useCallback(async () => {
     if (!input.trim() || loading || !activeModel) return
 
     const userMsg: UIMessage = { role: 'user', content: input.trim() }
-    const assistantMsg: UIMessage = { role: 'assistant', content: '', streaming: true, toolCalls: [] }
+    const assistantMsg: UIMessage = { role: 'assistant', content: '', streaming: true }
     setMessages((prev) => [...prev, userMsg, assistantMsg])
     setInput('')
     setLoading(true)
 
     try {
       const history: ModelMessage[] = [...messages, userMsg]
-        .filter((m) => !m.streaming)
+        .filter((m) => !m.streaming && m.role !== 'tool')
         .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
 
+      const toolCallMap = new Map<string, string>()
       let streamed = ''
-      const toolCallMap = new Map<string, ToolCallStatus>()
 
       setConsoleLog([])
-      pushLog('🚀', '开始处理', 'info')
+      setTaskList([])
+      pushLog('--', '开始处理', 'info')
 
       await chat(history, (event: ChatStreamEvent) => {
         if (event.type === 'text-delta') {
           streamed += event.text || ''
+          setMessages((prev) => {
+            const next = [...prev]
+            const last = next[next.length - 1]
+            if (last?.role === 'assistant' && last.streaming) last.content = streamed
+            return [...next]
+          })
         } else if (event.type === 'tool-call') {
           const toolName = event.toolName || 'unknown'
           const toolType = detectToolType(toolName)
-          pushLog(toolType === 'sandbox' ? '⚙️' : toolType === 'skill' ? '📖' : '🔌',
-            toolName, 'running')
-          const id = Math.random().toString(36).slice(2, 8)
-          const tc: ToolCallStatus = { id, name: toolName, type: toolType, status: 'running' }
-          toolCallMap.set(toolName || id, tc)
+          pushLog('>', `[${toolType}] ${toolName}`, 'running')
+          const tcId = Math.random().toString(36).slice(2, 8)
+          const tc: ToolCallStatus = { id: tcId, name: toolName, type: toolType, status: 'running', input: event.toolInput }
+          toolCallMap.set(tcId, tcId)
+
+          const textBeforeTool = streamed
+          streamed = ''
+          setMessages((prev) => {
+            const next = [...prev]
+            const last = next[next.length - 1]
+            if (last?.role === 'assistant' && last.streaming) {
+              if (textBeforeTool) {
+                last.content = textBeforeTool
+                last.streaming = false
+              } else {
+                next.pop()
+              }
+            }
+            next.push({ role: 'tool', content: '', toolCall: tc })
+            next.push({ role: 'assistant', content: '', streaming: true })
+            return [...next]
+          })
         } else if (event.type === 'tool-result') {
-          const existing = Array.from(toolCallMap.values()).find(t => t.name === event.toolName)
           const outputStr = String(event.toolOutput ?? '')
-          const ok = outputStr.length > 0 && !outputStr.includes('error') && !outputStr.includes('Error')
-          pushLog(
-            ok ? '✅' : '❌',
-            (event.toolName || 'tool') + (ok ? ' 完成' : ' 失败'),
-            ok ? 'ok' : 'error'
+          const ok = !outputStr.startsWith('Error') && !outputStr.startsWith('error')
+          const targetName = event.toolName
+
+          setMessages((prev) =>
+            prev.map(m => {
+              if (m.role === 'tool' && m.toolCall && m.toolCall.name === targetName && m.toolCall.status === 'running') {
+                return { ...m, content: outputStr.slice(0, 2000), toolCall: { ...m.toolCall, status: ok ? 'done' as const : 'error' as const, result: outputStr.slice(0, 8000) } }
+              }
+              return m
+            }),
           )
-          setStatusText(`工具完成: ${event.toolName}，继续...`)
-          if (existing) {
-            existing.status = 'done'
-            existing.result = String(event.toolOutput ?? '').slice(0, 8000)
+
+          pushLog(ok ? 'OK' : 'ERR', (targetName || 'tool') + (ok ? ' done' : ' fail'), ok ? 'ok' : 'error')
+          if (detectToolType(targetName || '') === 'agent') {
+            pushLog('OUT', outputStr, 'info')
           }
+          setStatusText('')
         } else if (event.type === 'done') {
-          pushLog('🏁', streamed ? `生成回复 (${streamed.length}字符)` : '无文本输出', streamed ? 'ok' : 'error')
-          setStatusText(streamed ? '' : '⚠️ AI 未生成回复，请重试')
+          pushLog('DONE', `回复 (${streamed.length}字)`, streamed ? 'ok' : 'info')
+          setMessages((prev) => {
+            const next = [...prev]
+            const last = next[next.length - 1]
+            if (last?.role === 'assistant' && last.streaming) {
+              if (streamed) { last.content = streamed; last.streaming = false }
+              else { next.pop() }
+            }
+            return [...next]
+          })
         }
-
-        // 实时更新消息
-        setMessages((prev) => {
-          const next = [...prev]
-          const last = next[next.length - 1]
-          if (last?.role === 'assistant') {
-            last.content = streamed
-            last.streaming = event.type !== 'done'
-            last.toolCalls = Array.from(toolCallMap.values())
-          }
-          return [...next]
-        })
-      })
-
-      setMessages((prev) => {
-        const next = [...prev]
-        const last = next[next.length - 1]
-        if (last?.role === 'assistant') {
-          last.content = streamed
-          last.streaming = false
-          last.toolCalls = Array.from(toolCallMap.values())
-        }
-        return [...next]
       })
     } catch (e: any) {
       setMessages((prev) => {
         const next = [...prev]
         const last = next[next.length - 1]
-        if (last?.role === 'assistant') {
-          last.content = `❌ ${e.message}`
-          last.streaming = false
-        }
+        if (last?.role === 'assistant') { last.content = `${e.message}`; last.streaming = false }
         return [...next]
       })
     } finally {
@@ -166,47 +190,18 @@ export function ChatPage() {
     }
   }, [input, loading, activeModel, messages])
 
-  const switchModel = (model: AIModelConfig) => {
-    setActiveModel(model)
-    setShowModelPicker(false)
-  }
+  // ask_user 回答
+  const handleAskAnswer = useCallback((answer: string) => {
+    if (!askUser) return
+    setMessages(prev => [...prev, { role: 'user', content: answer }])
+    const question = askUser.question
+    askUser.resolve(answer)
+    setAskUser(null)
+    pushLog('USR', `${question} => ${answer}`, 'ok')
+  }, [askUser])
 
   return (
     <div className="flex h-full flex-col">
-      {/* 顶栏 */}
-      <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
-        <div className="relative">
-          <button
-            className="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-accent"
-            onClick={() => setShowModelPicker(!showModelPicker)}
-          >
-            <Bot className="h-4 w-4 text-primary" />
-            {activeModel ? activeModel.displayName : '未选择模型'}
-            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-          </button>
-
-          {showModelPicker && (
-            <div className="absolute left-0 top-full z-50 mt-1 w-56 rounded-lg border border-border bg-card py-1 shadow-lg">
-              {configuredModels.length === 0 ? (
-                <p className="px-3 py-2 text-xs text-muted-foreground">请先在设置中配置 API Key</p>
-              ) : (
-                configuredModels.map((m) => (
-                  <button
-                    key={m.id}
-                    className={`flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-accent ${activeModel?.id === m.id ? 'bg-accent font-medium' : ''}`}
-                    onClick={() => switchModel(m)}
-                  >
-                    <span className={`h-2 w-2 rounded-full ${m.enabled ? 'bg-green-500' : 'bg-gray-400'}`} />
-                    {m.displayName}
-                  </button>
-                ))
-              )}
-            </div>
-          )}
-        </div>
-        <span className="text-xs font-mono text-muted-foreground">{activeModel?.selectedModel}</span>
-      </div>
-
       {/* 消息列表 */}
       <div className="flex-1 overflow-auto">
         {messages.length === 0 ? (
@@ -220,80 +215,55 @@ export function ChatPage() {
         ) : (
           <div className="w-full px-4 py-4 space-y-4">
             {messages.map((msg, i) => (
-              <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : ''}`}>
-                {msg.role === 'assistant' && (
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                    <Bot className="h-4 w-4 text-primary" />
-                  </div>
-                )}
-
-                <div className={`min-w-0 ${msg.role === 'user' ? 'max-w-[85%]' : 'max-w-full flex-1'}`}>
-                  {/* 工具调用卡片 */}
-                  {msg.toolCalls && msg.toolCalls.length > 0 && (
-                    <div className="mb-3 space-y-1.5">
-                      {msg.toolCalls.map((tc) => {
-                        const style = {
-                          sandbox: { running: 'border-emerald-400 bg-emerald-50/80 dark:bg-emerald-950/30', done: 'border-emerald-300 bg-emerald-50/50 dark:bg-emerald-950/20', iconColor: 'text-emerald-600', badge: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300', result: 'border-emerald-200 dark:border-emerald-800 bg-emerald-50/30 dark:bg-emerald-950/10', icon: ShieldCheck, labelIcon: Shield, label: '沙箱' },
-                          skill:   { running: 'border-purple-400 bg-purple-50/80 dark:bg-purple-950/30', done: 'border-purple-300 bg-purple-50/50 dark:bg-purple-950/20', iconColor: 'text-purple-600', badge: 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300', result: 'border-purple-200 dark:border-purple-800 bg-purple-50/30 dark:bg-purple-950/10', icon: Check, labelIcon: BookOpen, label: 'Skill' },
-                          mcp:     { running: 'border-blue-400 bg-blue-50/80 dark:bg-blue-950/30', done: 'border-blue-300 bg-blue-50/50 dark:bg-blue-950/20', iconColor: 'text-blue-600', badge: 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300', result: 'border-blue-200 dark:border-blue-800 bg-blue-50/30 dark:bg-blue-950/10', icon: Check, labelIcon: Cable, label: 'MCP' },
-                        }[tc.type]
-                        const isRunning = tc.status === 'running'
-                        const isDone = tc.status === 'done'
-                        return (
-                        <div key={tc.id} className={`flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-xs transition-all ${isRunning ? style.running + ' animate-pulse' : isDone ? style.done : 'border-red-300 bg-red-50/50 dark:bg-red-950/20'}`}>
-                          <div className="mt-0.5 shrink-0">
-                            {isRunning ? <Loader2 className={`h-4 w-4 animate-spin ${style.iconColor}`} />
-                            : isDone ? <style.icon className={`h-4 w-4 ${style.iconColor}`} />
-                            : <X className="h-4 w-4 text-red-600" />}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${style.badge}`}>
-                                <style.labelIcon className="h-3 w-3" />{style.label}
-                              </span>
-                              <span className="font-mono font-medium text-[11px] truncate">{tc.name}</span>
-                              <span className={`ml-auto shrink-0 text-[10px] font-medium ${style.iconColor}`}>
-                                {isRunning ? '执行中...' : isDone ? '完成' : '失败'}
-                              </span>
-                            </div>
-                            {tc.result && (
-                              <pre className={`mt-2 max-h-32 overflow-auto rounded border px-2.5 py-1.5 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-all ${style.result}`}>{tc.result}</pre>
-                            )}
-                            {tc.type === 'sandbox' && isDone && (
-                              <div className="mt-1.5 flex items-center gap-1 text-[10px] text-emerald-600/70 dark:text-emerald-400/50">
-                                <ShieldCheck className="h-3 w-3" />
-                                <span>BrainPlus 沙箱 · 安全隔离执行</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )})}
-                    </div>
-                  )}
-
-                  {/* 消息内容 */}
-                  {msg.role === 'user' ? (
-                    <div className="rounded-lg bg-primary px-4 py-2.5 text-sm text-primary-foreground">
-                      <p className="whitespace-pre-wrap">{msg.content}</p>
-                    </div>
-                  ) : (
-                    <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-pre:my-2 prose-code:bg-muted prose-code:rounded prose-code:px-1">
-                      <ReactMarkdown>{msg.content || (msg.streaming ? '...' : '')}</ReactMarkdown>
-                    </div>
-                  )}
-                </div>
-
-                {msg.role === 'user' && (
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary">
-                    <User className="h-4 w-4 text-primary-foreground" />
-                  </div>
-                )}
-              </div>
+              <ChatMessage key={i} msg={msg} />
             ))}
+            {/* 任务清单 */}
+            {taskList.length > 0 && (
+              <div className="flex gap-3">
+                <div className="flex-1 rounded-lg border border-border bg-card px-4 py-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <ListTodo className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-xs font-medium text-muted-foreground">
+                      任务进度 ({taskList.filter(t => t.status === 'done').length}/{taskList.length})
+                    </span>
+                  </div>
+                  <div className="space-y-1">
+                    {taskList.map(t => (
+                      <div key={t.id} className="flex items-center gap-2 text-xs">
+                        {t.status === 'done' ? (
+                          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-500" />
+                        ) : t.status === 'running' ? (
+                          <Loader2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground animate-spin" />
+                        ) : t.status === 'cancelled' ? (
+                          <X className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        ) : (
+                          <Circle className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
+                        )}
+                        <span className={`truncate ${
+                          t.status === 'done' ? 'text-muted-foreground line-through'
+                          : t.status === 'running' ? 'text-foreground font-medium'
+                          : 'text-muted-foreground'
+                        }`}>{t.title}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
             <div ref={endRef} />
           </div>
         )}
       </div>
+
+      {/* ask_user 对话框 */}
+      {askUser && (
+        <AskUserBar
+          askUser={askUser}
+          answer={askUserAnswer}
+          onAnswerChange={setAskUserAnswer}
+          onAnswer={handleAskAnswer}
+        />
+      )}
 
       {/* 输出文件栏 */}
       {outputFiles.length > 0 && (
@@ -331,69 +301,90 @@ export function ChatPage() {
                 </button>
               </div>
             ))}
-            {outputFiles.length > 8 && (
-              <span className="text-[10px] text-muted-foreground self-center">+{outputFiles.length - 8} more</span>
-            )}
           </div>
         </div>
       )}
 
-      {/* 终端日志 */}
-      {consoleLog.length > 0 && (
-        <div className="border-t border-border">
-          <button
-            className="flex w-full items-center gap-1.5 px-4 py-1.5 text-[10px] text-muted-foreground hover:bg-muted/50 transition-colors"
-            onClick={() => setShowConsole(!showConsole)}
-          >
-            <span className="font-mono">{showConsole ? '▼' : '▶'}</span>
-            <span>控制台 ({consoleLog.length})</span>
-          </button>
-          {showConsole && (
-            <div className="max-h-40 overflow-auto border-t border-border bg-black/90 px-4 py-2 font-mono text-[11px] leading-relaxed">
-              {consoleLog.map(line => (
-                <div key={line.id} className={`flex gap-2 ${
-                  line.status === 'error' ? 'text-red-400' :
-                  line.status === 'ok' ? 'text-green-400' :
-                  line.status === 'running' ? 'text-yellow-400' :
-                  'text-gray-400'
-                }`}>
-                  <span className="shrink-0 text-gray-600 w-16">{line.time}</span>
-                  <span className="shrink-0">{line.icon}</span>
-                  <span className="truncate">{line.msg}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+      {/* 控制台 */}
+      {showConsole && (
+        <ChatConsole lines={consoleLog} onClose={() => setShowConsole(false)} />
       )}
 
       {/* 状态栏 */}
-      {statusText && (
-        <div className={`border-t border-border px-4 py-1.5 text-center text-xs ${
-          statusText.includes('⚠️') ? 'bg-yellow-50 dark:bg-yellow-950/20 text-yellow-700' : 'bg-muted/30 text-muted-foreground'
-        }`}>
-          {statusText.includes('生成') ? <Loader2 className="inline h-3 w-3 animate-spin mr-1" /> : null}
-          {statusText}
+      {(statusText || progressMsg) && (
+        <div className="border-t border-border bg-muted/30 px-4 py-1.5 text-center text-xs text-muted-foreground">
+          {progressMsg && <Loader2 className="inline h-3 w-3 animate-spin mr-1" />}
+          {progressMsg || statusText}
         </div>
       )}
 
       {/* 输入区 */}
-      <div className="border-t border-border px-4 py-3">
-        <div className="flex w-full gap-2">
+      <div className="border-t border-border px-3 py-2">
+        <div className="flex items-center gap-2">
+          {/* 模型选择（紧凑图标按钮） */}
+          <div className="relative shrink-0">
+            <button
+              className="flex items-center gap-1 rounded-md border border-border p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              onClick={() => setShowModelPicker(!showModelPicker)}
+              title={activeModel ? `${activeModel.displayName} / ${activeModel.selectedModel}` : '选择模型'}
+            >
+              <Bot className="h-4 w-4" />
+            </button>
+            {showModelPicker && (
+              <div className="absolute left-0 bottom-full z-50 mb-1 w-72 rounded-lg border border-border bg-card shadow-lg">
+                <div className="max-h-72 overflow-auto p-1">
+                  {configuredModels.length === 0 ? (
+                    <p className="px-3 py-4 text-xs text-muted-foreground text-center">请先在设置中配置 API Key</p>
+                  ) : (
+                    configuredModels.map((provider) => (
+                      <div key={provider.id} className="mb-0.5 last:mb-0">
+                        <div
+                          className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs cursor-pointer transition-colors ${activeModel?.id === provider.id ? 'bg-accent' : 'hover:bg-muted/50'}`}
+                          onClick={() => { setActiveModel(provider); setShowModelPicker(false) }}
+                        >
+                          <span className={`h-2 w-2 rounded-full shrink-0 ${provider.enabled ? 'bg-green-500' : 'bg-gray-400'}`} />
+                          <span className="font-medium flex-1 truncate">{provider.displayName}</span>
+                        </div>
+                        {provider.availableModels?.length > 0 && (
+                          <div className="ml-5 border-l border-border pl-2 mt-0.5">
+                            {provider.availableModels.map((m) => {
+                              const isActive = activeModel?.id === provider.id && activeModel?.selectedModel === m.id
+                              return (
+                                <button
+                                  key={m.id}
+                                  className={`block w-full text-left px-2 py-1 rounded text-[11px] transition-colors ${isActive ? 'text-foreground font-medium bg-accent' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}`}
+                                  onClick={() => {
+                                    setActiveModel({ ...provider, selectedModel: m.id })
+                                    setShowModelPicker(false)
+                                  }}
+                                >
+                                  <span className="font-mono text-[10px] mr-1.5 opacity-50">{m.id}</span>
+                                  {m.contextWindow ? `${(m.contextWindow / 1000).toFixed(0)}k` : ''}
+                                  {m.capabilities?.length ? ` · ${m.capabilities.join(', ')}` : ''}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          {/* 输入框 */}
           <Input
-            className="flex-1"
+            className="flex-1 h-9 text-sm"
             placeholder={activeModel ? `向 ${activeModel.displayName} 提问...` : '请先配置模型'}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                handleSend()
-              }
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
             }}
             disabled={!activeModel}
           />
-          <Button size="icon" onClick={handleSend} disabled={!input.trim() || loading || !activeModel}>
+          <Button size="icon" className="h-9 w-9 shrink-0" onClick={handleSend} disabled={!input.trim() || loading || !activeModel}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         </div>
