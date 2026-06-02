@@ -23,6 +23,7 @@ export interface UIMessage {
   toolCall?: ToolCallStatus
   attachments?: MessageAttachment[]
   modelName?: string
+  trace?: string  // 可观测性信息
 }
 
 export interface ConsoleLine {

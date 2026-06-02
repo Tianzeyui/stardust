@@ -7,6 +7,8 @@ import { getAIModels, type AIModelConfig } from './config'
 import { getAllTools } from './mcpClient'
 import { getInstalledSkills } from './skillService'
 import type { SectionIndex } from '@/types/skill'
+import { progressiveDisclosure, extractToolInfo } from './toolDisclosure'
+import { createTrace, type TurnTrace } from './observability'
 
 // ====== Agent 自带工具的事件类型 ======
 
@@ -540,6 +542,7 @@ export interface ChatStreamEvent {
   toolName?: string
   toolInput?: unknown
   toolOutput?: unknown
+  trace?: TurnTrace
 }
 
 export async function chat(
@@ -573,46 +576,68 @@ export async function chat(
 
   // Agent 行为规则（始终注入）
   const agentRules =
-    '【重要】你是用户的工作助手。你必须严格遵守以下规则：\n' +
-    '1. 需要用户输入时，必须调用 ask_user 工具，绝不在文字回复中写问题等待用户回答。\n' +
-    '   - 选项中包含明确选项时用 select 模式，需要自由输入时用 input 模式，确认操作时用 confirm 模式。\n' +
-    '   - 错误示例："请问你想用什么主题？A.科技 B.自然 C.教育" → 这是错的，必须用 ask_user 工具。\n' +
-    '2. 长时间任务调用 show_progress，任务完成后调用 notify_complete。\n' +
-    '3. 信息收集够了立即执行，不反复确认。每次对话最多调用 ask_user 1-2 次，尽量一次问清所有需求。\n'
+    '你是用户的工作助手。\n' +
+    '1. 需要用户决策时调用 ask_user 工具，不要在文字中写问题等待回复。\n' +
+    '2. 可用的资源和提示词优先用工具查询，不要猜测。\n' +
+    '3. 长任务调用 show_progress，完成后调用 notify_complete。\n'
 
   const systemPrompt = [agentRules, skillInjection].filter(Boolean).join('\n\n') || undefined
+
+  // 渐进式披露：根据用户输入筛选相关工具
+  let filteredTools = mcpTools
+  if (Object.keys(mcpTools).length > 8) {
+    const lastMsg = messages[messages.length - 1]?.content
+    const userText = typeof lastMsg === 'string' ? lastMsg : ''
+    const toolInfo = extractToolInfo(mcpTools)
+    const { tools: selected } = progressiveDisclosure(toolInfo, userText)
+    filteredTools = Object.fromEntries(selected.map(name => [name, mcpTools[name]]))
+    const excluded = Object.keys(mcpTools).length - selected.length
+    if (excluded > 0) console.log(`[disclosure] ${Object.keys(mcpTools).length}→${selected.length} tools (excluded ${excluded})`)
+  }
 
   const result = streamText({
     model: model.instance,
     system: systemPrompt || undefined,
     messages,
-    tools: Object.keys(mcpTools).length > 0 ? mcpTools : undefined,
+    tools: Object.keys(filteredTools).length > 0 ? filteredTools : undefined,
     stopWhen: stepCountIs(25),
     abortSignal: opts?.abortSignal,
   })
+
+  // 可观测性追踪
+  const trace = createTrace()
+  messages.forEach(m => trace.addInput(typeof m.content === 'string' ? m.content : JSON.stringify(m.content)))
 
   let fullText = ''
 
   for await (const chunk of result.fullStream) {
     if (chunk.type === 'text-delta') {
       fullText += chunk.text
+      trace.addOutput(chunk.text)
       onEvent?.({ type: 'text-delta', text: chunk.text })
     } else if (chunk.type === 'tool-call') {
+      const name = (chunk as any).toolName || 'unknown'
+      trace.toolStart(name)
       onEvent?.({
         type: 'tool-call',
-        toolName: (chunk as any).toolName,
+        toolName: name,
         toolInput: (chunk as any).args || (chunk as any).input,
       })
     } else if (chunk.type === 'tool-result') {
+      const name = (chunk as any).toolName || 'unknown'
+      const output = (chunk as any).result || (chunk as any).output || ''
+      const ok = !String(output).startsWith('Error')
+      trace.toolEnd(name, ok)
       onEvent?.({
         type: 'tool-result',
-        toolName: (chunk as any).toolName,
+        toolName: name,
         toolOutput: (chunk as any).result || (chunk as any).output,
       })
     }
   }
 
-  onEvent?.({ type: 'done' })
+  const turnTrace = trace.finish()
+  onEvent?.({ type: 'done', trace: turnTrace })
   return fullText
 }
 

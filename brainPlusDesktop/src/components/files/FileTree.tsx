@@ -45,7 +45,7 @@ export function FileTree({ dirPath, selectedPath, onSelect, onNavigate, onContex
       const items: FileEntry[] = []
       for (const name of listResult.files) {
         if (name.startsWith('.')) continue
-        const childPath = `${dirPath.replace(/\/+$/, '')}/${name}`
+        const childPath = `${dirPath.replace(/[\\/]+$/, '')}/${name}`
         const statResult = await api.stat(childPath)
         items.push({
           name, path: childPath,

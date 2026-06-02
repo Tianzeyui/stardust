@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { chat, setAgentUIHandler, type ChatStreamEvent, type AskUserEvent } from '@/lib/chatService'
 import type { ModelMessage } from 'ai'
+import { formatDuration } from '@/lib/observability'
 import { useKonamiCode } from '@/hooks/useKonamiCode'
 import { useModelLoader } from '@/hooks/useModelLoader'
 import { ChatMessage } from './ChatMessage'
@@ -313,6 +314,22 @@ export function ChatPage() {
           setStatusText('')
         } else if (event.type === 'done') {
           pushLog('DONE', `回复 (${streamed.length}字)`, streamed ? 'ok' : 'info')
+          if (event.trace) {
+            const t = event.trace
+            const parts = [
+              `${t.inputTokens + t.outputTokens} tok`,
+              formatDuration(t.totalDuration),
+              t.toolCalls.length > 0 ? `${t.toolCalls.length} tools` : '',
+            ].filter(Boolean)
+            const info = parts.join(' · ')
+            // 附加到最后一条助手消息
+            setMessages(prev => {
+              const n = [...prev]
+              const last = n[n.length - 1]
+              if (last?.role === 'assistant') last.trace = info
+              return [...n]
+            })
+          }
           setMessages(prev => { const n = [...prev]; const l = n[n.length - 1]; if (l?.role === 'assistant' && l.streaming) { if (streamed) { l.content = streamed; l.streaming = false } else n.pop() } return [...n] })
         }
       }, { abortSignal: controller.signal, autoMode, localModelId: localModelId ?? undefined })
@@ -410,7 +427,7 @@ export function ChatPage() {
       {showConsole && <ChatConsole lines={consoleLog} onClose={() => setShowConsole(false)} />}
 
       {(statusText || progressMsg) && (
-        <div className="border-t border-border bg-muted/30 px-4 py-1.5 text-center text-xs text-muted-foreground">
+        <div className="border-t border-border bg-muted/30 px-4 py-1 text-center text-[10px] text-muted-foreground/50">
           {progressMsg && <Loader2 className="inline h-3 w-3 animate-spin mr-1" />}
           {progressMsg || statusText}
         </div>
@@ -436,71 +453,57 @@ export function ChatPage() {
           </div>
         )}
 
-        {/* 功能按钮行 */}
-        <div className="flex items-center gap-1.5 mb-1.5">
-          <div className="relative shrink-0">
-            <button
-              className="flex items-center gap-1 rounded border border-border px-1.5 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-              onClick={() => setShowModelPicker(!showModelPicker)}
-              title={localModelId ? `本地: ${localModels.find(m => m.id === localModelId)?.name}` : activeModel ? `${activeModel.displayName} / ${activeModel.selectedModel}` : '选择模型'}
-            >
-              {localModelId ? <HardDrive className="h-3 w-3" /> : <Bot className="h-3 w-3" />}
-              <span className="max-w-[80px] truncate">{localModelId ? '本地' : activeModel?.displayName || '模型'}</span>
-            </button>
-            <ModelPicker
-              show={showModelPicker} autoMode={autoMode}
-              activeModel={activeModel} localModelId={localModelId}
-              configuredModels={configuredModels} localModels={localModels}
-              onToggleAuto={() => setAutoMode(!autoMode)}
-              onSelectCloud={(m) => { setActiveModel(m); setLocalModelId(null); setShowModelPicker(false) }}
-              onSelectLocal={(id) => { setLocalModelId(id || null); if (id) setActiveModel(null as any); setShowModelPicker(false) }}
-              onClose={() => setShowModelPicker(false)} pickerRef={pickerRef}
-            />
-          </div>
-
-          <SkillPicker skills={skills} onToggle={async (s) => { await toggleSkill(s.id, !s.enabled); setSkills(getInstalledSkills()) }} />
-
-          <button className="flex items-center gap-1 rounded border border-border px-1.5 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors" onClick={handleUpload} title="上传文件">
-            <Paperclip className="h-3 w-3" />
-            <span>文件</span>
-          </button>
-
-          <span className="text-[10px] text-muted-foreground/50 ml-auto">{autoMode ? 'Auto' : ''}</span>
-        </div>
 
         {/* 输入行 */}
-        <div className="relative">
+        <div className="rounded-lg border border-input bg-background focus-within:ring-1 focus-within:ring-ring">
           <textarea
-            className="w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm leading-relaxed placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full resize-none bg-transparent px-3 pt-2 pb-0 text-sm leading-relaxed placeholder:text-muted-foreground outline-none disabled:cursor-not-allowed disabled:opacity-50"
             rows={3}
             placeholder={localModelId ? '向本地模型提问...' : activeModel ? `向 ${activeModel.displayName} 提问...` : '请先配置模型'}
             value={input}
             onChange={e => handleInputChange(e.target.value)}
             onKeyDown={e => {
               if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
-              if (e.key === 'Enter' && e.shiftKey) return // 允许换行
+              if (e.key === 'Enter' && e.shiftKey) return
             }}
             disabled={!activeModel && !localModelId}
           />
-
-          {/* 右下角发送/停止按钮 */}
-          {loading ? (
-            <button
-              className="absolute bottom-2 right-2 p-1 rounded text-muted-foreground/50 hover:text-foreground transition-colors"
-              onClick={() => abortRef.current?.abort()} title="停止生成"
-            >
-              <X className="h-4 w-4" />
+          <div className="flex items-center gap-1 px-2 pb-1.5">
+            <div className="relative shrink-0">
+              <button
+                className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground/60 hover:bg-muted hover:text-muted-foreground transition-colors"
+                onClick={() => setShowModelPicker(!showModelPicker)}
+                title={localModelId ? `本地: ${localModels.find(m => m.id === localModelId)?.name}` : activeModel ? `${activeModel.displayName} / ${activeModel.selectedModel}` : '选择模型'}
+              >
+                {localModelId ? <HardDrive className="h-3 w-3" /> : <Bot className="h-3 w-3" />}
+                <span className="max-w-[60px] truncate">{localModelId ? '本地' : activeModel?.displayName || '模型'}</span>
+              </button>
+              <ModelPicker
+                show={showModelPicker} autoMode={autoMode}
+                activeModel={activeModel} localModelId={localModelId}
+                configuredModels={configuredModels} localModels={localModels}
+                onToggleAuto={() => setAutoMode(!autoMode)}
+                onSelectCloud={(m) => { setActiveModel(m); setLocalModelId(null); setShowModelPicker(false) }}
+                onSelectLocal={(id) => { setLocalModelId(id || null); if (id) setActiveModel(null as any); setShowModelPicker(false) }}
+                onClose={() => setShowModelPicker(false)} pickerRef={pickerRef}
+              />
+            </div>
+            <SkillPicker skills={skills} onToggle={async (s) => { await toggleSkill(s.id, !s.enabled); setSkills(getInstalledSkills()) }} />
+            <button className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground/60 hover:bg-muted hover:text-muted-foreground transition-colors" onClick={handleUpload} title="上传文件">
+              <Paperclip className="h-3 w-3" />
+              <span>文件</span>
             </button>
-          ) : (
-            <button
-              className="absolute bottom-2 right-2 p-1 rounded text-muted-foreground/30 hover:text-muted-foreground transition-colors"
-              onClick={handleSend}
-              disabled={!input.trim() || (!activeModel && !localModelId)}
-              title="发送 (Enter)"
-            >
-              <Send className="h-4 w-4" />
-            </button>
-          )}
+            <div className="flex-1" />
+            {loading ? (
+              <button className="p-0.5 rounded text-muted-foreground/50 hover:text-foreground transition-colors" onClick={() => abortRef.current?.abort()} title="停止生成">
+                <X className="h-4 w-4" />
+              </button>
+            ) : (
+              <button className="p-0.5 rounded text-muted-foreground/30 hover:text-muted-foreground transition-colors" onClick={handleSend} disabled={!input.trim() || (!activeModel && !localModelId)} title="发送 (Enter)">
+                <Send className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -517,7 +520,7 @@ async function collectFiles(basePath: string, query?: string, maxDepth = 3): Pro
   if (!listResult.success || !listResult.files) return result
   for (const name of listResult.files) {
     if (name.startsWith('.') || name === 'node_modules') continue
-    const childPath = `${basePath.replace(/\/+$/, '')}/${name}`
+    const childPath = `${basePath.replace(/[\\/]+$/, '')}/${name}`
     const statResult = await api.stat(childPath)
     const isDir = statResult.success && statResult.stat?.isDirectory === true
     if (!query || name.toLowerCase().includes(query)) {

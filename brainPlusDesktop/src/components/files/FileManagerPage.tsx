@@ -130,10 +130,12 @@ export function FileManagerPage() {
   }
 
   const parentDir = (() => {
-    const p = currentPath.replace(/\/+$/, '').split('/').slice(0, -1).join('/') || '/'
-    if (p === '/') return null
-    // 不超出 workspace 根目录
-    const inWorkspace = rootDirs.some(d => currentPath.startsWith(d.path))
+    const parts = currentPath.replace(/[\\/]+$/, '').split(/[\\/]/)
+    if (parts.length <= 1) return null
+    const p = parts.slice(0, -1).join('/')
+    const isWin = window.electronAPI?.platform === 'win32'
+    if (isWin && parts.length <= 2) return null // C: 根目录
+    const inWorkspace = rootDirs.some(d => currentPath.replace(/\\/g, '/').startsWith(d.path))
     if (!inWorkspace) return null
     return p
   })()
@@ -157,7 +159,7 @@ export function FileManagerPage() {
     const result = await window.electronAPI.dialog.openFile({ filters: [{ name: '所有文件', extensions: ['*'] }] })
     if (!result.success || !result.files) return
     for (const src of result.files) {
-      const name = src.split('/').pop() || 'file'
+      const name = src.split(/[\\/]/).pop() || 'file'
       const dest = `${currentPath}/${name}`
       try {
         const content = await window.electronAPI.fs.readFile(src)

@@ -45,9 +45,9 @@ export function ChatMessage({ msg }: ChatMessageProps) {
               source={msg.content || (msg.streaming ? '...' : '')}
               style={{ fontSize: 14, backgroundColor: 'transparent' }}
             />
-            {msg.modelName && !msg.streaming && (
+            {(msg.modelName || msg.trace) && !msg.streaming && (
               <p className="mt-0.5 text-[10px] text-muted-foreground/40 select-none">
-                by {msg.modelName}
+                {[msg.modelName ? `by ${msg.modelName}` : '', msg.trace].filter(Boolean).join(' · ')}
               </p>
             )}
           </div>

@@ -4,7 +4,9 @@
  * .xlsx/.pptx/.pdf 等 → uv + markitdown
  */
 import { execFile, execSync } from 'child_process'
+import { app } from 'electron'
 import path from 'path'
+import fs from 'fs'
 
 export const CONVERTIBLE_EXTS = new Set([
   'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
@@ -33,8 +35,14 @@ export interface ConvertResult {
   error?: string
 }
 
-function hasCmd(cmd: string): boolean {
-  try { execSync(`which ${cmd}`, { stdio: 'ignore' }); return true } catch { return false }
+// uv 二进制路径（打包后优先，开发时回退 PATH）
+function getUvPath(): string {
+  const isWin = process.platform === 'win32'
+  const exeName = isWin ? 'uv.exe' : 'uv'
+  const bundled = path.join(app.getAppPath(), '..', 'resources', exeName)
+  // 开发模式 resources/ 不存在，直接返回 'uv' 走 PATH
+  try { if (fs.existsSync(bundled)) return bundled } catch {}
+  return 'uv'
 }
 
 function run(cmd: string, args: string[], timeout: number): Promise<{
@@ -60,17 +68,11 @@ export async function convertWithMarkitdown(
     return convertWithMammoth(filePath, onProgress)
   }
 
-  // 其他文件用 uv + markitdown
-  if (!hasCmd('uv')) {
-    return {
-      success: false,
-      error: '未检测到 uv。\n安装: curl -LsSf https://astral.sh/uv/install.sh | sh',
-    }
-  }
-
+  // 其他文件用 uv + markitdown（打包自带或系统 PATH）
+  const uv = getUvPath()
   onProgress?.('uv + markitdown 转换中...')
   const r = await run(
-    'uv',
+    uv,
     ['run', '--with', 'markitdown', 'python', '-m', 'markitdown', filePath],
     120000,
   )

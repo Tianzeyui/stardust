@@ -14,7 +14,7 @@ export function SkillPicker({ skills, onToggle }: SkillPickerProps) {
   return (
     <div className="relative shrink-0">
       <button
-        className="flex items-center gap-1 rounded border border-border px-1.5 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+        className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground/60 hover:bg-muted hover:text-muted-foreground transition-colors"
         onClick={() => setShow(!show)}
         title="Skills 开关"
       >
