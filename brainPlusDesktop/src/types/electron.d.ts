@@ -41,6 +41,13 @@ export interface ElectronAPI {
   platform: string
   dialog: {
     openDirectory: () => Promise<{ success: boolean; path?: string; error?: string }>
+    openFile: (opts?: { filters?: Array<{ name: string; extensions: string[] }> }) =>
+      Promise<{ success: boolean; files?: string[]; error?: string }>
+  }
+  file: {
+    checkType: (filePath: string) => Promise<{ isImage: boolean; isConvertible: boolean }>
+    convert: (filePath: string) => Promise<{ success: boolean; content?: string; error?: string }>
+    onConvertProgress: (cb: (data: { filePath: string; message: string }) => void) => () => void
   }
   workspace: {
     getPaths: () => Promise<{ root: string; output: string; input: string }>
@@ -55,6 +62,7 @@ export interface ElectronAPI {
   }
   fs: {
     readFile: (filePath: string) => Promise<{ success: boolean; content?: string; error?: string }>
+    readFileBase64: (filePath: string) => Promise<{ success: boolean; content?: string; error?: string }>
     exists: (filePath: string) => Promise<boolean>
     listDir: (dirPath: string) => Promise<{ success: boolean; files?: string[]; error?: string }>
     stat: (filePath: string) => Promise<{ success: boolean; stat?: { isFile: boolean; isDirectory: boolean; size: number; mtime: string }; error?: string }>

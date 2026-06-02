@@ -373,6 +373,7 @@ export interface ChatStreamEvent {
 export async function chat(
   messages: ModelMessage[],
   onEvent?: (event: ChatStreamEvent) => void,
+  system?: string,
 ) {
   const model = getChatModel()
   if (!model) throw new Error('请先在设置中启用一个 AI 模型')

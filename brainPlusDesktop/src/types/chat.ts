@@ -9,11 +9,19 @@ export interface ToolCallStatus {
   result?: string
 }
 
+export interface MessageAttachment {
+  name: string
+  type: 'image' | 'document'
+  status: 'done' | 'error'
+  error?: string
+}
+
 export interface UIMessage {
   role: 'user' | 'assistant' | 'tool'
   content: string
   streaming?: boolean
   toolCall?: ToolCallStatus
+  attachments?: MessageAttachment[]
 }
 
 export interface ConsoleLine {

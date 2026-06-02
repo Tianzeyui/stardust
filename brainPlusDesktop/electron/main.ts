@@ -6,6 +6,7 @@ import { mcpService, type MCPServer } from './main/mcp/MCPService.js'
 import { executeJS, executePython, preInit } from './main/sandboxService.js'
 import { initWorkspace, getWorkspacePaths, listOutputFiles, openFile, deleteFile, clearOutputFiles } from './main/workspace.js'
 import { writeSkillFiles, readSkillFile, deleteSkillFiles } from './main/skillDiskStore.js'
+import { convertWithMarkitdown, isImageFile, isConvertible } from './main/fileConvert.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -125,11 +126,55 @@ ipcMain.handle('dialog:openDirectory', async () => {
   }
 })
 
+// ==================== File Dialog IPC ====================
+
+ipcMain.handle('dialog:openFile', async (_event, opts?: { filters?: Array<{ name: string; extensions: string[] }> }) => {
+  try {
+    const result = await dialog.showOpenDialog(mainWindow!, {
+      properties: ['openFile', 'multiSelections'],
+      title: '选择文件',
+      filters: opts?.filters ?? [
+        { name: '所有支持的文件', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'pdf', 'csv', 'txt', 'md'] },
+        { name: '图片', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'] },
+        { name: '文档', extensions: ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'pdf', 'csv', 'txt', 'md'] },
+      ],
+    })
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, error: '用户取消选择' }
+    }
+    return { success: true, files: result.filePaths }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+// ==================== File Convert IPC ====================
+
+ipcMain.handle('file:checkType', async (_event, filePath: string) => {
+  return { isImage: isImageFile(filePath), isConvertible: isConvertible(filePath) }
+})
+
+ipcMain.handle('file:convert', async (event, filePath: string) => {
+  const result = await convertWithMarkitdown(filePath, (msg) => {
+    event.sender.send('file:convertProgress', { filePath, message: msg })
+  })
+  return result
+})
+
 // ==================== File System IPC ====================
 
 ipcMain.handle('fs:readFile', async (_event, filePath: string) => {
   try {
     return { success: true, content: fs.readFileSync(filePath, 'utf-8') }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+ipcMain.handle('fs:readFileBase64', async (_event, filePath: string) => {
+  try {
+    const buf = fs.readFileSync(filePath)
+    return { success: true, content: buf.toString('base64') }
   } catch (e: any) {
     return { success: false, error: e.message }
   }

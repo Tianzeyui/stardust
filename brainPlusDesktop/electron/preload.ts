@@ -5,6 +5,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   dialog: {
     openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),
+    openFile: (opts?: { filters?: Array<{ name: string; extensions: string[] }> }) =>
+      ipcRenderer.invoke('dialog:openFile', opts),
+  },
+
+  file: {
+    checkType: (filePath: string) => ipcRenderer.invoke('file:checkType', filePath),
+    convert: (filePath: string) => ipcRenderer.invoke('file:convert', filePath),
+    onConvertProgress: (cb: (data: { filePath: string; message: string }) => void) => {
+      const handler = (_event: any, data: any) => cb(data)
+      ipcRenderer.on('file:convertProgress', handler)
+      return () => ipcRenderer.removeListener('file:convertProgress', handler)
+    },
   },
 
   workspace: {
@@ -22,6 +34,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   fs: {
     readFile: (filePath: string) => ipcRenderer.invoke('fs:readFile', filePath),
+    readFileBase64: (filePath: string) => ipcRenderer.invoke('fs:readFileBase64', filePath),
     exists: (filePath: string) => ipcRenderer.invoke('fs:exists', filePath),
     listDir: (dirPath: string) => ipcRenderer.invoke('fs:listDir', dirPath),
     stat: (filePath: string) => ipcRenderer.invoke('fs:stat', filePath),

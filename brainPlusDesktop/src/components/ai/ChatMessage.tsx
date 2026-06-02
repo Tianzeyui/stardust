@@ -1,6 +1,6 @@
-import { Bot, Check, X, Shield, ShieldCheck, Cable, BookOpen, MessageSquare } from 'lucide-react'
+import { Check, X, Shield, ShieldCheck, Cable, BookOpen, MessageSquare, FileText, Image } from 'lucide-react'
 import MarkdownPreview from '@uiw/react-markdown-preview'
-import type { UIMessage, ToolCallStatus } from '@/types/chat'
+import type { UIMessage, ToolCallStatus, MessageAttachment } from '@/types/chat'
 
 interface ChatMessageProps {
   msg: UIMessage
@@ -25,16 +25,19 @@ export function ChatMessage({ msg }: ChatMessageProps) {
 
   return (
     <div className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : ''}`}>
-      {msg.role === 'assistant' && (
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10">
-          <Bot className="h-4 w-4 text-primary" />
-        </div>
-      )}
-
       <div className={`min-w-0 ${msg.role === 'user' ? 'max-w-[85%]' : 'max-w-full flex-1'}`}>
         {msg.role === 'user' ? (
-          <div className="rounded-lg bg-primary px-4 py-2.5 text-sm text-primary-foreground">
-            <p className="whitespace-pre-wrap">{msg.content}</p>
+          <div>
+            <div className="rounded-lg bg-primary px-4 py-2.5 text-sm text-primary-foreground">
+              <p className="whitespace-pre-wrap">{msg.content}</p>
+            </div>
+            {msg.attachments && msg.attachments.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1 justify-end">
+                {msg.attachments.map((att, i) => (
+                  <AttachmentChip key={i} att={att} />
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           <MarkdownPreview
@@ -100,6 +103,27 @@ function ToolBubble({ tc }: { tc: ToolCallStatus }) {
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+/** 附件 chip */
+function AttachmentChip({ att }: { att: MessageAttachment }) {
+  return (
+    <div
+      className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] ${
+        att.status === 'error'
+          ? 'border-destructive/30 bg-destructive/5 text-destructive'
+          : 'border-border bg-card text-muted-foreground'
+      }`}
+      title={att.error}
+    >
+      {att.type === 'image' ? (
+        <Image className="h-3 w-3" />
+      ) : (
+        <FileText className="h-3 w-3" />
+      )}
+      <span className="max-w-[100px] truncate">{att.name}</span>
     </div>
   )
 }

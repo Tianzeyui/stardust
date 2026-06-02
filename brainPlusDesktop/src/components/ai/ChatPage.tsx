@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   Send, Loader2, Bot, File, FolderOpen,
   ExternalLink, Trash2, X, ListTodo, Circle, CheckCircle2,
+  Paperclip, FileText, Image,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -34,6 +35,17 @@ export function ChatPage() {
   const [askUserAnswer, setAskUserAnswer] = useState('')
   const [progressMsg, setProgressMsg] = useState('')
   const [taskList, setTaskList] = useState<Array<{ id: string; title: string; status: string }>>([])
+  // 附件
+  interface Attachment {
+    id: string
+    name: string
+    path: string
+    type: 'image' | 'document'
+    status: 'pending' | 'converting' | 'done' | 'error'
+    content?: string  // 转换后的文本内容
+    error?: string
+  }
+  const [attachments, setAttachments] = useState<Attachment[]>([])
   const logId = useRef(0)
   const endRef = useRef<HTMLDivElement>(null)
 
@@ -89,20 +101,138 @@ export function ChatPage() {
     return () => setAgentUIHandler(null)
   }, [])
 
+  // 上传文件
+  const handleUpload = useCallback(async () => {
+    if (!window.electronAPI?.dialog || !window.electronAPI?.file) return
+    const result = await window.electronAPI.dialog.openFile()
+    if (!result.success || !result.files) return
+
+    const newAttachments: Attachment[] = result.files.map((filePath) => {
+      const name = filePath.split('/').pop() || filePath
+      const ext = name.split('.').pop()?.toLowerCase() || ''
+      const isImg = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'].includes(ext)
+      return {
+        id: 'att_' + Math.random().toString(36).slice(2, 8),
+        name,
+        path: filePath,
+        type: isImg ? 'image' as const : 'document' as const,
+        status: isImg ? 'done' as const : 'pending' as const,
+      }
+    })
+
+    setAttachments(prev => [...prev, ...newAttachments])
+
+    // 异步转换文档
+    for (const att of newAttachments) {
+      if (att.type === 'image') continue
+      setAttachments(prev => prev.map(a => a.id === att.id ? { ...a, status: 'converting' as const } : a))
+      try {
+        const convertResult = await window.electronAPI!.file.convert(att.path)
+        if (convertResult.success && convertResult.content) {
+          setAttachments(prev => prev.map(a =>
+            a.id === att.id ? { ...a, status: 'done' as const, content: convertResult.content } : a
+          ))
+        } else {
+          setAttachments(prev => prev.map(a =>
+            a.id === att.id ? { ...a, status: 'error' as const, error: convertResult.error || '转换失败' } : a
+          ))
+        }
+      } catch (e: any) {
+        setAttachments(prev => prev.map(a =>
+          a.id === att.id ? { ...a, status: 'error' as const, error: e.message } : a
+        ))
+      }
+    }
+  }, [])
+
+  // 移除附件
+  const removeAttachment = useCallback((id: string) => {
+    setAttachments(prev => prev.filter(a => a.id !== id))
+  }, [])
+
   // 发送消息核心
   const handleSend = useCallback(async () => {
     if (!input.trim() || loading || !activeModel) return
 
-    const userMsg: UIMessage = { role: 'user', content: input.trim() }
+    // 构建用户消息内容（多模态支持）
+    const textContent = input.trim()
+    const docs = attachments.filter(a => a.type === 'document' && a.status === 'done' && a.content)
+    const failedDocs = attachments.filter(a => a.type === 'document' && a.status !== 'done')
+    const docTexts = docs.map(a =>
+      `--- 文件: ${a.name} ---\n${a.content}\n--- 文件结束 ---`
+    ).join('\n\n')
+    // 构建给 AI 的完整消息
+    let fullText = textContent
+    if (docs.length > 0) {
+      fullText = textContent
+        ? `${textContent}\n\n以下是用户上传的文件内容：\n\n${docTexts}`
+        : `请分析以下文件内容：\n\n${docTexts}`
+    } else if (!fullText) {
+      fullText = '(空消息)'
+    }
+    const images = attachments.filter(a => a.type === 'image' && a.status === 'done')
+
+    // AI SDK 多模态格式：有图片时 content 为数组
+    type ContentPart = { type: 'text'; text: string } | { type: 'image'; image: string; mimeType?: string }
+    const userContent: string | ContentPart[] = images.length > 0
+      ? [
+          { type: 'text' as const, text: fullText },
+          ...images.map(img => {
+            const ext = img.name.split('.').pop()?.toLowerCase() || 'png'
+            const mime = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp', svg: 'image/svg+xml' }[ext] || 'image/png'
+            // 图片路径通过 Electron API 读取 base64
+            return { type: 'image' as const, image: img.path, mimeType: mime }
+          })
+        ]
+      : fullText
+
+    const displaySummary = [
+      textContent,
+      images.length > 0 ? `[${images.length}张图片]` : '',
+      docs.length > 0 ? `[${docs.length}个文档]` : '',
+      failedDocs.length > 0 ? `[${failedDocs.length}个转换失败]` : '',
+    ].filter(Boolean).join(' ') || '(空)'
+
+    const msgAttachments: UIMessage['attachments'] = attachments.map(a => ({
+      name: a.name,
+      type: a.type,
+      status: a.status === 'error' ? 'error' as const : 'done' as const,
+      error: a.error,
+    }))
+
+    const userMsg: UIMessage = {
+      role: 'user',
+      content: displaySummary,
+      attachments: msgAttachments.length > 0 ? msgAttachments : undefined,
+    }
     const assistantMsg: UIMessage = { role: 'assistant', content: '', streaming: true }
     setMessages((prev) => [...prev, userMsg, assistantMsg])
     setInput('')
+    setAttachments([])
     setLoading(true)
 
     try {
+      // 图片 base64 预加载
+      let resolvedContent = userContent
+      if (Array.isArray(userContent)) {
+        resolvedContent = await Promise.all(userContent.map(async (part) => {
+          if (part.type === 'image' && part.image && !part.image.startsWith('data:')) {
+            const api = window.electronAPI?.fs
+            const result = await api?.readFileBase64(part.image as string)
+            if (result?.success && result.content) {
+              return { ...part, image: `data:${part.mimeType};base64,${result.content}` }
+            }
+          }
+          return part
+        }))
+      }
+
       const history: ModelMessage[] = [...messages, userMsg]
         .filter((m) => !m.streaming && m.role !== 'tool')
-        .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+        .map((m, i, arr) => ({
+          role: m.role as 'user' | 'assistant',
+          content: i === arr.length - 1 ? resolvedContent as string : m.content,
+        }))
 
       const toolCallMap = new Map<string, string>()
       let streamed = ''
@@ -188,7 +318,7 @@ export function ChatPage() {
       setLoading(false)
       setTimeout(() => setStatusText(''), 3000)
     }
-  }, [input, loading, activeModel, messages])
+  }, [input, loading, activeModel, messages, attachments])
 
   // ask_user 回答
   const handleAskAnswer = useCallback((answer: string) => {
@@ -320,6 +450,41 @@ export function ChatPage() {
 
       {/* 输入区 */}
       <div className="border-t border-border px-3 py-2">
+        {/* 附件 chips */}
+        {attachments.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {attachments.map((att) => (
+              <div
+                key={att.id}
+                className={`flex items-center gap-1 rounded-md border px-2 py-1 text-xs ${
+                  att.status === 'error' ? 'border-destructive/30 bg-destructive/5 text-destructive'
+                  : att.status === 'converting' ? 'border-border bg-muted/50 text-muted-foreground'
+                  : 'border-border bg-card text-foreground'
+                }`}
+              >
+                {att.status === 'error' ? (
+                  <X className="h-3 w-3 text-destructive" />
+                ) : att.status === 'converting' ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : att.type === 'image' ? (
+                  <Image className="h-3 w-3 text-blue-500" />
+                ) : (
+                  <FileText className="h-3 w-3 text-amber-500" />
+                )}
+                <span className="max-w-[120px] truncate" title={att.error}>{att.name}</span>
+                {att.status === 'converting' && <span className="text-[10px]">转换中</span>}
+                {att.status === 'error' && <span className="text-[10px] text-destructive truncate max-w-[200px]" title={att.error}>失败: {att.error}</span>}
+                <button
+                  className="ml-0.5 rounded-full p-0.5 hover:bg-muted transition-colors"
+                  onClick={() => removeAttachment(att.id)}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="flex items-center gap-2">
           {/* 模型选择（紧凑图标按钮） */}
           <div className="relative shrink-0">
@@ -373,6 +538,14 @@ export function ChatPage() {
               </div>
             )}
           </div>
+          {/* 上传文件 */}
+          <button
+            className="flex items-center rounded-md border border-border p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+            onClick={handleUpload}
+            title="上传文件（图片/文档）"
+          >
+            <Paperclip className="h-4 w-4" />
+          </button>
           {/* 输入框 */}
           <Input
             className="flex-1 h-9 text-sm"
