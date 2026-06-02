@@ -13,6 +13,17 @@ export default defineConfig({
     electron([
       {
         entry: 'electron/main.ts',
+        vite: {
+          build: {
+            rollupOptions: {
+              external: [
+                'node-llama-cpp',
+                /^@node-llama-cpp\//,
+                'mammoth',
+              ],
+            },
+          },
+        },
       },
       {
         entry: 'electron/preload.ts',

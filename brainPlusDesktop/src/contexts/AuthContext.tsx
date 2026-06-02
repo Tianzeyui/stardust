@@ -28,15 +28,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
   const [configReady, setConfigReady] = useState(false)
 
-  // 监听 localStorage 变化（用户可能在另一个标签页修改了配置）
+  // 等待配置就绪（磁盘加载是异步的）
   useEffect(() => {
-    setConfigReady(isSupabaseConfigured())
-
-    const onStorageChange = () => {
-      setConfigReady(isSupabaseConfigured())
+    let cancelled = false
+    // 轮询直到配置加载完成
+    const check = () => {
+      if (cancelled) return
+      const ready = isSupabaseConfigured()
+      if (ready) { setConfigReady(true); return }
+      setTimeout(check, 200)
     }
-    window.addEventListener('storage', onStorageChange)
-    return () => window.removeEventListener('storage', onStorageChange)
+    check()
+    return () => { cancelled = true }
   }, [])
 
   // 初始化 session 并监听认证变化
@@ -118,11 +121,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     setError(null)
     const supabase = getSupabaseClient()
-    if (!supabase) return
-    const { error: err } = await supabase.auth.signOut()
-    if (err) {
-      setError(err.message)
+    if (!supabase) {
+      // 清除本地状态
+      setUser(null)
+      setSession(null)
+      return
     }
+    const { error: err } = await supabase.auth.signOut()
+    setUser(null)
+    setSession(null)
+    if (err) setError(err.message)
   }, [])
 
   return (

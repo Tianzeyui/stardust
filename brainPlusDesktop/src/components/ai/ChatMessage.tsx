@@ -40,10 +40,17 @@ export function ChatMessage({ msg }: ChatMessageProps) {
             )}
           </div>
         ) : (
-          <MarkdownPreview
-            source={msg.content || (msg.streaming ? '...' : '')}
-            style={{ fontSize: 14, backgroundColor: 'transparent' }}
-          />
+          <div>
+            <MarkdownPreview
+              source={msg.content || (msg.streaming ? '...' : '')}
+              style={{ fontSize: 14, backgroundColor: 'transparent' }}
+            />
+            {msg.modelName && !msg.streaming && (
+              <p className="mt-0.5 text-[10px] text-muted-foreground/40 select-none">
+                by {msg.modelName}
+              </p>
+            )}
+          </div>
         )}
       </div>
     </div>

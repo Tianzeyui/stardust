@@ -43,6 +43,57 @@ contextBridge.exposeInMainWorld('electronAPI', {
     unlink: (filePath: string) => ipcRenderer.invoke('fs:unlink', filePath),
   },
 
+  model: {
+    getStatus: () => ipcRenderer.invoke('model:getStatus'),
+    download: (id: string, useMirror?: boolean) => ipcRenderer.invoke('model:download', id, useMirror),
+    delete: (id: string) => ipcRenderer.invoke('model:delete', id),
+    isInstalled: (id: string) => ipcRenderer.invoke('model:isInstalled', id),
+    openDir: () => ipcRenderer.invoke('model:openDir'),
+    toggleEnabled: (id: string, enabled: boolean) => ipcRenderer.invoke('model:toggleEnabled', id, enabled),
+    load: (id: string) => ipcRenderer.invoke('model:load', id),
+    unload: () => ipcRenderer.invoke('model:unload'),
+    chat: (id: string, messages: Array<{ role: string; content: string }>) => {
+      ipcRenderer.send('model:chat', id, messages)
+    },
+    onChatChunk: (cb: (data: { text: string }) => void) => {
+      const handler = (_event: any, data: any) => cb(data)
+      ipcRenderer.on('model:chatChunk', handler)
+      return () => ipcRenderer.removeListener('model:chatChunk', handler)
+    },
+    onChatDone: (cb: () => void) => {
+      const handler = () => cb()
+      ipcRenderer.on('model:chatDone', handler)
+      return () => ipcRenderer.removeListener('model:chatDone', handler)
+    },
+    onChatError: (cb: (data: { error: string }) => void) => {
+      const handler = (_event: any, data: any) => cb(data)
+      ipcRenderer.on('model:chatError', handler)
+      return () => ipcRenderer.removeListener('model:chatError', handler)
+    },
+    subscribe: () => ipcRenderer.send('model:subscribe'),
+    onProgress: (cb: (data: { id: string; loaded: number; total: number }) => void) => {
+      const handler = (_event: any, data: any) => cb(data)
+      ipcRenderer.on('model:downloadProgress', handler)
+      return () => ipcRenderer.removeListener('model:downloadProgress', handler)
+    },
+    onDone: (cb: (data: { id: string; success: boolean; error: string }) => void) => {
+      const handler = (_event: any, data: any) => cb(data)
+      ipcRenderer.on('model:downloadDone', handler)
+      return () => ipcRenderer.removeListener('model:downloadDone', handler)
+    },
+  },
+
+  config: {
+    getSupabase: () => ipcRenderer.invoke('config:getSupabase'),
+    saveSupabase: (c: any) => ipcRenderer.invoke('config:saveSupabase', c),
+    clearSupabase: () => ipcRenderer.invoke('config:clearSupabase'),
+    getCloudinary: () => ipcRenderer.invoke('config:getCloudinary'),
+    saveCloudinary: (c: any) => ipcRenderer.invoke('config:saveCloudinary', c),
+    clearCloudinary: () => ipcRenderer.invoke('config:clearCloudinary'),
+    getAIModels: () => ipcRenderer.invoke('config:getAIModels'),
+    saveAIModels: (models: any[]) => ipcRenderer.invoke('config:saveAIModels', models),
+  },
+
   skills: {
     writeFiles: (skillId: string, files: Record<string, string>) =>
       ipcRenderer.invoke('skills:writeFiles', skillId, files),

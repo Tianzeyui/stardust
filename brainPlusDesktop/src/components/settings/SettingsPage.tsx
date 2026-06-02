@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Settings, Cpu, Server, Trash2, Plus, RefreshCw, Check, Wrench, FolderOpen, MessageSquare, Play, ChevronDown, Loader2, X } from 'lucide-react'
+import { Settings, Cpu, Server, Trash2, Plus, RefreshCw, Check, Wrench, FolderOpen, MessageSquare, Play, ChevronDown, Loader2, X, Download, HardDrive, ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,9 +14,9 @@ import {
 import { listTools, listResources, listPrompts, callTool, readResource, getPrompt, connect, addServer as addMcpServer, updateServer as updateMcpServer, removeServer as removeMcpServer } from '@/lib/mcpClient'
 import type { MCPTool, MCPResource, MCPPrompt } from '@/types/electron'
 
-type Tab = 'general' | 'ai' | 'mcp'
+type Tab = 'general' | 'ai' | 'model' | 'mcp'
 
-export function SettingsPage() {
+export function SettingsPage({ onClose }: { onClose?: () => void }) {
   const [tab, setTab] = useState<Tab>('general')
   const [saved, setSaved] = useState(false)
 
@@ -34,6 +34,11 @@ export function SettingsPage() {
   const [servers, setServers] = useState<MCPServerConfig[]>([])
   const [expandedSrv, setExpandedSrv] = useState<string | null>(null)
   const [srvDetailTab, setSrvDetailTab] = useState<'tools' | 'resources' | 'prompts'>('tools')
+  // 本地模型
+  interface ModelStatus { id: string; name: string; size: string; installed: boolean; enabled: boolean; progress?: number }
+  const [modelList, setModelList] = useState<ModelStatus[]>([])
+  const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const [downloadPct, setDownloadPct] = useState(0)
   const [srvTools, setSrvTools] = useState<MCPTool[]>([])
   const [srvResources, setSrvResources] = useState<MCPResource[]>([])
   const [srvPrompts, setSrvPrompts] = useState<MCPPrompt[]>([])
@@ -56,21 +61,36 @@ export function SettingsPage() {
     if (window.electronAPI?.mcp) {
       window.electronAPI.mcp.getServers().then(s => setServers(s as MCPServerConfig[])).catch(() => {})
     }
+    // 本地模型
+    if (window.electronAPI?.model) {
+      window.electronAPI.model.subscribe()
+      window.electronAPI.model.getStatus().then(list => setModelList(list)).catch(() => {})
+      window.electronAPI.model.onProgress(({ id, loaded, total }) => {
+        setDownloadingId(id)
+        setDownloadPct(total > 0 ? Math.round((loaded / total) * 100) : 0)
+      })
+      window.electronAPI.model.onDone(({ id, success }) => {
+        if (success) {
+          window.electronAPI!.model.getStatus().then(list => setModelList(list)).catch(() => {})
+        }
+        setDownloadingId(null)
+      })
+    }
   }, [])
 
   const flashSaved = () => { setSaved(true); setTimeout(() => setSaved(false), 1500) }
 
   // ===== 通用保存 =====
-  const saveGeneral = () => {
+  const saveGeneral = async () => {
     if (supabaseUrl.trim() && supabaseKey.trim()) {
-      saveSupabaseConfig(supabaseUrl.trim(), supabaseKey.trim())
+      await saveSupabaseConfig(supabaseUrl.trim(), supabaseKey.trim())
     }
-    saveCloudinaryConfig({ cloudName: cloudName.trim(), uploadPreset: uploadPreset.trim() })
+    await saveCloudinaryConfig({ cloudName: cloudName.trim(), uploadPreset: uploadPreset.trim() })
     flashSaved()
   }
 
-  const clearAll = () => {
-    clearSupabaseConfig(); clearCloudinaryConfig()
+  const clearAll = async () => {
+    await clearSupabaseConfig(); await clearCloudinaryConfig()
     setSupabaseUrl(''); setSupabaseKey(''); setCloudName(''); setUploadPreset('')
     flashSaved()
   }
@@ -79,7 +99,7 @@ export function SettingsPage() {
   const updateModel = (id: string, patch: Partial<AIModelConfig>) => {
     setModels((prev) => {
       const next = prev.map((m) => (m.id === id ? { ...m, ...patch } : m))
-      saveAIModels(next)
+      saveAIModels(next).catch(() => {})
       return next
     })
   }
@@ -92,7 +112,7 @@ export function SettingsPage() {
         ...m,
         enabled: m.id === id ? !model.enabled : false,
       }))
-      saveAIModels(next)
+      saveAIModels(next).catch(() => {})
       return next
     })
   }
@@ -210,10 +230,17 @@ export function SettingsPage() {
     <div className="flex h-full flex-col">
       {/* 顶栏：标签切换 */}
       <div className="flex items-center justify-between border-b border-border px-6 py-3">
-        <div className="flex items-center gap-1 rounded-lg bg-muted p-0.5">
+        <div className="flex items-center gap-2">
+          {onClose && (
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose} title="返回">
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          )}
+          <div className="flex items-center gap-1 rounded-lg bg-muted p-0.5">
           {([
             { id: 'general' as const, label: '通用', icon: Settings },
-            { id: 'ai' as const, label: 'AI 模型', icon: Cpu },
+            { id: 'ai' as const, label: '云模型', icon: Cpu },
+            { id: 'model' as const, label: '本地模型', icon: Cpu },
             { id: 'mcp' as const, label: 'MCP 服务器', icon: Server },
           ]).map((t) => (
             <button
@@ -224,12 +251,7 @@ export function SettingsPage() {
               <t.icon className="h-3.5 w-3.5" /> {t.label}
             </button>
           ))}
-        </div>
-        <div className="flex items-center gap-2">
-          {saved && <span className="text-xs text-green-600">✓ 已保存</span>}
-          <Button size="sm" onClick={tab === 'general' ? saveGeneral : undefined}>
-            {tab === 'general' ? '保存' : '自动保存'}
-          </Button>
+          </div>
         </div>
       </div>
 
@@ -266,7 +288,13 @@ export function SettingsPage() {
               </div>
             </fieldset>
 
-            <Button variant="ghost" size="sm" onClick={clearAll}>清除全部配置</Button>
+            <div className="flex items-center justify-between pt-2">
+              <Button variant="ghost" size="sm" onClick={clearAll}>清除全部配置</Button>
+              <div className="flex items-center gap-2">
+                {saved && <span className="text-xs text-muted-foreground">已保存</span>}
+                <Button size="sm" onClick={saveGeneral}>保存</Button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -274,14 +302,14 @@ export function SettingsPage() {
         {tab === 'ai' && (
           <div className="w-full space-y-3">
             <p className="text-xs text-muted-foreground rounded-lg bg-blue-50 dark:bg-blue-950/30 p-3 border border-blue-200 dark:border-blue-900">
-              同时只能启用一个模型。配置好的 API Key 仅存储在本地浏览器中。
+              可启用多个云模型，在聊天中自由切换。API Key 存储在本地磁盘。
             </p>
             {models.map((model) => (
               <div key={model.id} className={`rounded-lg border transition-colors ${model.enabled ? 'border-primary bg-primary/5' : 'border-border'}`}>
                 <div className="flex items-center justify-between px-4 py-3 cursor-pointer" onClick={() => setExpandedModel(expandedModel === model.id ? null : model.id)}>
                   <div className="flex items-center gap-3">
                     <span className="text-sm font-medium">{model.displayName}</span>
-                    {model.enabled && <span className="rounded-full bg-green-100 dark:bg-green-900/30 px-2 py-0.5 text-[10px] text-green-700 dark:text-green-300">已启用</span>}
+                    {model.enabled && <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">已启用</span>}
                     {!model.enabled && model.apiKey && <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] text-secondary-foreground">已配置</span>}
                   </div>
                   <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
@@ -344,6 +372,97 @@ export function SettingsPage() {
         )}
 
         {/* ===== MCP 服务器设置 ===== */}
+        {tab === 'model' && (
+          <div className="flex-1 overflow-auto p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold">本地模型管理</h3>
+              <Button size="sm" variant="outline" className="h-7 text-xs"
+                onClick={() => window.electronAPI?.model?.openDir()}>
+                <FolderOpen className="h-3 w-3 mr-1" /> 打开目录
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mb-4">
+              下载或手动放入 .gguf 文件到模型目录即可使用。模型文件名为 {`{id}.gguf`}。
+            </p>
+
+            {modelList.length === 0 ? (
+              <div className="flex items-center gap-2 py-8 justify-center text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-xs">加载模型列表...</span>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {modelList.map((m) => (
+                  <div key={m.id} className="rounded-lg border border-border p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <HardDrive className="h-5 w-5 text-muted-foreground" />
+                        <div>
+                          <p className="text-sm font-medium">{m.name}</p>
+                          <p className="text-[11px] text-muted-foreground">{m.size}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {downloadingId === m.id ? (
+                          <div className="flex items-center gap-2">
+                            <div className="h-1.5 w-24 rounded-full bg-muted overflow-hidden">
+                              <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${downloadPct}%` }} />
+                            </div>
+                            <span className="text-[11px] text-muted-foreground w-8 text-right">{downloadPct}%</span>
+                          </div>
+                        ) : m.installed ? (
+                          <Button
+                            size="sm" variant="outline" className="h-7 text-xs"
+                            onClick={async () => {
+                              if (window.electronAPI?.model) {
+                                await window.electronAPI.model.delete(m.id)
+                                setModelList(await window.electronAPI.model.getStatus())
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-3 w-3 mr-1" /> 删除
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm" className="h-7 text-xs"
+                            onClick={async () => {
+                              if (window.electronAPI?.model) {
+                                setDownloadingId(m.id)
+                                setDownloadPct(0)
+                                await window.electronAPI.model.download(m.id)
+                                setModelList(await window.electronAPI.model.getStatus())
+                              }
+                            }}
+                          >
+                            <Download className="h-3 w-3 mr-1" /> 下载
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    {m.installed && (
+                      <div className="mt-2 flex items-center gap-3">
+                        <span className="text-[11px] text-muted-foreground">已安装</span>
+                        <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer">
+                          <span
+                            className={`relative inline-flex h-3.5 w-6 items-center rounded-full transition-colors ${m.enabled ? 'bg-primary' : 'bg-muted'}`}
+                            onClick={async () => {
+                              await window.electronAPI?.model?.toggleEnabled(m.id, !m.enabled)
+                              setModelList(await window.electronAPI!.model!.getStatus())
+                            }}
+                          >
+                            <span className={`inline-block h-2.5 w-2.5 rounded-full bg-white transition-transform ${m.enabled ? 'translate-x-2.5' : 'translate-x-0.5'}`} />
+                          </span>
+                          启用
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {tab === 'mcp' && (
           <div className="w-full space-y-3">
             <div className="flex items-center justify-between">
@@ -354,7 +473,7 @@ export function SettingsPage() {
               <p className="py-12 text-center text-sm text-muted-foreground">暂无 MCP 服务器</p>
             ) : (
               servers.map((srv) => (
-                <div key={srv.id} className={`rounded-lg border transition-colors ${srv.enabled ? 'border-green-500 bg-green-50/50 dark:bg-green-950/10' : 'border-border'}`}>
+                <div key={srv.id} className="rounded-lg border border-border transition-colors">
                   <div className="flex items-center justify-between px-4 py-3 cursor-pointer" onClick={() => loadServerDetail(srv.id)}>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate">{srv.name}</p>
@@ -362,7 +481,7 @@ export function SettingsPage() {
                     </div>
                     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                       <button
-                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${srv.enabled ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${srv.enabled ? 'bg-primary' : 'bg-muted'}`}
                         onClick={() => toggleServer(srv.id)}
                       >
                         <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${srv.enabled ? 'translate-x-4' : 'translate-x-1'}`} />

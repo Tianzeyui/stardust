@@ -1,4 +1,4 @@
-import { streamText, stepCountIs, jsonSchema, type ModelMessage } from 'ai'
+import { streamText, generateText, stepCountIs, jsonSchema, type ModelMessage } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
@@ -79,8 +79,56 @@ export function getChatModel() {
   return { instance: provider(modelId), config: enabled }
 }
 
+// ====== 模型委托 ======
+
+const TIER_FAST = ['haiku', 'gpt-4o-mini', 'gemini-flash', 'deepseek-chat', 'flash', 'mini']
+const TIER_POWERFUL = ['opus', 'gpt-4', 'gpt-4-turbo', 'gemini-pro', 'deepseek-v3', 'deepseek-v4', 'pro', 'ultra']
+
+function pickModelByTier(
+  provider: AIModelConfig,
+  tier: 'fast' | 'balanced' | 'powerful',
+): string {
+  const models = provider.availableModels || []
+  if (models.length === 0) return provider.selectedModel || ''
+
+  if (tier === 'balanced') return provider.selectedModel || models[0]?.id || ''
+
+  const checks = tier === 'fast' ? TIER_FAST : TIER_POWERFUL
+  // 精确匹配
+  for (const ck of checks) {
+    const m = models.find(m => m.id === ck || m.id.includes(ck))
+    if (m) return m.id
+  }
+  // 回退：fast 取第一个，powerful 取最后一个
+  return tier === 'fast' ? models[0]?.id || '' : models[models.length - 1]?.id || ''
+}
+
+export async function delegateToModel(
+  tier: 'fast' | 'balanced' | 'powerful',
+  task: string,
+  systemContext?: string,
+): Promise<{ modelName: string; result: string }> {
+  const models = getAIModels()
+  const enabled = models.find((m) => m.enabled && m.apiKey)
+  if (!enabled) throw new Error('没有可用的模型')
+
+  const modelId = pickModelByTier(enabled, tier)
+  const provider = getProvider(enabled)
+
+  try {
+    const result = await generateText({
+      model: provider(modelId),
+      system: systemContext || '你是一个专业助手。请简洁准确地完成任务。',
+      prompt: task,
+    })
+    return { modelName: `${enabled.displayName} / ${modelId}`, result: result.text }
+  } catch (e: any) {
+    throw new Error(`委托 ${tier} 模型失败: ${e.message}`)
+  }
+}
+
 /** 从 MCP 服务器获取工具 */
-export async function getMCPSdkTools(): Promise<Record<string, any>> {
+export async function getMCPSdkTools(autoMode?: boolean): Promise<Record<string, any>> {
   if (!window.electronAPI?.mcp) return {}
 
   try {
@@ -317,6 +365,37 @@ export async function getMCPSdkTools(): Promise<Record<string, any>> {
       },
     }
 
+    // delegate_task 仅在 Auto 模式时注册
+    if (autoMode) {
+      sdkTools['delegate_task'] = {
+        description:
+          '将复杂子任务委托给更合适的模型处理。' +
+          'tier: "fast" 简单任务(分类/摘要/翻译), "balanced" 日常任务, "powerful" 复杂任务(推理/代码/长文)。' +
+          'task 描述要具体，包含上下文。委托后你会收到子任务结果，继续基于结果回复用户。' +
+          '典型用法：用户要求多步骤分析时，将每个子分析委托给 powerful 模型并行处理。',
+      inputSchema: jsonSchema({
+        type: 'object',
+        properties: {
+          tier: { type: 'string', enum: ['fast', 'balanced', 'powerful'], description: '目标模型层级' },
+          task: { type: 'string', description: '子任务描述（含必要上下文）' },
+          reason: { type: 'string', description: '委托原因（可选）' },
+        },
+        required: ['tier', 'task'],
+      }),
+      execute: async (args: { tier: string; task: string }) => {
+        try {
+          const result = await delegateToModel(
+            args.tier as 'fast' | 'balanced' | 'powerful',
+            args.task,
+          )
+          return `[${result.modelName}]\n${result.result}`
+        } catch (e: any) {
+          return `委托失败: ${e.message}`
+        }
+      },
+    }
+    } // end if (autoMode)
+
     // 注册沙箱执行工具（始终可用，不依赖 Skills）
     if (window.electronAPI?.sandbox) {
       const wsPaths = window.electronAPI?.workspace
@@ -373,12 +452,17 @@ export interface ChatStreamEvent {
 export async function chat(
   messages: ModelMessage[],
   onEvent?: (event: ChatStreamEvent) => void,
-  system?: string,
+  opts?: { abortSignal?: AbortSignal; autoMode?: boolean; localModelId?: string },
 ) {
+  // 本地模型路径
+  if (opts?.localModelId) {
+    return chatLocalViaIpc(messages, onEvent, opts.localModelId, opts?.abortSignal)
+  }
+
   const model = getChatModel()
   if (!model) throw new Error('请先在设置中启用一个 AI 模型')
 
-  const mcpTools = await getMCPSdkTools()
+  const mcpTools = await getMCPSdkTools(opts?.autoMode)
 
   // 已启用的技能：只注入名称+描述+段落索引（不注入完整文件内容，节省 token）
   const enabledSkills = getInstalledSkills().filter(s => s.enabled)
@@ -411,6 +495,7 @@ export async function chat(
     messages,
     tools: Object.keys(mcpTools).length > 0 ? mcpTools : undefined,
     stopWhen: stepCountIs(15),
+    abortSignal: opts?.abortSignal,
   })
 
   let fullText = ''
@@ -436,4 +521,58 @@ export async function chat(
 
   onEvent?.({ type: 'done' })
   return fullText
+}
+
+// ====== 本地模型推理（通过 IPC） ======
+
+async function chatLocalViaIpc(
+  messages: ModelMessage[],
+  onEvent?: (event: ChatStreamEvent) => void,
+  modelId?: string,
+  abortSignal?: AbortSignal,
+): Promise<string> {
+  console.warn('[localInference] 开始，modelId:', modelId, 'messages:', messages.length)
+  if (!modelId) throw new Error('未指定本地模型')
+  const api = window.electronAPI?.model
+  if (!api) throw new Error('本地模型 API 不可用')
+
+  // 转成简单消息格式
+  const msgs = messages.map(m => ({ role: m.role as string, content: typeof m.content === 'string' ? m.content : '' }))
+
+  // 发起流式聊天
+  api.chat(modelId, msgs)
+
+  let fullText = ''
+
+  return new Promise((resolve, reject) => {
+    const unsubChunk = api.onChatChunk(({ text }) => {
+      console.warn('[localInference] chunk:', text.slice(0, 50))
+      fullText += text
+      onEvent?.({ type: 'text-delta', text })
+    })
+    const unsubDone = api.onChatDone(() => {
+      console.warn('[localInference] done, fullText:', fullText.length)
+      unsubChunk()
+      unsubDone()
+      unsubErr()
+      onEvent?.({ type: 'done' })
+      resolve(fullText)
+    })
+    const unsubErr = api.onChatError(({ error }) => {
+      console.warn('[localInference] error:', error)
+      unsubChunk()
+      unsubDone()
+      unsubErr()
+      reject(new Error(error))
+    })
+
+    // 支持打断
+    if (abortSignal) {
+      abortSignal.addEventListener('abort', () => {
+        console.warn('[localInference] aborted')
+        unsubChunk(); unsubDone(); unsubErr()
+        reject(new DOMException('用户中断', 'AbortError'))
+      }, { once: true })
+    }
+  })
 }

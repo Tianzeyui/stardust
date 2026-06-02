@@ -70,6 +70,33 @@ export interface ElectronAPI {
     mkdir: (dirPath: string) => Promise<{ success: boolean; error?: string }>
     unlink: (filePath: string) => Promise<{ success: boolean; error?: string }>
   }
+  config: {
+    getSupabase: () => Promise<{ url: string; anonKey: string }>
+    saveSupabase: (c: { url: string; anonKey: string }) => Promise<void>
+    clearSupabase: () => Promise<boolean>
+    getCloudinary: () => Promise<{ cloudName: string; uploadPreset: string }>
+    saveCloudinary: (c: { cloudName: string; uploadPreset: string }) => Promise<void>
+    clearCloudinary: () => Promise<boolean>
+    getAIModels: () => Promise<any[]>
+    saveAIModels: (models: any[]) => Promise<void>
+  }
+  model: {
+    getStatus: () => Promise<Array<{ id: string; name: string; size: string; installed: boolean; enabled: boolean; progress?: number }>>
+    toggleEnabled: (id: string, enabled: boolean) => Promise<boolean>
+    download: (id: string, useMirror?: boolean) => Promise<{ success: boolean; error?: string }>
+    delete: (id: string) => Promise<{ success: boolean }>
+    isInstalled: (id: string) => Promise<boolean>
+    openDir: () => Promise<boolean>
+    load: (id: string) => Promise<{ success: boolean; error?: string }>
+    unload: () => Promise<boolean>
+    chat: (id: string, messages: Array<{ role: string; content: string }>) => void
+    onChatChunk: (cb: (data: { text: string }) => void) => () => void
+    onChatDone: (cb: () => void) => () => void
+    onChatError: (cb: (data: { error: string }) => void) => () => void
+    subscribe: () => void
+    onProgress: (cb: (data: { id: string; loaded: number; total: number }) => void) => () => void
+    onDone: (cb: (data: { id: string; success: boolean; error: string }) => void) => () => void
+  }
   skills: {
     writeFiles: (skillId: string, files: Record<string, string>) => Promise<{ success: boolean; error?: string }>
     readFile: (skillId: string, filePath: string) => Promise<{ success: boolean; content?: string; error?: string }>

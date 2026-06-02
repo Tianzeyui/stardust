@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { fileURLToPath } from 'url'
@@ -7,6 +7,21 @@ import { executeJS, executePython, preInit } from './main/sandboxService.js'
 import { initWorkspace, getWorkspacePaths, listOutputFiles, openFile, deleteFile, clearOutputFiles } from './main/workspace.js'
 import { writeSkillFiles, readSkillFile, deleteSkillFiles } from './main/skillDiskStore.js'
 import { convertWithMarkitdown, isImageFile, isConvertible } from './main/fileConvert.js'
+import {
+  getModelStatus,
+  getModelDir,
+  downloadModel,
+  deleteModel,
+  onModelEvent,
+  isModelInstalled,
+  setModelEnabled,
+} from './main/localModelManager.js'
+import { loadModel, chatLocal, unloadModel } from './main/localInference.js'
+import {
+  getSupabase, saveSupabase as saveSupabaseCfg, clearSupabase as clearSupabaseCfg,
+  getCloudinary, saveCloudinary as saveCloudinaryCfg, clearCloudinary as clearCloudinaryCfg,
+  getAIModels as getAIModelsCfg, saveAIModels as saveAIModelsCfg,
+} from './main/configStore.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -276,6 +291,101 @@ ipcMain.handle('workspace:listOutputs', () => listOutputFiles())
 ipcMain.handle('workspace:openFile', (_event, filePath: string) => openFile(filePath))
 ipcMain.handle('workspace:deleteFile', (_event, filePath: string) => deleteFile(filePath))
 ipcMain.handle('workspace:clearOutputs', () => clearOutputFiles())
+
+// ==================== Config IPC ====================
+
+ipcMain.handle('config:getSupabase', () => getSupabase())
+ipcMain.handle('config:saveSupabase', (_e, c: any) => saveSupabaseCfg(c))
+ipcMain.handle('config:clearSupabase', () => { clearSupabaseCfg(); return true })
+
+ipcMain.handle('config:getCloudinary', () => getCloudinary())
+ipcMain.handle('config:saveCloudinary', (_e, c: any) => saveCloudinaryCfg(c))
+ipcMain.handle('config:clearCloudinary', () => { clearCloudinaryCfg(); return true })
+
+ipcMain.handle('config:getAIModels', () => getAIModelsCfg())
+ipcMain.handle('config:saveAIModels', (_e, models: any[]) => saveAIModelsCfg(models))
+
+// ==================== Local Model IPC ====================
+
+ipcMain.handle('model:getStatus', () => getModelStatus())
+
+ipcMain.handle('model:download', async (_event, id: string) => {
+  return downloadModel(id)
+})
+
+ipcMain.handle('model:delete', async (_event, id: string) => {
+  return { success: deleteModel(id) }
+})
+
+ipcMain.handle('model:isInstalled', async (_event, id: string) => {
+  return isModelInstalled(id)
+})
+
+ipcMain.handle('model:toggleEnabled', async (_event, id: string, enabled: boolean) => {
+  setModelEnabled(id, enabled)
+  return true
+})
+
+ipcMain.handle('model:openDir', async () => {
+  shell.openPath(getModelDir())
+  return true
+})
+
+ipcMain.handle('model:load', async (_event, id: string) => {
+  return loadModel(id)
+})
+
+ipcMain.handle('model:unload', async () => {
+  await unloadModel()
+  return true
+})
+
+// 本地模型流式聊天
+ipcMain.on('model:chat', async (event, id: string, messages: Array<{ role: string; content: string }>) => {
+  const win = BrowserWindow.fromWebContents(event.sender)
+  if (!win) return
+
+  try {
+    console.log('[model:chat] 加载模型:', id)
+    const loadResult = await loadModel(id)
+    if (!loadResult.success) {
+      console.error('[model:chat] 加载失败:', loadResult.error)
+      win.webContents.send('model:chatError', { error: loadResult.error || '加载失败' })
+      return
+    }
+    console.log('[model:chat] 模型已加载，开始推理')
+
+    const stream = chatLocal(messages)
+    for await (const chunk of stream) {
+      if (win.isDestroyed()) break
+      win.webContents.send('model:chatChunk', { text: chunk })
+    }
+    if (!win.isDestroyed()) {
+      win.webContents.send('model:chatDone', {})
+    }
+  } catch (e: any) {
+    console.error('[model:chat] 推理异常:', e.message, e.stack)
+    if (!win.isDestroyed()) {
+      win.webContents.send('model:chatError', { error: e.message || '推理异常' })
+    }
+  }
+})
+
+// 模型事件 → 推送
+ipcMain.on('model:subscribe', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender)
+  if (!win) return
+
+  const unsubProgress = onModelEvent('download:progress', (id: string, loaded: number, total: number) => {
+    if (!win.isDestroyed()) win.webContents.send('model:downloadProgress', { id, loaded, total })
+  })
+  const unsubDone = onModelEvent('download:done', (id: string, success: boolean, error: string) => {
+    if (!win.isDestroyed()) win.webContents.send('model:downloadDone', { id, success, error })
+  })
+
+  event.sender.on('destroyed', () => { unsubProgress(); unsubDone() })
+  event.returnValue = true
+})
 
 // ==================== App Lifecycle ====================
 

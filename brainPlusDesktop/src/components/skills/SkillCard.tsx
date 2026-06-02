@@ -10,17 +10,11 @@ interface SkillCardProps {
 
 export function SkillCard({ skill, onToggle, onUninstall, onDetail }: SkillCardProps) {
   return (
-    <div
-      className={`rounded-lg border transition-colors ${
-        skill.enabled
-          ? 'border-green-500 bg-green-50/50 dark:bg-green-950/10'
-          : 'border-border'
-      }`}
-    >
+    <div className="rounded-lg border border-border transition-colors">
       <div className="flex items-center justify-between px-4 py-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <Package className="h-4 w-4 shrink-0 text-primary" />
+            <Package className="h-4 w-4 shrink-0 text-muted-foreground" />
             <span className="text-sm font-medium">{skill.name}</span>
             <span className="text-[10px] text-muted-foreground">
               {skill.fileCount} 个文件
@@ -33,7 +27,7 @@ export function SkillCard({ skill, onToggle, onUninstall, onDetail }: SkillCardP
         <div className="flex items-center gap-2 ml-2">
           <button
             className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-              skill.enabled ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'
+              skill.enabled ? 'bg-primary' : 'bg-muted'
             }`}
             onClick={() => onToggle(skill)}
             title={skill.enabled ? '禁用' : '启用'}
@@ -52,7 +46,7 @@ export function SkillCard({ skill, onToggle, onUninstall, onDetail }: SkillCardP
             <ExternalLink className="h-4 w-4" />
           </button>
           <button
-            className="rounded p-1 text-muted-foreground hover:text-destructive transition-colors"
+            className="rounded p-1 text-muted-foreground hover:text-foreground transition-colors"
             onClick={() => onUninstall(skill.id)}
             title="卸载"
           >
@@ -75,12 +69,12 @@ export function SkillCard({ skill, onToggle, onUninstall, onDetail }: SkillCardP
         {(skill.deps.pip.length > 0 || skill.deps.npm.length > 0) && (
           <div className="flex flex-wrap gap-1 mt-2">
             {skill.deps.pip.map(pkg => (
-              <span key={`pip-${pkg}`} className="inline-flex items-center rounded bg-blue-100 dark:bg-blue-900/30 px-1.5 py-0.5 text-[10px] text-blue-700 dark:text-blue-300">
+              <span key={`pip-${pkg}`} className="inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
                 pip: {pkg}
               </span>
             ))}
             {skill.deps.npm.map(pkg => (
-              <span key={`npm-${pkg}`} className="inline-flex items-center rounded bg-yellow-100 dark:bg-yellow-900/30 px-1.5 py-0.5 text-[10px] text-yellow-700 dark:text-yellow-300">
+              <span key={`npm-${pkg}`} className="inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
                 npm: {pkg}
               </span>
             ))}

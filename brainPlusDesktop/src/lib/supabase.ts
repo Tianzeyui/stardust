@@ -1,57 +1,44 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
-const STORAGE_KEY_URL = 'brainplus_supabase_url'
-const STORAGE_KEY_ANON_KEY = 'brainplus_supabase_anon_key'
+// ========== 内存缓存（磁盘文件 + IPC） ==========
 
+let supabaseCache: { url: string; anonKey: string } | null = null
 let cachedClient: SupabaseClient | null = null
 
-/**
- * 从 localStorage 获取已保存的 Supabase 配置
- */
-export function getSupabaseConfig(): { url: string; anonKey: string } | null {
-  const url = localStorage.getItem(STORAGE_KEY_URL)
-  const anonKey = localStorage.getItem(STORAGE_KEY_ANON_KEY)
-  if (url && anonKey) {
-    return { url, anonKey }
+const api = () => window.electronAPI?.config
+
+/** 启动时从磁盘加载 */
+export async function initSupabaseConfig(): Promise<void> {
+  if (!api()) return
+  const config = await api()!.getSupabase()
+  if (config.url && config.anonKey) {
+    supabaseCache = config
   }
-  return null
 }
 
-/**
- * 保存 Supabase 配置到 localStorage
- */
-export function saveSupabaseConfig(url: string, anonKey: string): void {
-  localStorage.setItem(STORAGE_KEY_URL, url)
-  localStorage.setItem(STORAGE_KEY_ANON_KEY, anonKey)
-  cachedClient = null // 清除缓存，下次获取时会用新配置创建
+export function getSupabaseConfig(): { url: string; anonKey: string } | null {
+  return supabaseCache
 }
 
-/**
- * 清除 Supabase 配置
- */
-export function clearSupabaseConfig(): void {
-  localStorage.removeItem(STORAGE_KEY_URL)
-  localStorage.removeItem(STORAGE_KEY_ANON_KEY)
+export async function saveSupabaseConfig(url: string, anonKey: string): Promise<void> {
+  supabaseCache = { url, anonKey }
   cachedClient = null
+  await api()?.saveSupabase(supabaseCache)
 }
 
-/**
- * 是否已配置 Supabase
- */
+export async function clearSupabaseConfig(): Promise<void> {
+  supabaseCache = null
+  cachedClient = null
+  await api()?.clearSupabase()
+}
+
 export function isSupabaseConfigured(): boolean {
-  return getSupabaseConfig() !== null
+  return !!supabaseCache
 }
 
-/**
- * 获取 Supabase 客户端实例
- * 如果配置改变，需要先调用 clearSupabaseConfig 清除缓存
- */
 export function getSupabaseClient(): SupabaseClient | null {
   if (cachedClient) return cachedClient
-
-  const config = getSupabaseConfig()
-  if (!config) return null
-
-  cachedClient = createClient(config.url, config.anonKey)
+  if (!supabaseCache) return null
+  cachedClient = createClient(supabaseCache.url, supabaseCache.anonKey)
   return cachedClient
 }

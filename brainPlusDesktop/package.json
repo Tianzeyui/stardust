@@ -26,6 +26,7 @@
     "clsx": "^2.1.1",
     "lucide-react": "^0.468.0",
     "mammoth": "^1.12.0",
+    "node-llama-cpp": "^3.18.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",

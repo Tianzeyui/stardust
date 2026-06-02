@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Brain, Settings } from 'lucide-react'
+import { Brain, Settings, Github } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -28,16 +28,24 @@ export function AuthPage() {
         <h1 className="text-3xl font-bold tracking-tight">BrainPlus</h1>
       </div>
 
-      {/* 设置按钮 */}
-      <div className="absolute right-4 top-4">
+      {/* 右上角按钮 */}
+      <div className="absolute right-4 top-4 flex items-center gap-1">
+        <a
+          href="https://github.com/Tianzeyui/brainPlus"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center h-9 w-9 text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+          title="GitHub"
+        >
+          <Github className="h-5 w-5" />
+        </a>
         <Button
           variant="ghost"
           size="icon"
           onClick={() => setSettingsOpen(true)}
-          title="Supabase 设置"
+          title="设置"
         >
           <Settings className="h-5 w-5" />
-          <span className="sr-only">设置</span>
         </Button>
       </div>
 

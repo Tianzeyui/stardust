@@ -131,9 +131,9 @@ export function FileTree({ dirPath, selectedPath, onSelect, depth = 0 }: FileTre
             <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
           )}
           {expanded ? (
-            <FolderOpen className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+            <FolderOpen className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           ) : (
-            <Folder className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+            <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           )}
           <span className="truncate">{dirPath.split('/').pop()}</span>
         </div>

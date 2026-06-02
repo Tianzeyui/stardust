@@ -4,8 +4,13 @@ import { AuthProvider } from './contexts/AuthContext'
 import { ToastProvider } from './hooks/useToast'
 import { ToastViewport } from './components/ui/toast'
 import { useToast } from './hooks/useToast'
+import { initConfig } from './lib/config'
+import { initSupabaseConfig } from './lib/supabase'
 import App from './App'
 import './index.css'
+
+// 启动时从磁盘加载配置
+Promise.all([initConfig(), initSupabaseConfig()]).catch(() => {})
 
 function ToastContainer() {
   const { toasts, dismiss } = useToast()

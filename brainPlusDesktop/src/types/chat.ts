@@ -22,6 +22,7 @@ export interface UIMessage {
   streaming?: boolean
   toolCall?: ToolCallStatus
   attachments?: MessageAttachment[]
+  modelName?: string
 }
 
 export interface ConsoleLine {
