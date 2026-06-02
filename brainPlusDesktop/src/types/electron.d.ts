@@ -97,6 +97,13 @@ export interface ElectronAPI {
     onProgress: (cb: (data: { id: string; loaded: number; total: number }) => void) => () => void
     onDone: (cb: (data: { id: string; success: boolean; error: string }) => void) => () => void
   }
+  conv: {
+    list: () => Promise<Array<{ id: string; title: string; messageCount: number; updatedAt: string }>>
+    get: (id: string) => Promise<{ id: string; title: string; messages: any[]; modelName?: string; createdAt: string; updatedAt: string } | null>
+    save: (conv: any) => Promise<boolean>
+    delete: (id: string) => Promise<boolean>
+    create: (title?: string, modelName?: string) => Promise<{ id: string; title: string; messages: any[]; createdAt: string; updatedAt: string }>
+  }
   skills: {
     writeFiles: (skillId: string, files: Record<string, string>) => Promise<{ success: boolean; error?: string }>
     readFile: (skillId: string, filePath: string) => Promise<{ success: boolean; content?: string; error?: string }>

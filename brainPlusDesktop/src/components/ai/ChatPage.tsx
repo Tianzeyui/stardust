@@ -14,6 +14,7 @@ import { AskUserBar } from './AskUserBar'
 import { ChatConsole } from './ChatConsole'
 import { ModelPicker } from './ModelPicker'
 import { OutputFiles } from './OutputFiles'
+import { ConversationBar, type ConvInfo } from './ConversationBar'
 import {
   type ToolCallStatus, type UIMessage, type ConsoleLine,
   detectToolType,
@@ -35,8 +36,13 @@ export function ChatPage() {
   const [progressMsg, setProgressMsg] = useState('')
   const [taskList, setTaskList] = useState<Array<{ id: string; title: string; status: string }>>([])
   const [attachments, setAttachments] = useState<Attachment[]>([])
+  // 对话管理
+  const [convId, setConvId] = useState<string | null>(null)
+  const [convTitle, setConvTitle] = useState('新对话')
+  const [convList, setConvList] = useState<ConvInfo[]>([])
   const abortRef = useRef<AbortController | null>(null)
   const pickerRef = useRef<HTMLDivElement>(null)
+  const messagesRef = useRef<UIMessage[]>([])
   const logId = useRef(0)
   const endRef = useRef<HTMLDivElement>(null)
 
@@ -46,7 +52,28 @@ export function ChatPage() {
     setConsoleLog(prev => [...prev.slice(-200), { id, time, icon, msg, status }])
   }
 
+  useEffect(() => { messagesRef.current = messages }, [messages])
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+
+  // 加载对话列表
+  const loadConvList = useCallback(async () => {
+    if (!window.electronAPI?.conv) return
+    const list = await window.electronAPI.conv.list()
+    setConvList(list)
+  }, [])
+  useEffect(() => { loadConvList() }, [loadConvList])
+
+  // 保存当前对话（消息变化时）
+  useEffect(() => {
+    if (!convId || !window.electronAPI?.conv || messages.length === 0) return
+    const modelName = activeModel ? `${activeModel.displayName} / ${activeModel.selectedModel}` : undefined
+    window.electronAPI.conv.save({
+      id: convId, title: convTitle, messages, modelName,
+      createdAt: '', updatedAt: new Date().toISOString(),
+    })
+    // 更新列表
+    setConvList(prev => prev.map(c => c.id === convId ? { ...c, title: convTitle, messageCount: messages.length, updatedAt: new Date().toISOString() } : c))
+  }, [messages, convId, convTitle, activeModel])
 
   const refreshOutputs = useCallback(async () => {
     if (window.electronAPI?.workspace) {
@@ -89,6 +116,75 @@ export function ChatPage() {
     return () => setAgentUIHandler(null)
   }, [])
 
+  // 新对话
+  const handleNewConv = useCallback(async () => {
+    const api = window.electronAPI?.conv
+    if (!api) return
+    const c = await api.create('新对话')
+    setConvId(c.id); setConvTitle('新对话'); setMessages([])
+    setConvList(prev => [{ id: c.id, title: '新对话', messageCount: 0, updatedAt: c.updatedAt }, ...prev])
+  }, [])
+
+  // 切换对话
+  const handleSwitchConv = useCallback(async (id: string) => {
+    const api = window.electronAPI?.conv
+    if (!api) return
+    const c = await api.get(id)
+    if (c) { setConvId(c.id); setConvTitle(c.title); setMessages(c.messages || []) }
+  }, [])
+
+  // 删除对话
+  const handleDeleteConv = useCallback(async (id: string) => {
+    await window.electronAPI?.conv?.delete(id)
+    setConvList(prev => prev.filter(c => c.id !== id))
+    if (convId === id) {
+      const remaining = convList.filter(c => c.id !== id)
+      if (remaining.length > 0) { handleSwitchConv(remaining[0].id) }
+      else { handleNewConv() }
+    }
+  }, [convId, convList, handleSwitchConv, handleNewConv])
+
+  // 重命名对话
+  const handleRenameConv = useCallback(async (id: string, title: string) => {
+    setConvTitle(title)
+    setConvList(prev => prev.map(c => c.id === id ? { ...c, title } : c))
+    const c = await window.electronAPI?.conv?.get(id)
+    if (c) window.electronAPI?.conv?.save({ ...c, title })
+  }, [])
+
+  // 自动标题（首条消息后异步生成）
+  const generateTitle = useCallback(async (cid: string, userText: string, aiText: string) => {
+    try {
+      const prompt = `根据以下对话生成一个简短的标题（3-8个字，直接输出标题不要解释）：\n用户: ${userText.slice(0, 100)}\nAI: ${aiText.slice(0, 200)}`
+
+      // 优先用任意已启用的本地模型
+      const modelApi = window.electronAPI?.model
+      const localModel = modelApi ? (await modelApi.getStatus()).find(m => m.installed && m.enabled) : null
+
+      if (localModel && modelApi) {
+        console.warn(`[title] 使用本地模型: ${localModel.name}`)
+        modelApi.chat(localModel.id, [{ role: 'user', content: prompt }])
+        let title = ''
+        const u1 = modelApi.onChatChunk(({ text }) => { title += text })
+        modelApi.onChatDone(() => {
+          u1()
+          const t = title.trim().slice(0, 40) || '新对话'
+          console.warn(`[title] 结果: "${t}"`)
+          setConvTitle(t); setConvList(prev => prev.map(c => c.id === cid ? { ...c, title: t } : c))
+        })
+      } else if (activeModel) {
+        console.warn(`[title] 使用云模型: ${activeModel.displayName}`)
+        const { delegateToModel } = await import('@/lib/chatService')
+        const r = await delegateToModel('fast', prompt)
+        const t = r.result.trim().slice(0, 40) || '新对话'
+        console.warn(`[title] 结果: "${t}"`)
+        setConvTitle(t); setConvList(prev => prev.map(c => c.id === cid ? { ...c, title: t } : c))
+      } else {
+        console.warn('[title] 无可用模型')
+      }
+    } catch {}
+  }, [activeModel])
+
   // 上传文件
   const handleUpload = useCallback(async () => {
     if (!window.electronAPI?.dialog || !window.electronAPI?.file) return
@@ -121,6 +217,15 @@ export function ChatPage() {
   // 发送消息
   const handleSend = useCallback(async () => {
     if (!input.trim() || loading || (!activeModel && !localModelId)) return
+
+    // 确保有对话
+    let cid = convId
+    if (!cid && window.electronAPI?.conv) {
+      const c = await window.electronAPI.conv.create('新对话')
+      cid = c.id; setConvId(c.id)
+      setConvList(prev => [{ id: c.id, title: '新对话', messageCount: 0, updatedAt: c.updatedAt }, ...prev])
+    }
+    const isFirstMsg = messages.length === 0
 
     const docs = attachments.filter(a => a.type === 'document' && a.status === 'done' && a.content)
     const failedDocs = attachments.filter(a => a.type === 'document' && a.status !== 'done')
@@ -211,7 +316,16 @@ export function ChatPage() {
       }))
       if (isAbort) { pushLog('STOP', '用户中断', 'info'); setProgressMsg(''); setTaskList(prev => prev.map(t => t.status === 'running' ? { ...t, status: 'cancelled' } : t)) }
     } finally { abortRef.current = null; setLoading(false); setTimeout(() => setStatusText(''), 3000) }
-  }, [input, loading, activeModel, messages, attachments, localModelId, localModels, autoMode])
+
+    // 首条消息后自动生成标题（用 ref 避免闭包过期）
+    if (isFirstMsg && cid) {
+      const userText = input.trim()
+      const latestMsgs = messagesRef.current
+      const aiReply = latestMsgs.filter(m => m.role === 'assistant').pop()
+      const aiText = aiReply?.content?.slice(0, 200) || ''
+      if (aiText) setTimeout(() => generateTitle(cid, userText, aiText), 1000)
+    }
+  }, [input, loading, activeModel, messages, attachments, localModelId, localModels, autoMode, convId, generateTitle])
 
   const handleAskAnswer = useCallback((answer: string) => {
     if (!askUser) return
@@ -223,6 +337,15 @@ export function ChatPage() {
 
   return (
     <div className="flex h-full flex-col">
+      <ConversationBar
+        convId={convId}
+        convTitle={convTitle}
+        conversations={convList}
+        onNew={handleNewConv}
+        onSwitch={handleSwitchConv}
+        onDelete={handleDeleteConv}
+        onRename={handleRenameConv}
+      />
       <div className="flex-1 overflow-auto">
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">

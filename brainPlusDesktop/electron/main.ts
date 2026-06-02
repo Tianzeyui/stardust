@@ -18,6 +18,10 @@ import {
 } from './main/localModelManager.js'
 import { loadModel, chatLocal, unloadModel } from './main/localInference.js'
 import {
+  listConversations, getConversation, saveConversation,
+  deleteConversation, createConversation,
+} from './main/conversationStore.js'
+import {
   getSupabase, saveSupabase as saveSupabaseCfg, clearSupabase as clearSupabaseCfg,
   getCloudinary, saveCloudinary as saveCloudinaryCfg, clearCloudinary as clearCloudinaryCfg,
   getAIModels as getAIModelsCfg, saveAIModels as saveAIModelsCfg,
@@ -386,6 +390,14 @@ ipcMain.on('model:subscribe', (event) => {
   event.sender.on('destroyed', () => { unsubProgress(); unsubDone() })
   event.returnValue = true
 })
+
+// ==================== Conversation IPC ====================
+
+ipcMain.handle('conv:list', () => listConversations())
+ipcMain.handle('conv:get', (_e, id: string) => getConversation(id))
+ipcMain.handle('conv:save', (_e, conv: any) => { saveConversation(conv); return true })
+ipcMain.handle('conv:delete', (_e, id: string) => deleteConversation(id))
+ipcMain.handle('conv:create', (_e, title?: string, modelName?: string) => createConversation(title, modelName))
 
 // ==================== App Lifecycle ====================
 

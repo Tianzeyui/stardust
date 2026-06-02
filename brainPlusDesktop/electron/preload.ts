@@ -94,6 +94,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     saveAIModels: (models: any[]) => ipcRenderer.invoke('config:saveAIModels', models),
   },
 
+  conv: {
+    list: () => ipcRenderer.invoke('conv:list'),
+    get: (id: string) => ipcRenderer.invoke('conv:get', id),
+    save: (conv: any) => ipcRenderer.invoke('conv:save', conv),
+    delete: (id: string) => ipcRenderer.invoke('conv:delete', id),
+    create: (title?: string, modelName?: string) => ipcRenderer.invoke('conv:create', title, modelName),
+  },
+
   skills: {
     writeFiles: (skillId: string, files: Record<string, string>) =>
       ipcRenderer.invoke('skills:writeFiles', skillId, files),

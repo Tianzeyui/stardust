@@ -494,7 +494,7 @@ export async function chat(
     system: systemPrompt || undefined,
     messages,
     tools: Object.keys(mcpTools).length > 0 ? mcpTools : undefined,
-    stopWhen: stepCountIs(15),
+    stopWhen: stepCountIs(25),
     abortSignal: opts?.abortSignal,
   })
 
