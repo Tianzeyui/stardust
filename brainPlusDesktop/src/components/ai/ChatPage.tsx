@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import {
-  Send, Loader2, Bot, X, ListTodo, Circle, CheckCircle2,
+  Send, Loader2, Bot, X, ListTodo, Circle, CheckCircle2, File,
   Paperclip, FileText, Image, HardDrive,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -15,6 +15,9 @@ import { ChatConsole } from './ChatConsole'
 import { ModelPicker } from './ModelPicker'
 import { OutputFiles } from './OutputFiles'
 import { ConversationBar, type ConvInfo } from './ConversationBar'
+import { SkillPicker } from './SkillPicker'
+import { getInstalledSkills, toggleSkill } from '@/lib/skillService'
+import type { InstalledSkill } from '@/types/skill'
 import {
   type ToolCallStatus, type UIMessage, type ConsoleLine,
   detectToolType,
@@ -36,6 +39,11 @@ export function ChatPage() {
   const [progressMsg, setProgressMsg] = useState('')
   const [taskList, setTaskList] = useState<Array<{ id: string; title: string; status: string }>>([])
   const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [skills, setSkills] = useState<InstalledSkill[]>([])
+  // @ 文件选择
+  const [atFiles, setAtFiles] = useState<Array<{ name: string; path: string; isDir: boolean }>>([])
+  const [showAtPicker, setShowAtPicker] = useState(false)
+  const atQueryRef = useRef('')
   // 对话管理
   const [convId, setConvId] = useState<string | null>(null)
   const [convTitle, setConvTitle] = useState('新对话')
@@ -61,6 +69,7 @@ export function ChatPage() {
     const list = await window.electronAPI.conv.list()
     setConvList(list)
   }, [])
+  useEffect(() => { setSkills(getInstalledSkills()) }, [])
   useEffect(() => { loadConvList() }, [loadConvList])
 
   // 保存当前对话（消息变化时）
@@ -327,6 +336,40 @@ export function ChatPage() {
     }
   }, [input, loading, activeModel, messages, attachments, localModelId, localModels, autoMode, convId, generateTitle])
 
+  // @ 文件选择器
+  const handleInputChange = useCallback(async (val: string) => {
+    setInput(val)
+    const atIdx = val.lastIndexOf('@')
+    if (atIdx >= 0 && (atIdx === 0 || val[atIdx - 1] === ' ')) {
+      const query = val.slice(atIdx + 1).toLowerCase()
+      atQueryRef.current = query
+      if (window.electronAPI?.workspace && window.electronAPI?.fs) {
+        const ws = await window.electronAPI.workspace.getPaths()
+        // 搜索整个工作区（递归列出所有文件）
+        const allFiles = await collectFiles(ws.root, query || undefined)
+        setAtFiles(allFiles.slice(0, 10))
+        setShowAtPicker(allFiles.length > 0)
+      }
+    } else { setShowAtPicker(false) }
+  }, [])
+
+  const selectAtFile = useCallback(async (file: { name: string; path: string }) => {
+    const atIdx = input.lastIndexOf('@')
+    const afterAt = input.slice(atIdx + 1)
+    const spaceIdx = afterAt.indexOf(' ')
+    const replaceLen = spaceIdx >= 0 ? spaceIdx + 1 : afterAt.length + 1
+    setInput(input.slice(0, atIdx) + input.slice(atIdx + replaceLen))
+    const att: Attachment = { id: 'att_' + Math.random().toString(36).slice(2, 8), name: file.name, path: file.path, type: ['png','jpg','jpeg','gif','webp','bmp','svg'].includes(file.name.split('.').pop()?.toLowerCase()||'') ? 'image' : 'document', status: 'pending' }
+    setAttachments(prev => [...prev, att]); setShowAtPicker(false)
+    if (att.type === 'document' && window.electronAPI?.file) {
+      setAttachments(prev => prev.map(a => a.id === att.id ? { ...a, status: 'converting' } : a))
+      try {
+        const r = await window.electronAPI.file.convert(file.path)
+        setAttachments(prev => prev.map(a => a.id === att.id ? { ...a, status: r.success && r.content ? 'done' : 'error', content: r.content, error: r.error } : a))
+      } catch (e: any) { setAttachments(prev => prev.map(a => a.id === att.id ? { ...a, status: 'error', error: e.message } : a)) }
+    }
+  }, [input])
+
   const handleAskAnswer = useCallback((answer: string) => {
     if (!askUser) return
     setMessages(prev => [...prev, { role: 'user', content: answer }])
@@ -377,55 +420,115 @@ export function ChatPage() {
       <div className="border-t border-border px-3 py-2">
         {attachments.length > 0 && <AttachmentChips attachments={attachments} onRemove={removeAttachment} />}
 
-        <div className="flex items-center gap-2">
+        {/* @ 文件选择器 */}
+        {showAtPicker && atFiles.length > 0 && (
+          <div className="mb-1.5 rounded-md border border-border bg-card shadow-lg max-h-36 overflow-auto">
+            {atFiles.map(f => (
+              <button
+                key={f.path}
+                className="flex items-center gap-2 w-full px-2 py-1.5 text-xs hover:bg-muted/50 transition-colors text-left"
+                onClick={() => selectAtFile(f)}
+              >
+                <File className="h-3 w-3 text-muted-foreground shrink-0" />
+                <span className="truncate">{f.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* 功能按钮行 */}
+        <div className="flex items-center gap-1.5 mb-1.5">
           <div className="relative shrink-0">
             <button
-              className="flex items-center gap-1 rounded-md border border-border p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              className="flex items-center gap-1 rounded border border-border px-1.5 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
               onClick={() => setShowModelPicker(!showModelPicker)}
               title={localModelId ? `本地: ${localModels.find(m => m.id === localModelId)?.name}` : activeModel ? `${activeModel.displayName} / ${activeModel.selectedModel}` : '选择模型'}
             >
-              {localModelId ? <HardDrive className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+              {localModelId ? <HardDrive className="h-3 w-3" /> : <Bot className="h-3 w-3" />}
+              <span className="max-w-[80px] truncate">{localModelId ? '本地' : activeModel?.displayName || '模型'}</span>
             </button>
             <ModelPicker
-              show={showModelPicker}
-              autoMode={autoMode}
-              activeModel={activeModel}
-              localModelId={localModelId}
-              configuredModels={configuredModels}
-              localModels={localModels}
+              show={showModelPicker} autoMode={autoMode}
+              activeModel={activeModel} localModelId={localModelId}
+              configuredModels={configuredModels} localModels={localModels}
               onToggleAuto={() => setAutoMode(!autoMode)}
               onSelectCloud={(m) => { setActiveModel(m); setLocalModelId(null); setShowModelPicker(false) }}
               onSelectLocal={(id) => { setLocalModelId(id || null); if (id) setActiveModel(null as any); setShowModelPicker(false) }}
-              onClose={() => setShowModelPicker(false)}
-              pickerRef={pickerRef}
+              onClose={() => setShowModelPicker(false)} pickerRef={pickerRef}
             />
           </div>
 
-          <button className="flex items-center rounded-md border border-border p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors" onClick={handleUpload} title="上传文件">
-            <Paperclip className="h-4 w-4" />
+          <SkillPicker skills={skills} onToggle={async (s) => { await toggleSkill(s.id, !s.enabled); setSkills(getInstalledSkills()) }} />
+
+          <button className="flex items-center gap-1 rounded border border-border px-1.5 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors" onClick={handleUpload} title="上传文件">
+            <Paperclip className="h-3 w-3" />
+            <span>文件</span>
           </button>
 
-          <Input
-            className="flex-1 h-9 text-sm"
+          <span className="text-[10px] text-muted-foreground/50 ml-auto">{autoMode ? 'Auto' : ''}</span>
+        </div>
+
+        {/* 输入行 */}
+        <div className="relative">
+          <textarea
+            className="w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm leading-relaxed placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            rows={3}
             placeholder={localModelId ? '向本地模型提问...' : activeModel ? `向 ${activeModel.displayName} 提问...` : '请先配置模型'}
-            value={input} onChange={e => setInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
+            value={input}
+            onChange={e => handleInputChange(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
+              if (e.key === 'Enter' && e.shiftKey) return // 允许换行
+            }}
             disabled={!activeModel && !localModelId}
           />
 
+          {/* 右下角发送/停止按钮 */}
           {loading ? (
-            <Button size="icon" className="h-9 w-9 shrink-0" variant="secondary" onClick={() => abortRef.current?.abort()} title="停止生成">
+            <button
+              className="absolute bottom-2 right-2 p-1 rounded text-muted-foreground/50 hover:text-foreground transition-colors"
+              onClick={() => abortRef.current?.abort()} title="停止生成"
+            >
               <X className="h-4 w-4" />
-            </Button>
+            </button>
           ) : (
-            <Button size="icon" className="h-9 w-9 shrink-0" onClick={handleSend} disabled={!input.trim() || (!activeModel && !localModelId)}>
+            <button
+              className="absolute bottom-2 right-2 p-1 rounded text-muted-foreground/30 hover:text-muted-foreground transition-colors"
+              onClick={handleSend}
+              disabled={!input.trim() || (!activeModel && !localModelId)}
+              title="发送 (Enter)"
+            >
               <Send className="h-4 w-4" />
-            </Button>
+            </button>
           )}
         </div>
       </div>
     </div>
   )
+}
+
+// ====== 工具函数 ======
+
+async function collectFiles(basePath: string, query?: string, maxDepth = 3): Promise<Array<{ name: string; path: string; isDir: boolean }>> {
+  const api = window.electronAPI?.fs
+  if (!api || maxDepth <= 0) return []
+  const result: Array<{ name: string; path: string; isDir: boolean }> = []
+  const listResult = await api.listDir(basePath)
+  if (!listResult.success || !listResult.files) return result
+  for (const name of listResult.files) {
+    if (name.startsWith('.') || name === 'node_modules') continue
+    const childPath = `${basePath.replace(/\/+$/, '')}/${name}`
+    const statResult = await api.stat(childPath)
+    const isDir = statResult.success && statResult.stat?.isDirectory === true
+    if (!query || name.toLowerCase().includes(query)) {
+      result.push({ name, path: childPath, isDir })
+    }
+    if (isDir && result.length < 30) {
+      const sub = await collectFiles(childPath, query, maxDepth - 1)
+      result.push(...sub)
+    }
+  }
+  return result
 }
 
 // ====== 内部组件 ======
