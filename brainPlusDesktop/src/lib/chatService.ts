@@ -170,7 +170,7 @@ export async function getMCPSdkTools(autoMode?: boolean): Promise<Record<string,
 }
 
 export interface ChatStreamEvent {
-  type: 'text-delta' | 'tool-call' | 'tool-result' | 'done' | 'compression' | 'disclosure'
+  type: 'text-delta' | 'tool-call' | 'tool-result' | 'done' | 'compression' | 'disclosure' | 'system-log'
   text?: string
   toolName?: string
   toolInput?: unknown
@@ -188,7 +188,7 @@ export interface ChatStreamEvent {
 export async function chat(
   messages: ModelMessage[],
   onEvent?: (event: ChatStreamEvent) => void,
-  opts?: { abortSignal?: AbortSignal; autoMode?: boolean; localModelId?: string; forceCompression?: boolean; selectedTools?: Set<string> | null },
+  opts?: { abortSignal?: AbortSignal; autoMode?: boolean; localModelId?: string; forceCompression?: boolean; selectedTools?: Set<string> | null; memoryInjection?: string },
 ) {
   // 本地模型路径
   if (opts?.localModelId) {
@@ -377,14 +377,24 @@ export async function chat(
     })
   }
 
-  // 摘要注入 system prompt，不放入 messages（避免 AI SDK 安全警告）
-  const finalSystem = summary
-    ? `${systemPrompt || ''}\n\n[对话历史摘要]\n${summary}`
-    : systemPrompt || undefined
+  // 记忆 + 摘要注入 system prompt
+  let finalSystem = systemPrompt || ''
+  if (opts?.memoryInjection) {
+    console.log('[memory] 本轮注入记忆:\n' + opts.memoryInjection)
+    onEvent?.({ type: 'system-log', text: `🧠 记忆注入:\n${opts.memoryInjection}` })
+    finalSystem = `${opts.memoryInjection}\n\n${finalSystem}`
+  } else {
+    console.log('[memory] 本轮无记忆注入（记忆为空或未开启）')
+    onEvent?.({ type: 'system-log', text: '🧠 无记忆（对话中提取后将在此显示）' })
+  }
+  // 输出逐轮 system prompt 到控制台
+  onEvent?.({ type: 'system-log', text: `📋 系统提示词 (${finalSystem.length}字):\n${finalSystem.slice(0, 500)}${finalSystem.length > 500 ? '...(截断)' : ''}` })
+  if (summary) finalSystem = `${finalSystem}\n\n[对话历史摘要]\n${summary}`
+  finalSystem = finalSystem.trim()
 
   const result = streamText({
     model: model.instance,
-    system: finalSystem,
+    system: finalSystem || undefined,
     messages: compressedMessages,
     tools: Object.keys(filteredTools).length > 0 ? filteredTools : undefined,
     stopWhen: stepCountIs(getAgentMaxSteps()),
@@ -398,6 +408,11 @@ export async function chat(
   let fullText = ''
 
   for await (const chunk of result.fullStream) {
+    // 手动检查 abort——工具执行中 AI SDK 可能不会立即中断
+    if (opts?.abortSignal?.aborted) {
+      onEvent?.({ type: 'done' })
+      break
+    }
     if (chunk.type === 'text-delta') {
       fullText += chunk.text
       trace.addOutput(chunk.text)

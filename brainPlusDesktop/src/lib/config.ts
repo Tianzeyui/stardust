@@ -172,3 +172,19 @@ export function saveAgentMaxSteps(steps: number): void {
   const n = Math.max(5, Math.min(100, Math.round(steps)))
   localStorage.setItem(AGENT_MAX_STEPS_KEY, String(n))
 }
+
+// ========== 记忆功能开关 ==========
+
+const MEMORY_ENABLED_KEY = 'brainplus_memory_enabled'
+
+export function getMemoryEnabled(): boolean {
+  try {
+    const v = localStorage.getItem(MEMORY_ENABLED_KEY)
+    if (v !== null) return v === 'true'
+  } catch {}
+  return false  // 默认关闭
+}
+
+export function saveMemoryEnabled(enabled: boolean): void {
+  localStorage.setItem(MEMORY_ENABLED_KEY, String(enabled))
+}

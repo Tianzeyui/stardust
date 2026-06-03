@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
-import { Settings, Cpu, Server, Trash2, Plus, RefreshCw, Check, Wrench, FolderOpen, MessageSquare, Play, ChevronDown, Loader2, X, Download, HardDrive, ArrowLeft, Info, Bot } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { Settings, Cpu, Server, Trash2, Plus, RefreshCw, Check, Wrench, FolderOpen, MessageSquare, Play, ChevronDown, Loader2, X, ArrowLeft, Info, Bot } from 'lucide-react'
 import { APP_VERSION } from '@/lib/version'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,13 +13,20 @@ import {
   type AIModelConfig, type MCPServerConfig,
   getDisclosureThreshold, saveDisclosureThreshold,
   getAgentMaxSteps, saveAgentMaxSteps,
+  getMemoryEnabled, saveMemoryEnabled,
 } from '@/lib/config'
 import { listTools, listResources, listPrompts, callTool, readResource, getPrompt, connect, disconnect, addServer as addMcpServer, updateServer as updateMcpServer, removeServer as removeMcpServer } from '@/lib/mcpClient'
 import type { MCPTool, MCPResource, MCPPrompt } from '@/types/electron'
+import { MemoryPanel } from './MemoryPanel'
+import { MemoryManager } from '@/lib/memory/manager'
+import { createSupabaseMemoryStore } from '@/lib/memory/store-supabase'
+import { createLocalMemoryStore } from '@/lib/memory/store-local'
+import { useAuth } from '@/contexts/AuthContext'
 
-type Tab = 'general' | 'agent' | 'ai' | 'model' | 'mcp' | 'about'
+type Tab = 'general' | 'agent' | 'ai' | 'mcp' | 'about'
 
 export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; initialTab?: Tab }) {
+  const { user } = useAuth()
   const [tab, setTab] = useState<Tab>(initialTab || 'general')
   const [saved, setSaved] = useState(false)
 
@@ -37,11 +44,6 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
   const [servers, setServers] = useState<MCPServerConfig[]>([])
   const [expandedSrv, setExpandedSrv] = useState<string | null>(null)
   const [srvDetailTab, setSrvDetailTab] = useState<'tools' | 'resources' | 'prompts'>('tools')
-  // 本地模型
-  interface ModelStatus { id: string; name: string; size: string; installed: boolean; enabled: boolean; progress?: number }
-  const [modelList, setModelList] = useState<ModelStatus[]>([])
-  const [downloadingId, setDownloadingId] = useState<string | null>(null)
-  const [downloadPct, setDownloadPct] = useState(0)
   const [srvTools, setSrvTools] = useState<MCPTool[]>([])
   const [srvResources, setSrvResources] = useState<MCPResource[]>([])
   const [srvPrompts, setSrvPrompts] = useState<MCPPrompt[]>([])
@@ -52,6 +54,12 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
   const [callLoading, setCallLoading] = useState(false)
   const [disclosureThreshold, setDisclosureThreshold] = useState(getDisclosureThreshold)
   const [maxSteps, setMaxSteps] = useState(getAgentMaxSteps)
+  const [memoryEnabled, setMemoryEnabled] = useState(getMemoryEnabled)
+  const memoryManagerRef = useRef(new MemoryManager(
+    // 短期记忆只读 —— 设置页无法确定当前 convId，仅展示长期记忆
+    createLocalMemoryStore('settings'),
+    createSupabaseMemoryStore(() => user?.id ?? null),
+  ))
 
   useEffect(() => {
     // 通用
@@ -65,21 +73,6 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
     // MCP 服务器：从 Electron 主进程加载
     if (window.electronAPI?.mcp) {
       window.electronAPI.mcp.getServers().then(s => setServers(s as MCPServerConfig[])).catch(() => {})
-    }
-    // 本地模型
-    if (window.electronAPI?.model) {
-      window.electronAPI.model.subscribe()
-      window.electronAPI.model.getStatus().then(list => setModelList(list)).catch(() => {})
-      window.electronAPI.model.onProgress(({ id, loaded, total }) => {
-        setDownloadingId(id)
-        setDownloadPct(total > 0 ? Math.round((loaded / total) * 100) : 0)
-      })
-      window.electronAPI.model.onDone(({ id, success }) => {
-        if (success) {
-          window.electronAPI!.model.getStatus().then(list => setModelList(list)).catch(() => {})
-        }
-        setDownloadingId(null)
-      })
     }
   }, [])
 
@@ -285,8 +278,7 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
           {([
             { id: 'general' as const, label: '通用', icon: Settings },
             { id: 'agent' as const, label: 'Agent', icon: Bot },
-            { id: 'ai' as const, label: '云模型', icon: Cpu },
-            { id: 'model' as const, label: '本地模型', icon: Cpu },
+            { id: 'ai' as const, label: 'AI模型', icon: Cpu },
             { id: 'mcp' as const, label: 'MCP 服务器', icon: Server },
             { id: 'about' as const, label: '关于', icon: Info },
           ]).map((t) => (
@@ -349,6 +341,23 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
         {tab === 'agent' && (
           <div className="w-full space-y-6">
             <fieldset className="rounded-lg border border-border p-4">
+              <legend className="px-2 text-sm font-semibold">记忆功能</legend>
+              <p className="text-xs text-muted-foreground leading-relaxed mb-3">
+                开启后 AI 自动从对话中提取关键信息（偏好/技能/项目等），下次对话时记住。
+                短期记忆仅限本次会话，长期记忆存云端跨设备同步。
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${memoryEnabled ? 'bg-primary' : 'bg-muted'}`}
+                  onClick={() => { const v = !memoryEnabled; setMemoryEnabled(v); saveMemoryEnabled(v) }}
+                >
+                  <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${memoryEnabled ? 'translate-x-4' : 'translate-x-1'}`} />
+                </button>
+                <span className="text-xs text-muted-foreground">{memoryEnabled ? '已开启' : '已关闭'}</span>
+              </div>
+            </fieldset>
+
+            <fieldset className="rounded-lg border border-border p-4">
               <legend className="px-2 text-sm font-semibold">最大任务步数</legend>
               <p className="text-xs text-muted-foreground leading-relaxed mb-3">
                 AI 在一次对话中最多执行多少步工具调用（包括读取文档、调用技能、沙箱执行等）。
@@ -377,6 +386,8 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
                 <span className="ml-3 text-xs text-muted-foreground">默认 25 步</span>
               </div>
             </fieldset>
+
+            <MemoryPanel manager={memoryManagerRef.current} />
           </div>
         )}
 
@@ -450,98 +461,6 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
                 )}
               </div>
             ))}
-          </div>
-        )}
-
-        {/* ===== MCP 服务器设置 ===== */}
-        {tab === 'model' && (
-          <div className="flex-1 overflow-auto p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold">本地模型管理</h3>
-              <Button size="sm" variant="outline" className="h-7 text-xs"
-                onClick={() => window.electronAPI?.model?.openDir()}>
-                <FolderOpen className="h-3 w-3 mr-1" /> 打开目录
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground mb-4">
-              下载或手动放入 .gguf 文件到模型目录即可使用。模型文件名为 {`{id}.gguf`}。
-            </p>
-
-            {modelList.length === 0 ? (
-              <div className="flex items-center gap-2 py-8 justify-center text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span className="text-xs">加载模型列表...</span>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {modelList.map((m) => (
-                  <div key={m.id} className="rounded-lg border border-border p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <HardDrive className="h-5 w-5 text-muted-foreground" />
-                        <div>
-                          <p className="text-sm font-medium">{m.name}</p>
-                          <p className="text-[11px] text-muted-foreground">{m.size}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {downloadingId === m.id ? (
-                          <div className="flex items-center gap-2">
-                            <div className="h-1.5 w-24 rounded-full bg-muted overflow-hidden">
-                              <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${downloadPct}%` }} />
-                            </div>
-                            <span className="text-[11px] text-muted-foreground w-8 text-right">{downloadPct}%</span>
-                          </div>
-                        ) : m.installed ? (
-                          <Button
-                            size="sm" variant="outline" className="h-7 text-xs"
-                            onClick={async () => {
-                              if (window.electronAPI?.model) {
-                                await window.electronAPI.model.delete(m.id)
-                                setModelList(await window.electronAPI.model.getStatus())
-                              }
-                            }}
-                          >
-                            <Trash2 className="h-3 w-3 mr-1" /> 删除
-                          </Button>
-                        ) : (
-                          <Button
-                            size="sm" className="h-7 text-xs"
-                            onClick={async () => {
-                              if (window.electronAPI?.model) {
-                                setDownloadingId(m.id)
-                                setDownloadPct(0)
-                                await window.electronAPI.model.download(m.id)
-                                setModelList(await window.electronAPI.model.getStatus())
-                              }
-                            }}
-                          >
-                            <Download className="h-3 w-3 mr-1" /> 下载
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                    {m.installed && (
-                      <div className="mt-2 flex items-center gap-3">
-                        <span className="text-[11px] text-muted-foreground">已安装</span>
-                        <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer">
-                          <span
-                            className={`relative inline-flex h-3.5 w-6 items-center rounded-full transition-colors ${m.enabled ? 'bg-primary' : 'bg-muted'}`}
-                            onClick={async () => {
-                              await window.electronAPI?.model?.toggleEnabled(m.id, !m.enabled)
-                              setModelList(await window.electronAPI!.model!.getStatus())
-                            }}
-                          >
-                            <span className={`inline-block h-2.5 w-2.5 rounded-full bg-white transition-transform ${m.enabled ? 'translate-x-2.5' : 'translate-x-0.5'}`} />
-                          </span>
-                          启用
-                        </label>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         )}
 

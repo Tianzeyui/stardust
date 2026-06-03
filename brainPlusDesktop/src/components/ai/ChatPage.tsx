@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   Send, Loader2, Bot, X, ListTodo, Circle, CheckCircle2, File,
-  Paperclip, FileText, Image, HardDrive,
+  Paperclip, FileText, Image,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -23,6 +23,11 @@ import type { DisclosureResult } from '@/lib/toolDisclosure'
 import { getDisclosureThreshold, saveDisclosureThreshold } from '@/lib/config'
 import { getInstalledSkills, toggleSkill } from '@/lib/skillService'
 import type { InstalledSkill } from '@/types/skill'
+import { MemoryManager } from '@/lib/memory/manager'
+import { createLocalMemoryStore } from '@/lib/memory/store-local'
+import { createSupabaseMemoryStore } from '@/lib/memory/store-supabase'
+import { useAuth } from '@/contexts/AuthContext'
+import { MemoryPopup } from './MemoryPopup'
 import {
   type ToolCallStatus, type UIMessage, type ConsoleLine,
   type CompressionEventData,
@@ -31,10 +36,11 @@ import {
 import { TokenUsageBar } from './TokenUsageBar'
 
 export function ChatPage() {
+  const { user } = useAuth()
   const [messages, setMessages] = useState<UIMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const { configuredModels, activeModel, setActiveModel, localModels, localModelId, setLocalModelId, refreshModels } = useModelLoader()
+  const { configuredModels, activeModel, setActiveModel, refreshModels } = useModelLoader()
   const [showModelPicker, setShowModelPicker] = useState(false)
   const [autoMode, setAutoMode] = useState(true)
   const [outputFiles, setOutputFiles] = useState<Array<{ name: string; path: string; size: number }>>([])
@@ -53,6 +59,9 @@ export function ChatPage() {
   const [disclosureThreshold, setDisclosureThreshold] = useState(getDisclosureThreshold)
   // 本轮实际激活的工具名（用于披露面板展示）
   const [activatedToolNames, setActivatedToolNames] = useState<Set<string>>(new Set())
+  // 记忆开关（本次会话）
+  const [sessionMemoryEnabled, setSessionMemoryEnabled] = useState(false)
+  const [shortMemoryCount, setShortMemoryCount] = useState(0)
   // @ 文件选择
   const [atFiles, setAtFiles] = useState<Array<{ name: string; path: string; isDir: boolean }>>([])
   const [showAtPicker, setShowAtPicker] = useState(false)
@@ -69,6 +78,15 @@ export function ChatPage() {
   const messagesRef = useRef<UIMessage[]>([])
   // enable_tool 代理映射：AI SDK 工具名 → 实际显示名
   const toolNameProxyRef = useRef<Map<string, string>>(new Map())
+  // 记忆管理器（convId 变化时重建，绑定新会话）
+  const memoryManagerRef = useRef<MemoryManager | null>(null)
+  // 始终创建 MemoryManager 用于查看长期记忆（即使无 convId）
+  useEffect(() => {
+    memoryManagerRef.current = new MemoryManager(
+      createLocalMemoryStore(convId || 'pending'),
+      createSupabaseMemoryStore(() => user?.id ?? null),
+    )
+  }, [convId, user?.id])
   const logId = useRef(0)
   const endRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -115,7 +133,9 @@ export function ChatPage() {
   }, [])
   useEffect(() => { setSkills(getInstalledSkills()) }, [])
   // 切换对话时重置 MCP 工具选择
-  useEffect(() => { setSelectedMCPTools(null); setDisclosureResult(null) }, [convId])
+  useEffect(() => {
+    setSelectedMCPTools(null); setDisclosureResult(null); setShortMemoryCount(0)
+  }, [convId])
   useEffect(() => { loadConvList() }, [loadConvList])
 
   // 保存当前对话（消息变化时，含压缩快照）
@@ -233,38 +253,17 @@ export function ChatPage() {
     if (c) window.electronAPI?.conv?.save({ ...c, title })
   }, [])
 
-  // 自动标题（首条消息后异步生成）
+  // 自动标题（首条消息后异步生成，使用云端 fast 模型）
   const generateTitle = useCallback(async (cid: string, userText: string, aiText: string) => {
     try {
       const prompt = `根据以下对话生成一个简短的标题（3-8个字，直接输出标题不要解释）：\n用户: ${userText.slice(0, 100)}\nAI: ${aiText.slice(0, 200)}`
 
-      // 优先用任意已启用的本地模型
-      const modelApi = window.electronAPI?.model
-      const localModel = modelApi ? (await modelApi.getStatus()).find(m => m.installed && m.enabled) : null
-
-      if (localModel && modelApi) {
-        console.warn(`[title] 使用本地模型: ${localModel.name}`)
-        modelApi.chat(localModel.id, [{ role: 'user', content: prompt }])
-        let title = ''
-        const u1 = modelApi.onChatChunk(({ text }) => { title += text })
-        modelApi.onChatDone(() => {
-          u1()
-          const t = title.trim().slice(0, 40) || '新对话'
-          console.warn(`[title] 结果: "${t}"`)
-          setConvTitle(t); setConvList(prev => prev.map(c => c.id === cid ? { ...c, title: t } : c))
-        })
-      } else if (activeModel) {
-        console.warn(`[title] 使用云模型: ${activeModel.displayName}`)
-        const { delegateToModel } = await import('@/lib/chatService')
-        const r = await delegateToModel('fast', prompt)
-        const t = r.result.trim().slice(0, 40) || '新对话'
-        console.warn(`[title] 结果: "${t}"`)
-        setConvTitle(t); setConvList(prev => prev.map(c => c.id === cid ? { ...c, title: t } : c))
-      } else {
-        console.warn('[title] 无可用模型')
-      }
+      const { delegateToModel } = await import('@/lib/chatService')
+      const res = await delegateToModel('fast', prompt)
+      const t = res.result.trim().slice(0, 40) || '新对话'
+      setConvTitle(t); setConvList(prev => prev.map(c => c.id === cid ? { ...c, title: t } : c))
     } catch {}
-  }, [activeModel])
+  }, [])
 
   // 上传文件
   const handleUpload = useCallback(async () => {
@@ -297,7 +296,7 @@ export function ChatPage() {
 
   // 发送消息
   const handleSend = useCallback(async () => {
-    if (!input.trim() || loading || (!activeModel && !localModelId)) return
+    if (!input.trim() || loading || !activeModel) return
 
     // 确保有对话
     let cid = convId
@@ -305,6 +304,11 @@ export function ChatPage() {
       const c = await window.electronAPI.conv.create('新对话')
       cid = c.id; setConvId(c.id)
       setConvList(prev => [{ id: c.id, title: '新对话', messageCount: 0, updatedAt: c.updatedAt }, ...prev])
+      // 立即创建 MemoryManager（不等 useEffect），确保首条消息也能注入记忆
+      memoryManagerRef.current = new MemoryManager(
+        createLocalMemoryStore(cid),
+        createSupabaseMemoryStore(() => user?.id ?? null),
+      )
     }
     const isFirstMsg = messages.length === 0
 
@@ -330,9 +334,7 @@ export function ChatPage() {
 
     const displaySummary = [input.trim(), images.length > 0 ? `[${images.length}张图片]` : '', docs.length > 0 ? `[${docs.length}个文档]` : '', failedDocs.length > 0 ? `[${failedDocs.length}个转换失败]` : ''].filter(Boolean).join(' ')
 
-    const modelName = localModelId
-      ? `本地 / ${localModels.find(m => m.id === localModelId)?.name || localModelId}`
-      : activeModel ? `${activeModel.displayName} / ${activeModel.selectedModel}` : undefined
+    const modelName = activeModel ? `${activeModel.displayName} / ${activeModel.selectedModel}` : undefined
 
     const userMsg: UIMessage = { role: 'user', content: displaySummary, attachments: attachments.length > 0 ? attachments.map(a => ({ name: a.name, type: a.type, status: a.status === 'error' ? 'error' as const : 'done' as const, error: a.error })) : undefined }
     setMessages(prev => [...prev, userMsg, { role: 'assistant', content: '', streaming: true, modelName }])
@@ -405,6 +407,8 @@ export function ChatPage() {
           if (proxyName) toolNameProxyRef.current.delete(sdkName)
           if (detectToolType(event.toolName || '') === 'agent') pushLog('OUT', String(event.toolOutput ?? ''), 'info')
           setStatusText('')
+        } else if (event.type === 'system-log') {
+          pushLog('SYS', event.text || '', 'info')
         } else if (event.type === 'disclosure') {
           if (event.disclosureResult) setDisclosureResult(event.disclosureResult)
         } else if (event.type === 'compression') {
@@ -438,13 +442,18 @@ export function ChatPage() {
       }, {
         abortSignal: controller.signal,
         autoMode,
-        localModelId: localModelId ?? undefined,
         forceCompression: forceCompressRef.current ? true : undefined,
         selectedTools: selectedMCPTools,
+        memoryInjection: sessionMemoryEnabled
+          ? await memoryManagerRef.current?.getInjectionText(input.trim()) ?? undefined
+          : undefined,
       })
       forceCompressRef.current = false
     } catch (e: any) {
-      const isAbort = e.name === 'AbortError' || controller.signal.aborted
+      // 兼容不同 AI SDK 版本的 abort 信号
+      const isAbort = e.name === 'AbortError'
+        || e.message?.includes('abort')
+        || controller.signal.aborted
       setMessages(prev => prev.map(m => {
         if (m.role === 'assistant' && m.streaming) return { ...m, content: (m.content || '') + `\n\n*[${isAbort ? '用户已中断' : '连接失败'}] *`, streaming: false }
         if (m.role === 'tool' && m.toolCall?.status === 'running') return { ...m, toolCall: { ...m.toolCall, status: 'error' as const, result: isAbort ? '[已中断]' : '[连接失败]' } }
@@ -461,6 +470,22 @@ export function ChatPage() {
       }
     } finally { abortRef.current = null; setLoading(false); setTimeout(() => setStatusText(''), 8000) }
 
+    // 后台异步提取记忆（fire-and-forget，不阻塞用户）
+    const memMgr = memoryManagerRef.current
+    if (sessionMemoryEnabled && memMgr && messagesRef.current.length >= 2) {
+      const toExtract: ModelMessage[] = messagesRef.current
+        .filter(m => m.role === 'user' || m.role === 'assistant')
+        .slice(-10)
+        .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+      memMgr.extract(toExtract).then(async facts => {
+        console.log(`[memory] 提取完成: ${facts.length} 条`, facts.map(f => f.content))
+        if (facts.length > 0) {
+          await memMgr.saveToShortTerm(facts)
+          setShortMemoryCount((await memMgr.getShortTermList()).length)
+        }
+      }).catch(e => { console.warn('[memory] 提取失败:', e.message) })
+    }
+
     // 首条消息后自动生成标题（用 ref 避免闭包过期）
     if (isFirstMsg && cid) {
       const userText = input.trim()
@@ -469,7 +494,7 @@ export function ChatPage() {
       const aiText = aiReply?.content?.slice(0, 200) || ''
       if (aiText) setTimeout(() => generateTitle(cid, userText, aiText), 1000)
     }
-  }, [input, loading, activeModel, messages, attachments, localModelId, localModels, autoMode, convId, generateTitle, selectedMCPTools])
+  }, [input, loading, activeModel, messages, attachments, autoMode, convId, generateTitle, selectedMCPTools])
 
   // @ 文件选择器
   const handleInputChange = useCallback(async (val: string) => {
@@ -631,35 +656,40 @@ export function ChatPage() {
           <textarea
             className="w-full resize-none bg-transparent px-3 pt-2 pb-0 text-sm leading-relaxed placeholder:text-muted-foreground outline-none disabled:cursor-not-allowed disabled:opacity-50 custom-scrollbar"
             rows={3}
-            placeholder={askUser ? '请在上方回答 AI 的问题...' : localModelId ? '向本地模型提问...' : activeModel ? `向 ${activeModel.displayName} 提问...` : '请先配置模型'}
+            placeholder={askUser ? '请在上方回答 AI 的问题...' : activeModel ? `向 ${activeModel.displayName} 提问...` : '请先配置模型'}
             value={input}
             onChange={e => handleInputChange(e.target.value)}
             onKeyDown={e => {
               if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
               if (e.key === 'Enter' && e.shiftKey) return
             }}
-            disabled={!activeModel && !localModelId || !!askUser}
+            disabled={!activeModel || !!askUser}
           />
           <div className="flex items-center gap-1 px-2 pb-1.5">
             <div className="relative shrink-0">
               <button
                 className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground/60 hover:bg-muted hover:text-muted-foreground transition-colors"
                 onClick={() => setShowModelPicker(!showModelPicker)}
-                title={localModelId ? `本地: ${localModels.find(m => m.id === localModelId)?.name}` : activeModel ? `${activeModel.displayName} / ${activeModel.selectedModel}` : '选择模型'}
+                title={activeModel ? `${activeModel.displayName} / ${activeModel.selectedModel}` : '选择模型'}
               >
-                {localModelId ? <HardDrive className="h-3 w-3" /> : <Bot className="h-3 w-3" />}
-                <span className="max-w-[60px] truncate">{localModelId ? '本地' : activeModel?.displayName || '模型'}</span>
+                <Bot className="h-3 w-3" />
+                <span className="max-w-[60px] truncate">{activeModel?.displayName || '模型'}</span>
               </button>
               <ModelPicker
                 show={showModelPicker} autoMode={autoMode}
-                activeModel={activeModel} localModelId={localModelId}
-                configuredModels={configuredModels} localModels={localModels}
+                activeModel={activeModel}
+                configuredModels={configuredModels}
                 onToggleAuto={() => setAutoMode(!autoMode)}
-                onSelectCloud={(m) => { setActiveModel(m); setLocalModelId(null); setShowModelPicker(false) }}
-                onSelectLocal={(id) => { setLocalModelId(id || null); if (id) setActiveModel(null as any); setShowModelPicker(false) }}
+                onSelectCloud={(m) => { setActiveModel(m); setShowModelPicker(false) }}
                 onClose={() => setShowModelPicker(false)} pickerRef={pickerRef}
               />
             </div>
+            <MemoryPopup
+              manager={memoryManagerRef.current}
+              enabled={sessionMemoryEnabled}
+              onToggle={() => setSessionMemoryEnabled(v => !v)}
+              shortCount={shortMemoryCount}
+            />
             <SkillPicker skills={skills} onToggle={async (s) => { await toggleSkill(s.id, !s.enabled); setSkills(getInstalledSkills()) }} />
             <MCPToolPicker
               selectedTools={selectedMCPTools}
@@ -679,7 +709,7 @@ export function ChatPage() {
                 <X className="h-4 w-4" />
               </button>
             ) : (
-              <button className="p-0.5 rounded text-muted-foreground/30 hover:text-muted-foreground transition-colors" onClick={handleSend} disabled={!input.trim() || (!activeModel && !localModelId) || !!askUser} title={askUser ? '请先在上方回答 AI 的问题' : '发送 (Enter)'}>
+              <button className="p-0.5 rounded text-muted-foreground/30 hover:text-muted-foreground transition-colors" onClick={handleSend} disabled={!input.trim() || !activeModel || !!askUser} title={askUser ? '请先在上方回答 AI 的问题' : '发送 (Enter)'}>
                 <Send className="h-4 w-4" />
               </button>
             )}

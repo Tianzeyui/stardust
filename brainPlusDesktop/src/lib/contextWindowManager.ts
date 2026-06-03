@@ -165,26 +165,10 @@ export class ContextWindowManager {
    */
   private async summarize(messages: ModelMessage[]): Promise<string> {
     const conversationText = this.buildConversationText(messages)
-
-    // 1) 优先云端 fast 模型
-    try {
-      const { delegateToModel } = await import('./chatService')
-      const { result } = await delegateToModel('fast', conversationText, SUMMARY_SYSTEM_PROMPT)
-      if (result) return result
-    } catch {
-      // 云端不可用，继续尝试本地模型
-    }
-
-    // 2) 回退到本地模型
-    try {
-      const localResult = await this.summarizeLocal(conversationText)
-      if (localResult) return localResult
-    } catch {
-      // 本地模型也不可用
-    }
-
-    // 3) 全部失败，抛异常让 compress() 走 truncateOnly
-    throw new Error('所有模型均不可用，无法生成摘要')
+    const { delegateToModel } = await import('./chatService')
+    const { result } = await delegateToModel('fast', conversationText, SUMMARY_SYSTEM_PROMPT)
+    if (result) return result
+    throw new Error('摘要生成失败')
   }
 
   /** 构建消息文本（截断每条到 1000 字） */
@@ -202,56 +186,6 @@ export class ContextWindowManager {
         return `[${role}]: ${truncated}`
       })
       .join('\n\n')
-  }
-
-  /** 使用本地模型生成摘要（通过 IPC 一次性推理） */
-  private summarizeLocal(conversationText: string): Promise<string> {
-    const api = (window as any).electronAPI?.model
-    if (!api) return Promise.reject(new Error('本地模型 API 不可用'))
-
-    return api.getStatus().then((list: Array<{ id: string; installed: boolean; enabled: boolean }>) => {
-      const available = list.filter((m: any) => m.installed && m.enabled)
-      if (available.length === 0) throw new Error('没有可用的本地模型')
-
-      const modelId = available[0].id
-
-      return new Promise<string>((resolve, reject) => {
-        const msgs = [
-          { role: 'system', content: SUMMARY_SYSTEM_PROMPT },
-          { role: 'user', content: conversationText },
-        ]
-
-        const timeout = setTimeout(() => {
-          unsub()
-          reject(new Error('本地模型摘要超时（30s）'))
-        }, 30000)
-
-        let fullText = ''
-        const unsubChunk = api.onChatChunk(({ text }: { text: string }) => {
-          fullText += text
-        })
-        const unsubDone = api.onChatDone(() => {
-          clearTimeout(timeout)
-          unsub()
-          resolve(fullText || '[摘要生成失败]')
-        })
-        const unsubErr = api.onChatError(({ error }: { error: string }) => {
-          clearTimeout(timeout)
-          unsub()
-          reject(new Error(error))
-        })
-
-        const unsub = () => {
-          unsubChunk()
-          unsubDone()
-          unsubErr()
-        }
-
-        api.chat(modelId, msgs)
-      })
-    }).catch(() => {
-      throw new Error('本地模型不可用')
-    })
   }
 
   /**
