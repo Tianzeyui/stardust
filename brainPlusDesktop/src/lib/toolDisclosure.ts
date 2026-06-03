@@ -12,9 +12,16 @@ interface ToolInfo {
   justCalled?: boolean   // 刚才调用过的加分
 }
 
-interface DisclosureResult {
+export interface ToolScore {
+  score: number
+  matched: boolean        // 是否包含在本次请求中
+  reason?: string         // 排除原因
+}
+
+export interface DisclosureResult {
   tools: string[]         // 选中的工具名列表
   excluded: string[]      // 被排除的工具名
+  scores: Record<string, ToolScore>  // 每个工具的得分详情（供 UI 展示）
 }
 
 /** 中文 + 英文分词 */
@@ -75,8 +82,11 @@ export function progressiveDisclosure(
   opts?: { maxTokens?: number; minTools?: number; maxTools?: number },
 ): DisclosureResult {
   const maxTokens = opts?.maxTokens ?? 3000
-  const minTools = opts?.minTools ?? 4
-  const maxTools = opts?.maxTools ?? 12
+  const rawMin = opts?.minTools ?? 4
+  const rawMax = opts?.maxTools ?? 12
+  // minTools 不应超过 maxTools，否则 agent 工具会吃满配额
+  const minTools = Math.min(rawMin, rawMax)
+  const maxTools = rawMax
 
   const keywords = tokenize(userInput)
 
@@ -94,23 +104,37 @@ export function progressiveDisclosure(
   // Token 预算控制
   const selected: string[] = []
   const excluded: string[] = []
+  const scores: Record<string, ToolScore> = {}
   let totalTokens = 0
 
   for (const item of scored) {
-    if (selected.length >= maxTools) { excluded.push(item.name); continue }
+    let reason: string | undefined
+    let matched = true
 
-    const wouldExceed = totalTokens + item.estimatedTokens > maxTokens
-    const belowMin = selected.length < minTools
-
-    if (wouldExceed && !belowMin) {
-      excluded.push(item.name)
+    if (selected.length >= maxTools) {
+      reason = `超出最大工具数(${maxTools})`
+      matched = false
     } else {
+      const wouldExceed = totalTokens + item.estimatedTokens > maxTokens
+      const belowMin = selected.length < minTools
+
+      if (wouldExceed && !belowMin) {
+        reason = '超出 Token 预算'
+        matched = false
+      }
+    }
+
+    if (matched) {
       selected.push(item.name)
       totalTokens += item.estimatedTokens
+    } else {
+      excluded.push(item.name)
     }
+
+    scores[item.name] = { score: item.score, matched, reason }
   }
 
-  return { tools: selected, excluded }
+  return { tools: selected, excluded, scores }
 }
 
 /**
@@ -122,15 +146,26 @@ export function extractToolInfo(
   sdkTools: Record<string, any>,
   lastTools?: Set<string>,
 ): Record<string, { description: string; isAgent?: boolean; isSkill?: boolean; justCalled?: boolean }> {
-  const agentTools = new Set(['ask_user', 'show_progress', 'notify_complete', 'update_task_list', 'delegate_task'])
+  // 始终保留的内建工具（+100 分，不被渐进式披露筛掉）
+  const alwaysKeep = new Set([
+    // Agent 工具
+    'ask_user', 'show_progress', 'notify_complete', 'update_task_list', 'delegate_task',
+    // MCP 网关
+    'mcp_list_resources', 'mcp_read_resource', 'mcp_list_prompts', 'mcp_get_prompt', 'enable_tool',
+    // Skill
+    'read_skill',
+  ])
 
   const result: Record<string, { description: string; isAgent?: boolean; isSkill?: boolean; justCalled?: boolean }> = {}
 
   for (const [name, tool] of Object.entries(sdkTools)) {
+    const isBuiltin = alwaysKeep.has(name)
+      || name.startsWith('sandbox_')   // 沙箱工具始终可用
+      || name.startsWith('workspace_') // 工作区工具始终可用
     result[name] = {
       description: tool.description || name,
-      isAgent: agentTools.has(name),
-      isSkill: name === 'read_skill',
+      isAgent: isBuiltin,
+      isSkill: !isBuiltin && name === 'read_skill',
       justCalled: lastTools?.has(name) ?? false,
     }
   }

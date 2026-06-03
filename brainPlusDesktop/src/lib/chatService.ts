@@ -3,21 +3,35 @@ import { createOpenAI } from '@ai-sdk/openai'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { createDeepSeek } from '@ai-sdk/deepseek'
-import { getAIModels, type AIModelConfig } from './config'
+import { getAIModels, getDisclosureThreshold, type AIModelConfig } from './config'
 import { getAllTools } from './mcpClient'
 import { getInstalledSkills } from './skillService'
 import type { SectionIndex } from '@/types/skill'
-import { progressiveDisclosure, extractToolInfo } from './toolDisclosure'
+import { progressiveDisclosure, extractToolInfo, type DisclosureResult } from './toolDisclosure'
 import { createTrace, estimateTokens, type TurnTrace } from './observability'
 import { ContextWindowManager } from './contextWindowManager'
 
 // ====== Agent 自带工具的事件类型 ======
 
+/** 多问多答：单个问题定义 */
+export interface AskQuestion {
+  id: string          // 唯一标识
+  label: string       // 问题文本
+  inputType: 'input' | 'select' | 'confirm'
+  options?: string[]  // select 模式下的候选项
+  placeholder?: string
+  required?: boolean
+}
+
 export interface AskUserEvent {
   type: 'ask_user'
-  question: string
+  // 旧格式（单问题，向后兼容）
+  question?: string
   options?: string[]
-  inputType: 'select' | 'input' | 'confirm'
+  inputType?: 'select' | 'input' | 'confirm'
+  // 新格式（多问多答）
+  title?: string
+  questions?: AskQuestion[]
   resolve: (answer: string) => void
 }
 
@@ -142,18 +156,29 @@ export async function getMCPSdkTools(autoMode?: boolean): Promise<Record<string,
       // 工具名只允许 [a-zA-Z0-9_-]，替换非法字符
       const safeName = (t.serverName + '__' + t.name).replace(/[^a-zA-Z0-9_-]/g, '_')
       // 确保 inputSchema 是合法的 JSON Schema (type: object)
-      const schema = t.inputSchema && t.inputSchema.type === 'object'
+      const hasValidSchema = t.inputSchema && (t.inputSchema as any).type === 'object'
+      const schema = hasValidSchema
         ? t.inputSchema
         : { type: 'object', properties: {}, additionalProperties: true }
+      if (!hasValidSchema) {
+        console.warn(`[getMCPSdkTools] tool "${safeName}" has empty/invalid inputSchema, using fallback. Raw:`, JSON.stringify(t.inputSchema).slice(0, 200))
+      }
       sdkTools[safeName] = {
         description: t.description || `MCP tool: ${t.name} (${t.serverName})`,
         inputSchema: jsonSchema(schema as any),
+        _rawSchema: schema,  // 保留原始 inputSchema 用于 enable_tool 参数发现
         execute: async (args: any) => {
           const { callTool } = await import('./mcpClient')
           const result = await callTool(t.serverId, t.name, args)
-          return result.success
-            ? JSON.stringify(result.content)
-            : `Error: ${result.error}`
+          if (!result.success) return `Error: ${result.error}`
+          // 从 MCP content 数组中提取实际文本，避免返回原始 JSON 包装
+          const content = result.content || []
+          const parts = content.map((c: any) => {
+            if (c.type === 'text') return c.text || ''
+            if (c.type === 'image') return `[Image: ${c.data?.slice(0, 50) || '...'}]`
+            return JSON.stringify(c)
+          })
+          return parts.filter(Boolean).join('\n') || '(empty)'
         },
       }
     }
@@ -253,29 +278,60 @@ export async function getMCPSdkTools(autoMode?: boolean): Promise<Record<string,
 
     sdkTools['ask_user'] = {
       description:
-        '向用户提问，获取决策、选择或确认。尽量一次问清楚所有需要的信息，减少往返。' +
-        'inputType: "select" 让用户从 options 中选择一个；"input" 让用户自由输入；"confirm" 让用户确认/取消。' +
-        '用于：技能需要用户决策时（如选择文件格式、确认操作）、信息不足需要补充时。' +
-        '注意：收集到足够信息后立即开始执行任务，不要在信息完备时继续提问。',
+        '向用户提问以获取决策或补充信息。**优先使用多问题模式一次问清楚**，减少往返。\n' +
+        '多问题模式：传入 title 标题 + questions 数组，每个问题可独立设置输入类型(input/select/confirm)。\n' +
+        '单问题模式：传入 question + inputType(兼容旧版)。\n' +
+        '注意：信息充分时立即执行任务，不要在信息完备时继续提问。',
       inputSchema: jsonSchema({
         type: 'object',
         properties: {
-          question: { type: 'string', description: '向用户提出的问题' },
-          options: { type: 'array', items: { type: 'string' }, description: 'select 模式下的选项列表' },
-          inputType: { type: 'string', enum: ['select', 'input', 'confirm'], description: '交互类型' },
+          title: { type: 'string', description: '表单标题，如"请提供发票查询信息"' },
+          questions: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', description: '问题唯一标识，如"invoice_code"' },
+                label: { type: 'string', description: '问题文本，如"发票代码"' },
+                inputType: { type: 'string', enum: ['input', 'select', 'confirm'], description: '输入类型' },
+                options: { type: 'array', items: { type: 'string' }, description: 'select/confirm 的选项' },
+                placeholder: { type: 'string', description: '输入框提示文字' },
+                required: { type: 'boolean', description: '是否必填' },
+              },
+              required: ['id', 'label', 'inputType'],
+            },
+            description: '问题列表（多问多答模式，推荐）',
+          },
+          // 旧格式兼容
+          question: { type: 'string', description: '（旧格式）单个问题文本' },
+          options: { type: 'array', items: { type: 'string' }, description: '（旧格式）选项列表' },
+          inputType: { type: 'string', enum: ['select', 'input', 'confirm'], description: '（旧格式）交互类型' },
         },
-        required: ['question', 'inputType'],
       }),
-      execute: async (args: { question: string; options?: string[]; inputType: string }) => {
+      execute: async (args: {
+        title?: string; questions?: AskQuestion[];
+        question?: string; options?: string[]; inputType?: string;
+      }) => {
         return new Promise<string>((resolve) => {
           if (onAgentUIEvent) {
-            onAgentUIEvent({
-              type: 'ask_user',
-              question: args.question,
-              options: args.options,
-              inputType: (args.inputType as 'select' | 'input' | 'confirm') || 'confirm',
-              resolve,
-            })
+            // 新格式：多问多答
+            if (args.questions && args.questions.length > 0) {
+              onAgentUIEvent({
+                type: 'ask_user',
+                title: args.title,
+                questions: args.questions,
+                resolve,
+              })
+            } else {
+              // 旧格式兼容
+              onAgentUIEvent({
+                type: 'ask_user',
+                question: args.question || '请提供信息',
+                options: args.options,
+                inputType: (args.inputType as 'select' | 'input' | 'confirm') || 'confirm',
+                resolve,
+              })
+            }
           } else {
             resolve('用户不在线，请自行决策。' + (args.options ? ` 可选: ${args.options.join(', ')}` : ''))
           }
@@ -531,6 +587,79 @@ export async function getMCPSdkTools(autoMode?: boolean): Promise<Record<string,
       }
     }
 
+    // ====== MCP 资源工具 ======
+    // 列出所有已启用服务器的资源
+    sdkTools['mcp_list_resources'] = {
+      description: '列出所有已启用 MCP 服务器提供的资源。返回每个资源的 URI、名称、MIME 类型和所属服务器。',
+      inputSchema: jsonSchema({
+        type: 'object',
+        properties: {},
+        additionalProperties: false,
+      }),
+      execute: async () => {
+        const { getAllResources } = await import('./mcpClient')
+        const result = await getAllResources()
+        if (result.resources.length === 0) return '当前没有可用的 MCP 资源'
+        return result.resources.map((r: any) =>
+          `[${r.serverName}] ${r.name || r.uri} (${r.mimeType || 'unknown'})\n  URI: ${r.uri}${r.description ? '\n  描述: ' + r.description : ''}`
+        ).join('\n\n')
+      },
+    }
+    // 读取指定资源
+    sdkTools['mcp_read_resource'] = {
+      description: '读取 MCP 服务器上的一个资源。serverId 和 uri 可从 mcp_list_resources 获取。',
+      inputSchema: jsonSchema({
+        type: 'object',
+        properties: {
+          serverId: { type: 'string', description: '资源所属的服务器 ID' },
+          uri: { type: 'string', description: '资源的 URI' },
+        },
+        required: ['serverId', 'uri'],
+      }),
+      execute: async ({ serverId, uri }: { serverId: string; uri: string }) => {
+        const { readResource } = await import('./mcpClient')
+        const result = await readResource(serverId, uri)
+        return result.success ? JSON.stringify(result.content) : `Error: ${result.error}`
+      },
+    }
+
+    // ====== MCP 提示工具 ======
+    // 列出所有已启用服务器的提示
+    sdkTools['mcp_list_prompts'] = {
+      description: '列出所有已启用 MCP 服务器提供的提示模板。',
+      inputSchema: jsonSchema({
+        type: 'object',
+        properties: {},
+        additionalProperties: false,
+      }),
+      execute: async () => {
+        const { getAllPrompts } = await import('./mcpClient')
+        const result = await getAllPrompts()
+        if (result.prompts.length === 0) return '当前没有可用的 MCP 提示模板'
+        return result.prompts.map((p: any) =>
+          `[${p.serverName}] ${p.name}${p.description ? '\n  描述: ' + p.description : ''}${p.arguments?.length ? '\n  参数: ' + p.arguments.map((a: any) => `${a.name}${a.required ? '*' : ''}`).join(', ') : ''}`
+        ).join('\n\n')
+      },
+    }
+    // 执行指定提示
+    sdkTools['mcp_get_prompt'] = {
+      description: '执行 MCP 服务器上的一个提示模板。serverId 和 promptName 可从 mcp_list_prompts 获取。',
+      inputSchema: jsonSchema({
+        type: 'object',
+        properties: {
+          serverId: { type: 'string', description: '提示所属的服务器 ID' },
+          promptName: { type: 'string', description: '提示的名称' },
+          args: { type: 'object', description: '提示所需的参数（可选）' },
+        },
+        required: ['serverId', 'promptName'],
+      }),
+      execute: async ({ serverId, promptName, args }: { serverId: string; promptName: string; args?: any }) => {
+        const { getPrompt } = await import('./mcpClient')
+        const result = await getPrompt(serverId, promptName, args || {})
+        return JSON.stringify(result)
+      },
+    }
+
     return sdkTools
   } catch {
     return {}
@@ -538,7 +667,7 @@ export async function getMCPSdkTools(autoMode?: boolean): Promise<Record<string,
 }
 
 export interface ChatStreamEvent {
-  type: 'text-delta' | 'tool-call' | 'tool-result' | 'done' | 'compression'
+  type: 'text-delta' | 'tool-call' | 'tool-result' | 'done' | 'compression' | 'disclosure'
   text?: string
   toolName?: string
   toolInput?: unknown
@@ -549,12 +678,14 @@ export interface ChatStreamEvent {
   compressedTokens?: number
   limit?: number
   summary?: string
+  // disclosure 事件字段
+  disclosureResult?: DisclosureResult
 }
 
 export async function chat(
   messages: ModelMessage[],
   onEvent?: (event: ChatStreamEvent) => void,
-  opts?: { abortSignal?: AbortSignal; autoMode?: boolean; localModelId?: string; forceCompression?: boolean },
+  opts?: { abortSignal?: AbortSignal; autoMode?: boolean; localModelId?: string; forceCompression?: boolean; selectedTools?: Set<string> | null },
 ) {
   // 本地模型路径
   if (opts?.localModelId) {
@@ -565,6 +696,21 @@ export async function chat(
   if (!model) throw new Error('请先在设置中启用一个 AI 模型')
 
   const mcpTools = await getMCPSdkTools(opts?.autoMode)
+
+  // 应用用户手动选择的 MCP 工具过滤
+  let toolsForDisclosure = mcpTools
+  if (opts?.selectedTools) {
+    if (opts.selectedTools.size > 0) {
+      toolsForDisclosure = Object.fromEntries(
+        Object.entries(mcpTools).filter(([name]) => opts.selectedTools!.has(name))
+      )
+    } else {
+      toolsForDisclosure = {}  // 用户明确选了空集 → 不发送 MCP 工具
+    }
+  }
+
+  // 保存完整工具集引用（渐进式披露筛选后，enable_tool 需要访问完整集合）
+  const fullToolSet = toolsForDisclosure
 
   // 已启用的技能：只注入名称+描述+段落索引（不注入完整文件内容，节省 token）
   const enabledSkills = getInstalledSkills().filter(s => s.enabled)
@@ -584,22 +730,106 @@ export async function chat(
   const agentRules =
     '你是用户的工作助手。\n' +
     '1. 需要用户决策时调用 ask_user 工具，不要在文字中写问题等待回复。\n' +
-    '2. 可用的资源和提示词优先用工具查询，不要猜测。\n' +
+    '2. 优先使用工具目录中的工具完成任务，不要凭空猜测。\n' +
     '3. 长任务调用 show_progress，完成后调用 notify_complete。\n'
 
-  const systemPrompt = [agentRules, skillInjection].filter(Boolean).join('\n\n') || undefined
-
-  // 渐进式披露：根据用户输入筛选相关工具
-  let filteredTools = mcpTools
-  if (Object.keys(mcpTools).length > 8) {
+  // 渐进式披露：工具数超过阈值时根据用户输入筛选最相关的工具
+  const threshold = getDisclosureThreshold()
+  let filteredTools = toolsForDisclosure
+  const totalToolCount = Object.keys(toolsForDisclosure).length
+  let disclosureResult: DisclosureResult
+  if (totalToolCount > threshold) {
     const lastMsg = messages[messages.length - 1]?.content
     const userText = typeof lastMsg === 'string' ? lastMsg : ''
-    const toolInfo = extractToolInfo(mcpTools)
-    const { tools: selected } = progressiveDisclosure(toolInfo, userText)
-    filteredTools = Object.fromEntries(selected.map(name => [name, mcpTools[name]]))
-    const excluded = Object.keys(mcpTools).length - selected.length
-    if (excluded > 0) console.log(`[disclosure] ${Object.keys(mcpTools).length}→${selected.length} tools (excluded ${excluded})`)
+    const toolInfo = extractToolInfo(toolsForDisclosure)
+    disclosureResult = progressiveDisclosure(toolInfo, userText, { maxTools: threshold })
+    filteredTools = Object.fromEntries(disclosureResult.tools.map(name => [name, toolsForDisclosure[name]]))
+    const excluded = totalToolCount - disclosureResult.tools.length
+    if (excluded > 0) console.log(`[disclosure] ${totalToolCount}→${disclosureResult.tools.length} tools (excluded ${excluded}, threshold ${threshold})`)
+  } else {
+    // 工具数未超阈值时，全部匹配（无需筛选），也生成 disclosureResult 供 UI 展示
+    disclosureResult = {
+      tools: Object.keys(toolsForDisclosure),
+      excluded: [],
+      scores: Object.fromEntries(
+        Object.keys(toolsForDisclosure).map(name => [name, { score: 0, matched: true }])
+      ),
+    }
   }
+  // 始终发送 disclosure 事件，确保 UI 中的工具索引随每次对话更新
+  onEvent?.({ type: 'disclosure', disclosureResult })
+
+  // 注册 enable_tool：AI 可通过它按需激活并调用任何在目录中但未预加载的工具
+  if (Object.keys(fullToolSet).length > 0) {
+    filteredTools = {
+      ...filteredTools,
+      enable_tool: {
+        description: '按需激活并使用一个 MCP 工具。当需要的工具不在当前已加载列表中时调用此工具。查看系统提示中的"工具目录"获取所有可用工具的名称和功能描述。如果工具已加载，请直接调用而非通过此工具。',
+        inputSchema: jsonSchema({
+          type: 'object',
+          properties: {
+            name: { type: 'string', description: '要使用的工具名称（来自工具目录）' },
+            args: { type: 'object', description: '传递给该工具的参数，根据工具目录中的功能描述合理构造' },
+          },
+          required: ['name'],
+        }),
+        execute: async ({ name, args }: { name: string; args?: any }) => {
+          const tool = fullToolSet[name] as any
+          if (!tool) return `工具 "${name}" 不在可用目录中。请检查工具目录中的工具名称。`
+
+          // 检查参数：如果 args 为空且工具要求必填参数，返回 schema 引导 AI 重试
+          const raw = tool._rawSchema as Record<string, any> | undefined
+          const required = (raw?.required || []) as string[]
+          const hasArgs = args && typeof args === 'object' && Object.keys(args).length > 0
+
+          if (required.length > 0 && !hasArgs) {
+            const props = raw?.properties as Record<string, any> | undefined
+            const schemaHint = props
+              ? '参数说明:\n' + Object.entries(props).map(([k, v]: [string, any]) =>
+                  `  ${k} (${v.type || 'any'})${required.includes(k) ? ' *必填*' : ''}${v.description ? ': ' + v.description : ''}`
+                ).join('\n')
+              : '参数结构未知'
+            return `工具 "${name}" 需要参数。请重新调用 enable_tool 并提供 args。\n${schemaHint}`
+          }
+
+          try {
+            const result = await tool.execute(args || {})
+            return result
+          } catch (e: any) {
+            // 如果执行失败且 args 为空，可能是参数缺失，提供 schema 引导
+            if (!hasArgs && required.length > 0) {
+              const props = raw?.properties as Record<string, any> | undefined
+              const hint = props ? '。参数: ' + Object.keys(props).join(', ') : ''
+              return `调用 ${name} 失败: ${e.message}${hint}。请用 enable_tool 重新调用并传入正确的 args。`
+            }
+            return `调用 ${name} 失败: ${e.message}`
+          }
+        },
+      },
+    }
+  }
+
+  // 工具目录：标注每个工具是预加载还是需激活（在披露之后生成，确保状态准确）
+  // 工具目录：只列 MCP 业务工具（serverName__toolName 格式），排除沙箱/代理/网关等内建工具
+  const preloadedNames = new Set(Object.keys(filteredTools))
+  const mcpToolNames = Object.keys(fullToolSet).filter(n => n.includes('__'))
+  const toolCatalog = mcpToolNames.length > 0
+    ? '可用 MCP 工具目录（共 ' + mcpToolNames.length + ' 个）:\n' +
+      mcpToolNames.map(name => {
+        const t = fullToolSet[name] as any
+        const desc = (t?.description || name).replace(/\n/g, ' ')
+        const tag = preloadedNames.has(name) ? '[预加载]' : '[需激活]'
+        // 提取参数概要
+        const raw = t?._rawSchema as Record<string, any> | undefined
+        const props = raw?.properties as Record<string, any> | undefined
+        const params = props ? Object.entries(props).map(([k, v]: [string, any]) => `${k}:${v.type || 'any'}`).join(', ') : ''
+        const paramHint = params ? ` (参数: ${params.slice(0, 80)})` : ''
+        return `- ${tag} ${name}: ${desc.slice(0, 100)}${paramHint}`
+      }).join('\n') +
+      '\n\n[预加载] 工具可直接调用。[需激活] 的 MCP 工具请调用 enable_tool(name, args)。'
+    : undefined
+
+  const systemPrompt = [agentRules, toolCatalog, skillInjection].filter(Boolean).join('\n\n') || undefined
 
   // 上下文窗口压缩
   const cwm = new ContextWindowManager()

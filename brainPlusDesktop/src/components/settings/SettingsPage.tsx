@@ -11,6 +11,7 @@ import {
   getCloudinaryConfig, saveCloudinaryConfig, clearCloudinaryConfig,
   getAIModels, saveAIModels,
   type AIModelConfig, type MCPServerConfig,
+  getDisclosureThreshold, saveDisclosureThreshold,
 } from '@/lib/config'
 import { listTools, listResources, listPrompts, callTool, readResource, getPrompt, connect, disconnect, addServer as addMcpServer, updateServer as updateMcpServer, removeServer as removeMcpServer } from '@/lib/mcpClient'
 import type { MCPTool, MCPResource, MCPPrompt } from '@/types/electron'
@@ -48,6 +49,7 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
   const [callArgs, setCallArgs] = useState('{}')
   const [callResult, setCallResult] = useState<string | null>(null)
   const [callLoading, setCallLoading] = useState(false)
+  const [disclosureThreshold, setDisclosureThreshold] = useState(getDisclosureThreshold)
 
   useEffect(() => {
     // 通用
@@ -211,9 +213,36 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
     finally { setLoadingDetail(false) }
   }
 
+  /** 根据 inputSchema 生成参数模板 JSON */
+  const generateArgsTemplate = (target: any): string => {
+    if (!target?.inputSchema?.properties) return '{}'
+    const props = target.inputSchema.properties as Record<string, any>
+    const entries = Object.entries(props).map(([name, schema]: [string, any]) => {
+      let defaultVal: any = ''
+      switch (schema.type) {
+        case 'number': case 'integer': defaultVal = 0; break
+        case 'boolean': defaultVal = false; break
+        case 'array': defaultVal = []; break
+        case 'object': defaultVal = {}; break
+        default: defaultVal = ''
+      }
+      return [name, defaultVal]
+    })
+    return JSON.stringify(Object.fromEntries(entries), null, 2)
+  }
+
   const openCallModal = (type: 'tool' | 'resource' | 'prompt', target: any) => {
     setCallModal({ type, target })
-    setCallArgs(type === 'resource' ? '' : '{}')
+    if (type === 'resource') {
+      setCallArgs('')
+    } else if (type === 'prompt') {
+      const tmpl = target.arguments?.length
+        ? JSON.stringify(Object.fromEntries(target.arguments.map((a: any) => [a.name, a.default ?? ''])), null, 2)
+        : '{}'
+      setCallArgs(tmpl)
+    } else {
+      setCallArgs(generateArgsTemplate(target))
+    }
     setCallResult(null)
   }
 
@@ -484,6 +513,43 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
               <p className="text-xs text-muted-foreground">MCP (Model Context Protocol) 服务器配置，用于扩展 AI 工具能力。</p>
               <Button size="sm" variant="outline" onClick={addServer}><Plus className="mr-1 h-3.5 w-3.5" />新增</Button>
             </div>
+
+            {/* 渐进式披露阈值 */}
+            <fieldset className="rounded-lg border border-border p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <legend className="text-sm font-semibold mb-1">渐进式披露阈值</legend>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    当可用 MCP 工具数量超过此值时，系统会自动根据当前对话内容智能筛选最相关的工具发送给 AI 模型。
+                    筛选可节省 token 消耗并提升响应质量。建议值 5-12，工具数量越多可适当调高。
+                  </p>
+                </div>
+                <div className="shrink-0 flex items-center gap-1">
+                  <Button variant="outline" size="icon" className="h-7 w-7"
+                    onClick={() => { const n = Math.max(1, disclosureThreshold - 1); setDisclosureThreshold(n); saveDisclosureThreshold(n) }}
+                    disabled={disclosureThreshold <= 1}>
+                    <span className="text-xs">−</span>
+                  </Button>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={disclosureThreshold}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value);
+                      if (!isNaN(v) && v >= 1 && v <= 50) { setDisclosureThreshold(v); saveDisclosureThreshold(v) }
+                    }}
+                    className="h-8 w-16 text-center text-sm"
+                  />
+                  <Button variant="outline" size="icon" className="h-7 w-7"
+                    onClick={() => { const n = Math.min(50, disclosureThreshold + 1); setDisclosureThreshold(n); saveDisclosureThreshold(n) }}
+                    disabled={disclosureThreshold >= 50}>
+                    <span className="text-xs">+</span>
+                  </Button>
+                </div>
+              </div>
+            </fieldset>
+
             {servers.length === 0 ? (
               <p className="py-12 text-center text-sm text-muted-foreground">暂无 MCP 服务器</p>
             ) : (
@@ -573,17 +639,35 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
                               <p className="py-8 text-center text-xs text-muted-foreground">未发现工具</p>
                             ) : (
                               <div className="space-y-2 max-h-64 overflow-auto">
-                                {srvTools.map((tool) => (
-                                  <div key={tool.name} className="flex items-start justify-between rounded border border-border p-2">
-                                    <div className="min-w-0 flex-1">
-                                      <p className="text-xs font-medium">{tool.name}</p>
-                                      <p className="text-[10px] text-muted-foreground line-clamp-2">{tool.description || '无描述'}</p>
+                                {srvTools.map((tool) => {
+                                  const props = (tool.inputSchema?.properties || {}) as Record<string, any>
+                                  const required = (tool.inputSchema?.required || []) as string[]
+                                  const propEntries = Object.entries(props)
+                                  return (
+                                  <div key={tool.name} className="rounded border border-border p-2 space-y-1">
+                                    <div className="flex items-start justify-between">
+                                      <div className="min-w-0 flex-1">
+                                        <p className="text-xs font-medium">{tool.name}</p>
+                                        <p className="text-[10px] text-muted-foreground line-clamp-2">{tool.description || '无描述'}</p>
+                                      </div>
+                                      <Button size="sm" variant="outline" className="ml-2 h-6 text-[10px] shrink-0" onClick={() => openCallModal('tool', tool)}>
+                                        <Play className="mr-1 h-2.5 w-2.5" />调用
+                                      </Button>
                                     </div>
-                                    <Button size="sm" variant="outline" className="ml-2 h-6 text-[10px] shrink-0" onClick={() => openCallModal('tool', tool)}>
-                                      <Play className="mr-1 h-2.5 w-2.5" />调用
-                                    </Button>
+                                    {propEntries.length > 0 && (
+                                      <div className="border-t border-border/50 pt-1">
+                                        <p className="text-[10px] text-muted-foreground/70 mb-0.5">参数:</p>
+                                        {propEntries.map(([name, schema]: [string, any]) => (
+                                          <div key={name} className="flex items-baseline gap-1 text-[10px] ml-1">
+                                            <span className="font-mono text-primary/80">{name}{required.includes(name) ? '*' : ''}</span>
+                                            <span className="text-muted-foreground/50">{schema.type || 'any'}</span>
+                                            {schema.description && <span className="text-muted-foreground/60">{schema.description}</span>}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
                                   </div>
-                                ))}
+                                )})}
                               </div>
                             )
                           )}
@@ -673,6 +757,34 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
                 </button>
               </div>
 
+              {/* 工具参数提示 */}
+              {callModal.type === 'tool' && callModal.target?.inputSchema?.properties && (
+                <div className="mb-3 rounded-md bg-muted/50 p-2 space-y-0.5">
+                  <p className="text-[10px] text-muted-foreground mb-1">参数说明：</p>
+                  {Object.entries(callModal.target.inputSchema.properties as Record<string, any>).map(([name, schema]: [string, any]) => {
+                    const req = (callModal.target.inputSchema.required as string[] || []).includes(name)
+                    return (
+                      <div key={name} className="flex items-baseline gap-1.5 text-[10px]">
+                        <span className="font-mono text-primary font-medium">{name}{req ? '*' : ''}</span>
+                        <span className="text-muted-foreground/50">{schema.type || 'any'}</span>
+                        {schema.description && <span className="text-muted-foreground/70">— {schema.description}</span>}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+              {/* Prompt 参数提示 */}
+              {callModal.type === 'prompt' && callModal.target?.arguments?.length > 0 && (
+                <div className="mb-3 rounded-md bg-muted/50 p-2 space-y-0.5">
+                  <p className="text-[10px] text-muted-foreground mb-1">参数说明：</p>
+                  {callModal.target.arguments.map((a: any) => (
+                    <div key={a.name} className="flex items-baseline gap-1.5 text-[10px]">
+                      <span className="font-mono text-primary font-medium">{a.name}{a.required ? '*' : ''}</span>
+                      {a.description && <span className="text-muted-foreground/70">— {a.description}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
               {callModal.type !== 'resource' && (
                 <div className="mb-4">
                   <Label className="text-xs">参数 (JSON)</Label>

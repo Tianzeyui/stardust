@@ -89,6 +89,24 @@
   scrollbar-color: hsl(var(--muted-foreground) / 0.2) transparent;
 }
 
+/* ====== AskUserBar 滑入动画 ====== */
+@keyframes ask-slide-up {
+  from { opacity: 0; transform: translateY(12px); max-height: 0; }
+  to { opacity: 1; transform: translateY(0); max-height: 500px; }
+}
+.animate-ask-slide-up {
+  animation: ask-slide-up 0.3s ease-out;
+}
+
+/* 等待回复脉冲点 */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+.animate-pulse-dot {
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
+
 /* 对话区域强制所有内容换行，防止横向溢出 */
 .chat-messages * {
   overflow-wrap: break-word;
@@ -107,3 +125,4 @@
   max-width: 100%;
   height: auto;
 }
+

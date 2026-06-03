@@ -107,10 +107,10 @@ ipcMain.handle('mcp:disconnect', async (_event, serverId: string) => {
 // 工具
 ipcMain.handle('mcp:listTools', async (_event, serverId: string) => {
   try {
-    return mcpService.listTools(serverId)
+    return await mcpService.listTools(serverId)
   } catch (e: any) {
     console.error('[MCP IPC] listTools error:', e.message)
-    return []
+    throw e  // 向上传播，前端可 catch 并展示错误
   }
 })
 
@@ -126,6 +126,9 @@ ipcMain.handle('mcp:callTool', async (_event, serverId: string, toolName: string
 ipcMain.handle('mcp:listResources', async (_event, serverId: string) => {
   return mcpService.listResources(serverId)
 })
+ipcMain.handle('mcp:getAllResources', async () => {
+  return mcpService.getAllResources()
+})
 
 ipcMain.handle('mcp:readResource', async (_event, serverId: string, uri: string) => {
   return mcpService.readResource(serverId, uri)
@@ -134,6 +137,9 @@ ipcMain.handle('mcp:readResource', async (_event, serverId: string, uri: string)
 // 提示
 ipcMain.handle('mcp:listPrompts', async (_event, serverId: string) => {
   return mcpService.listPrompts(serverId)
+})
+ipcMain.handle('mcp:getAllPrompts', async () => {
+  return mcpService.getAllPrompts()
 })
 
 ipcMain.handle('mcp:getPrompt', async (_event, serverId: string, promptName: string, args: Record<string, unknown>) => {
@@ -476,7 +482,7 @@ app.whenReady().then(() => {
     website: 'https://github.com/Tianzeyui/brainPlus',
     iconPath: appIcon,
   })
-  // Windows/Linux 移除菜单栏；macOS 保留应用名菜单
+  // Windows/Linux 移除菜单栏；macOS 保留应用名 + Edit 菜单
   if (process.platform === 'darwin') {
     Menu.setApplicationMenu(Menu.buildFromTemplate([
       {
@@ -489,6 +495,32 @@ app.whenReady().then(() => {
           { role: 'unhide' },
           { type: 'separator' },
           { role: 'quit' },
+        ],
+      },
+      {
+        label: 'Edit',
+        submenu: [
+          { role: 'undo' },
+          { role: 'redo' },
+          { type: 'separator' },
+          { role: 'cut' },
+          { role: 'copy' },
+          { role: 'paste' },
+          { role: 'selectAll' },
+        ],
+      },
+      {
+        label: 'View',
+        submenu: [
+          { role: 'reload' },
+          { role: 'forceReload' },
+          { role: 'toggleDevTools' },
+          { type: 'separator' },
+          { role: 'resetZoom' },
+          { role: 'zoomIn' },
+          { role: 'zoomOut' },
+          { type: 'separator' },
+          { role: 'togglefullscreen' },
         ],
       },
     ]))

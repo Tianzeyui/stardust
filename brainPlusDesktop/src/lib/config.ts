@@ -136,3 +136,21 @@ export function getMCPServers(): MCPServerConfig[] {
 export function saveMCPServers(servers: MCPServerConfig[]): void {
   localStorage.setItem('brainplus_mcp_servers', JSON.stringify(servers))
 }
+
+// ========== 渐进式披露阈值 ==========
+
+const DISCLOSURE_THRESHOLD_KEY = 'brainplus_disclosure_threshold'
+const DEFAULT_THRESHOLD = 8
+
+export function getDisclosureThreshold(): number {
+  try {
+    const v = localStorage.getItem(DISCLOSURE_THRESHOLD_KEY)
+    if (v) { const n = parseInt(v); if (n >= 1 && n <= 50) return n }
+  } catch {}
+  return DEFAULT_THRESHOLD
+}
+
+export function saveDisclosureThreshold(threshold: number): void {
+  const n = Math.max(1, Math.min(50, Math.round(threshold)))
+  localStorage.setItem(DISCLOSURE_THRESHOLD_KEY, String(n))
+}

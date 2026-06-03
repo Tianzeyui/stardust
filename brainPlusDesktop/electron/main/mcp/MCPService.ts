@@ -62,7 +62,12 @@ class MCPService {
           this.serverConfigs.set(s.id, s)
         }
       }
-    } catch { /* 首次运行，文件不存在 */ }
+    } catch (e: any) {
+      // 首次运行文件不存在属正常，JSON 解析失败需警告
+      if (e instanceof SyntaxError || e.message?.includes('JSON')) {
+        console.warn('[MCPService] 配置文件 JSON 解析失败，将使用空配置:', e.message)
+      }
+    }
   }
 
   private saveConfig(): void {
@@ -86,6 +91,13 @@ class MCPService {
   updateServer(id: string, patch: Partial<MCPServer>): void {
     const existing = this.serverConfigs.get(id)
     if (existing) {
+      // 关键字段变更时断开旧连接（URL、命令、传输类型变了，旧连接已失效）
+      const keyChanged = (patch.url !== undefined && patch.url !== existing.url)
+        || (patch.command !== undefined && patch.command !== existing.command)
+        || (patch.type !== undefined && patch.type !== existing.type)
+      if (keyChanged) {
+        this.closeClient(id)
+      }
       this.serverConfigs.set(id, { ...existing, ...patch })
       this.saveConfig()
     }
@@ -186,13 +198,17 @@ class MCPService {
       const client = await this.connect(server)
       const result = await client.listTools()
       console.log(`[MCPService] listTools ${server.name}: ${result.tools?.length || 0} tools`)
-      return (result.tools || []).map((t: any) => ({
-        name: t.name,
-        description: t.description || '',
-        inputSchema: t.inputSchema || {},
-        serverId: server.id,
-        serverName: server.name,
-      }))
+      return (result.tools || []).map((t: any) => {
+        const schema = t.inputSchema || {}
+        console.log(`[MCPService] tool "${t.name}" inputSchema:`, JSON.stringify(schema).slice(0, 300))
+        return {
+          name: t.name,
+          description: t.description || '',
+          inputSchema: schema,
+          serverId: server.id,
+          serverName: server.name,
+        }
+      })
     } catch (e: any) {
       console.error(`[MCPService] listTools error for ${server.name}:`, e.message, e.stack)
       throw e
@@ -228,9 +244,14 @@ class MCPService {
   async listResources(serverId: string): Promise<any[]> {
     const server = this.serverConfigs.get(serverId)
     if (!server) throw new Error('服务器不存在')
-    const client = await this.connect(server)
-    const result = await client.listResources()
-    return result.resources || []
+    try {
+      const client = await this.connect(server)
+      const result = await client.listResources()
+      return result.resources || []
+    } catch (e: any) {
+      console.error(`[MCPService] listResources error for ${server.name}:`, e.message)
+      return []
+    }
   }
 
   async readResource(serverId: string, uri: string): Promise<{ success: boolean; content?: any; error?: string }> {
@@ -261,8 +282,45 @@ class MCPService {
   async getPrompt(serverId: string, promptName: string, args: Record<string, unknown>): Promise<any> {
     const server = this.serverConfigs.get(serverId)
     if (!server) throw new Error('服务器不存在')
-    const client = await this.connect(server)
-    return client.getPrompt({ name: promptName, arguments: args })
+    try {
+      const client = await this.connect(server)
+      return await client.getPrompt({ name: promptName, arguments: args })
+    } catch (e: any) {
+      console.error(`[MCPService] getPrompt error for ${server.name}:`, e.message)
+      throw e
+    }
+  }
+
+  async getAllResources(): Promise<{ resources: any[]; errors: Array<{ serverName: string; error: string }> }> {
+    const resources: any[] = []
+    const errors: Array<{ serverName: string; error: string }> = []
+    for (const s of this.getServers().filter((s) => s.enabled)) {
+      try {
+        const list = await this.listResources(s.id)
+        for (const r of list) {
+          resources.push({ ...r, serverId: s.id, serverName: s.name })
+        }
+      } catch (e: any) {
+        errors.push({ serverName: s.name, error: e.message })
+      }
+    }
+    return { resources, errors }
+  }
+
+  async getAllPrompts(): Promise<{ prompts: any[]; errors: Array<{ serverName: string; error: string }> }> {
+    const prompts: any[] = []
+    const errors: Array<{ serverName: string; error: string }> = []
+    for (const s of this.getServers().filter((s) => s.enabled)) {
+      try {
+        const list = await this.listPrompts(s.id)
+        for (const p of list) {
+          prompts.push({ ...p, serverId: s.id, serverName: s.name })
+        }
+      } catch (e: any) {
+        errors.push({ serverName: s.name, error: e.message })
+      }
+    }
+    return { prompts, errors }
   }
 
   // ====== 清理 ======

@@ -100,6 +100,11 @@ export async function listResources(serverId: string): Promise<MCPResource[]> {
   return []
 }
 
+export async function getAllResources(): Promise<{ resources: MCPResource[]; errors: Array<{ serverName: string; error: string }> }> {
+  if (isElectron()) return api()!.getAllResources()
+  return { resources: [], errors: [] }
+}
+
 export async function readResource(serverId: string, uri: string): Promise<{ success: boolean; content?: any; error?: string }> {
   if (isElectron()) return api()!.readResource(serverId, uri)
   return { success: false, error: '当前环境不支持 MCP 资源读取' }
@@ -110,6 +115,11 @@ export async function readResource(serverId: string, uri: string): Promise<{ suc
 export async function listPrompts(serverId: string): Promise<MCPPrompt[]> {
   if (isElectron()) return api()!.listPrompts(serverId)
   return []
+}
+
+export async function getAllPrompts(): Promise<{ prompts: MCPPrompt[]; errors: Array<{ serverName: string; error: string }> }> {
+  if (isElectron()) return api()!.getAllPrompts()
+  return { prompts: [], errors: [] }
 }
 
 export async function getPrompt(serverId: string, promptName: string, args: any): Promise<any> {

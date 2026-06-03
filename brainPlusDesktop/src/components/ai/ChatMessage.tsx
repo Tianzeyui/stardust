@@ -1,6 +1,20 @@
-import { Check, X, Shield, ShieldCheck, Cable, BookOpen, MessageSquare, FileText, Image } from 'lucide-react'
+import { Check, X, Shield, ShieldCheck, Cable, BookOpen, MessageSquare, FileText, Image, Zap, FolderOpen } from 'lucide-react'
 import MarkdownPreview from '@uiw/react-markdown-preview'
 import type { UIMessage, ToolCallStatus, MessageAttachment } from '@/types/chat'
+
+/** 工具结果格式化：JSON 结果包进代码块，纯文本保持原样 */
+function formatToolResult(result: string, type: string): string {
+  const text = stripHtml(String(result).slice(0, 2000))
+  // 沙箱代码已经格式化好了，直接返回
+  if (type === 'sandbox') return text
+  // 尝试解析为 JSON，成功则包进代码块，失败则原样返回
+  try {
+    JSON.parse(text)
+    return '```json\n' + text + '\n```'
+  } catch {
+    return text
+  }
+}
 
 /** 剥离 HTML 标签，避免 MarkdownPreview 将 <tag> 当作 React 组件渲染 */
 function stripHtml(s: string): string {
@@ -21,6 +35,8 @@ const TOOL_STYLE: Record<string, {
   skill: { icon: Check, labelIcon: BookOpen, label: 'Skill' },
   mcp: { icon: Check, labelIcon: Cable, label: 'MCP' },
   agent: { icon: Check, labelIcon: MessageSquare, label: 'Agent' },
+  gateway: { icon: Check, labelIcon: Zap, label: '网关' },
+  workspace: { icon: Check, labelIcon: FolderOpen, label: '工作区' },
 }
 
 export function ChatMessage({ msg }: ChatMessageProps) {
@@ -107,7 +123,7 @@ function ToolBubble({ tc }: { tc: ToolCallStatus }) {
             {tc.result && (
               <div className="mt-1.5 max-h-40 overflow-auto custom-scrollbar rounded border border-border max-w-full">
                 <MarkdownPreview
-                  source={stripHtml(String(tc.result).slice(0, 2000))}
+                  source={formatToolResult(tc.result, tc.type)}
                   style={{ fontSize: 12, padding: '4px 8px', backgroundColor: 'transparent' }}
                 />
               </div>

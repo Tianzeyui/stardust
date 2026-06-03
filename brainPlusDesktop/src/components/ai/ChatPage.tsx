@@ -18,6 +18,9 @@ import { ModelPicker } from './ModelPicker'
 import { OutputFiles } from './OutputFiles'
 import { ConversationBar, type ConvInfo } from './ConversationBar'
 import { SkillPicker } from './SkillPicker'
+import { MCPToolPicker } from './MCPToolPicker'
+import type { DisclosureResult } from '@/lib/toolDisclosure'
+import { getDisclosureThreshold, saveDisclosureThreshold } from '@/lib/config'
 import { getInstalledSkills, toggleSkill } from '@/lib/skillService'
 import type { InstalledSkill } from '@/types/skill'
 import {
@@ -44,6 +47,12 @@ export function ChatPage() {
   const [taskList, setTaskList] = useState<Array<{ id: string; title: string; status: string }>>([])
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [skills, setSkills] = useState<InstalledSkill[]>([])
+  // MCP 工具选择：null = 自动模式（全用），Set = 手动选择
+  const [selectedMCPTools, setSelectedMCPTools] = useState<Set<string> | null>(null)
+  const [disclosureResult, setDisclosureResult] = useState<DisclosureResult | null>(null)
+  const [disclosureThreshold, setDisclosureThreshold] = useState(getDisclosureThreshold)
+  // 本轮实际激活的工具名（用于披露面板展示）
+  const [activatedToolNames, setActivatedToolNames] = useState<Set<string>>(new Set())
   // @ 文件选择
   const [atFiles, setAtFiles] = useState<Array<{ name: string; path: string; isDir: boolean }>>([])
   const [showAtPicker, setShowAtPicker] = useState(false)
@@ -58,6 +67,8 @@ export function ChatPage() {
   const forceCompressRef = useRef(false)
   const pickerRef = useRef<HTMLDivElement>(null)
   const messagesRef = useRef<UIMessage[]>([])
+  // enable_tool 代理映射：AI SDK 工具名 → 实际显示名
+  const toolNameProxyRef = useRef<Map<string, string>>(new Map())
   const logId = useRef(0)
   const endRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -103,6 +114,8 @@ export function ChatPage() {
     setConvList(list)
   }, [])
   useEffect(() => { setSkills(getInstalledSkills()) }, [])
+  // 切换对话时重置 MCP 工具选择
+  useEffect(() => { setSelectedMCPTools(null); setDisclosureResult(null) }, [convId])
   useEffect(() => { loadConvList() }, [loadConvList])
 
   // 保存当前对话（消息变化时，含压缩快照）
@@ -350,7 +363,7 @@ export function ChatPage() {
         .map((m, i, arr) => ({ role: m.role as 'user' | 'assistant', content: i === arr.length - 1 ? resolvedContent as string : m.content }))
 
       let streamed = ''
-      setConsoleLog([]); setTaskList([])
+      setConsoleLog([]); setTaskList([]); setActivatedToolNames(new Set())
       pushLog('--', '开始处理', 'info')
 
       await chat(history, (event: ChatStreamEvent) => {
@@ -358,7 +371,20 @@ export function ChatPage() {
           streamed += event.text || ''
           setMessages(prev => { const n = [...prev]; const l = n[n.length - 1]; if (l?.role === 'assistant' && l.streaming) l.content = streamed; return [...n] })
         } else if (event.type === 'tool-call') {
-          const tc: ToolCallStatus = { id: Math.random().toString(36).slice(2, 8), name: event.toolName || 'unknown', type: detectToolType(event.toolName || ''), status: 'running', input: event.toolInput }
+          let toolName = event.toolName || 'unknown'
+          let toolType = detectToolType(toolName)
+          // enable_tool 代理工具时，显示被代理的工具名和真实类型
+          if (toolName === 'enable_tool' && event.toolInput && typeof event.toolInput === 'object') {
+            const proxied = (event.toolInput as any).name
+            if (proxied) {
+              toolNameProxyRef.current.set('enable_tool', proxied)
+              toolName = proxied
+              toolType = detectToolType(proxied)  // 根据实际工具名判定类型
+            }
+          }
+          const tc: ToolCallStatus = { id: Math.random().toString(36).slice(2, 8), name: toolName, type: toolType, status: 'running', input: event.toolInput }
+          // 记录本轮激活的工具名
+          setActivatedToolNames(prev => { const next = new Set(prev); next.add(toolName); return next })
           pushLog('>', `[${tc.type}] ${tc.name}`, 'running')
           const textBeforeTool = streamed; streamed = ''
           setMessages(prev => {
@@ -369,10 +395,18 @@ export function ChatPage() {
           })
         } else if (event.type === 'tool-result') {
           const ok = !String(event.toolOutput ?? '').startsWith('Error')
-          setMessages(prev => prev.map(m => m.role === 'tool' && m.toolCall?.name === event.toolName && m.toolCall?.status === 'running' ? { ...m, content: String(event.toolOutput ?? '').slice(0, 2000), toolCall: { ...m.toolCall, status: ok ? 'done' as const : 'error' as const, result: String(event.toolOutput ?? '').slice(0, 8000) } } : m))
-          pushLog(ok ? 'OK' : 'ERR', `${event.toolName || 'tool'} ${ok ? 'done' : 'fail'}`, ok ? 'ok' : 'error')
+          // resolve enable_tool proxy name
+          const sdkName = event.toolName || 'unknown'
+          const proxyName = toolNameProxyRef.current.get(sdkName)
+          const matchName = proxyName || sdkName
+          setMessages(prev => prev.map(m => m.role === 'tool' && (m.toolCall?.name === matchName || m.toolCall?.name === sdkName) && m.toolCall?.status === 'running' ? { ...m, content: String(event.toolOutput ?? '').slice(0, 2000), toolCall: { ...m.toolCall, status: ok ? 'done' as const : 'error' as const, result: String(event.toolOutput ?? '').slice(0, 8000) } } : m))
+          pushLog(ok ? 'OK' : 'ERR', `${matchName} ${ok ? 'done' : 'fail'}`, ok ? 'ok' : 'error')
+          // cleanup proxy mapping
+          if (proxyName) toolNameProxyRef.current.delete(sdkName)
           if (detectToolType(event.toolName || '') === 'agent') pushLog('OUT', String(event.toolOutput ?? ''), 'info')
           setStatusText('')
+        } else if (event.type === 'disclosure') {
+          if (event.disclosureResult) setDisclosureResult(event.disclosureResult)
         } else if (event.type === 'compression') {
           setCompressionInfo({
             wasCompressed: true,
@@ -406,6 +440,7 @@ export function ChatPage() {
         autoMode,
         localModelId: localModelId ?? undefined,
         forceCompression: forceCompressRef.current ? true : undefined,
+        selectedTools: selectedMCPTools,
       })
       forceCompressRef.current = false
     } catch (e: any) {
@@ -434,7 +469,7 @@ export function ChatPage() {
       const aiText = aiReply?.content?.slice(0, 200) || ''
       if (aiText) setTimeout(() => generateTitle(cid, userText, aiText), 1000)
     }
-  }, [input, loading, activeModel, messages, attachments, localModelId, localModels, autoMode, convId, generateTitle])
+  }, [input, loading, activeModel, messages, attachments, localModelId, localModels, autoMode, convId, generateTitle, selectedMCPTools])
 
   // @ 文件选择器
   const handleInputChange = useCallback(async (val: string) => {
@@ -473,7 +508,8 @@ export function ChatPage() {
   const handleAskAnswer = useCallback((answer: string) => {
     if (!askUser) return
     setMessages(prev => [...prev, { role: 'user', content: answer }])
-    pushLog('USR', `${askUser.question} => ${answer}`, 'ok')
+    const askLabel = askUser.title || askUser.question || '用户回答'
+    pushLog('USR', `${askLabel} => ${answer.slice(0, 80)}`, 'ok')
     askUser.resolve(answer)
     setAskUser(null)
   }, [askUser])
@@ -595,14 +631,14 @@ export function ChatPage() {
           <textarea
             className="w-full resize-none bg-transparent px-3 pt-2 pb-0 text-sm leading-relaxed placeholder:text-muted-foreground outline-none disabled:cursor-not-allowed disabled:opacity-50 custom-scrollbar"
             rows={3}
-            placeholder={localModelId ? '向本地模型提问...' : activeModel ? `向 ${activeModel.displayName} 提问...` : '请先配置模型'}
+            placeholder={askUser ? '请在上方回答 AI 的问题...' : localModelId ? '向本地模型提问...' : activeModel ? `向 ${activeModel.displayName} 提问...` : '请先配置模型'}
             value={input}
             onChange={e => handleInputChange(e.target.value)}
             onKeyDown={e => {
               if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
               if (e.key === 'Enter' && e.shiftKey) return
             }}
-            disabled={!activeModel && !localModelId}
+            disabled={!activeModel && !localModelId || !!askUser}
           />
           <div className="flex items-center gap-1 px-2 pb-1.5">
             <div className="relative shrink-0">
@@ -625,6 +661,14 @@ export function ChatPage() {
               />
             </div>
             <SkillPicker skills={skills} onToggle={async (s) => { await toggleSkill(s.id, !s.enabled); setSkills(getInstalledSkills()) }} />
+            <MCPToolPicker
+              selectedTools={selectedMCPTools}
+              onSelectionChange={setSelectedMCPTools}
+              disclosureResult={disclosureResult}
+              threshold={disclosureThreshold}
+              onThresholdChange={(n) => { setDisclosureThreshold(n); saveDisclosureThreshold(n) }}
+              activatedToolNames={activatedToolNames}
+            />
             <button className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground/60 hover:bg-muted hover:text-muted-foreground transition-colors" onClick={handleUpload} title="上传文件">
               <Paperclip className="h-3 w-3" />
               <span>文件</span>
@@ -635,7 +679,7 @@ export function ChatPage() {
                 <X className="h-4 w-4" />
               </button>
             ) : (
-              <button className="p-0.5 rounded text-muted-foreground/30 hover:text-muted-foreground transition-colors" onClick={handleSend} disabled={!input.trim() || (!activeModel && !localModelId)} title="发送 (Enter)">
+              <button className="p-0.5 rounded text-muted-foreground/30 hover:text-muted-foreground transition-colors" onClick={handleSend} disabled={!input.trim() || (!activeModel && !localModelId) || !!askUser} title={askUser ? '请先在上方回答 AI 的问题' : '发送 (Enter)'}>
                 <Send className="h-4 w-4" />
               </button>
             )}

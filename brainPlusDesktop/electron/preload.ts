@@ -136,10 +136,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('mcp:callTool', serverId, toolName, args),
 
     listResources: (serverId: string) => ipcRenderer.invoke('mcp:listResources', serverId),
+    getAllResources: () => ipcRenderer.invoke('mcp:getAllResources'),
     readResource: (serverId: string, uri: string) =>
       ipcRenderer.invoke('mcp:readResource', serverId, uri),
 
     listPrompts: (serverId: string) => ipcRenderer.invoke('mcp:listPrompts', serverId),
+    getAllPrompts: () => ipcRenderer.invoke('mcp:getAllPrompts'),
     getPrompt: (serverId: string, promptName: string, args: any) =>
       ipcRenderer.invoke('mcp:getPrompt', serverId, promptName, args),
   },

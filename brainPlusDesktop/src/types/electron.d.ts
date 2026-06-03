@@ -127,9 +127,11 @@ export interface ElectronAPI {
     callTool: (serverId: string, toolName: string, args: any) => Promise<MCPToolResult>
 
     listResources: (serverId: string) => Promise<MCPResource[]>
+    getAllResources: () => Promise<{ resources: MCPResource[]; errors: Array<{ serverName: string; error: string }> }>
     readResource: (serverId: string, uri: string) => Promise<{ success: boolean; content?: any; error?: string }>
 
     listPrompts: (serverId: string) => Promise<MCPPrompt[]>
+    getAllPrompts: () => Promise<{ prompts: MCPPrompt[]; errors: Array<{ serverName: string; error: string }> }>
     getPrompt: (serverId: string, promptName: string, args: any) => Promise<any>
   }
 }
