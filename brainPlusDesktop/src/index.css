@@ -67,3 +67,43 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* 自定义滚动条 — 极简风格，复用 muted 色系 */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.2);
+  border-radius: 3px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.35);
+}
+/* Firefox */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.2) transparent;
+}
+
+/* 对话区域强制所有内容换行，防止横向溢出 */
+.chat-messages * {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+.chat-messages pre {
+  white-space: pre-wrap !important;
+  word-break: break-all !important;
+}
+.chat-messages table {
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
+}
+.chat-messages img {
+  max-width: 100%;
+  height: auto;
+}

@@ -8,7 +8,8 @@ import { getAllTools } from './mcpClient'
 import { getInstalledSkills } from './skillService'
 import type { SectionIndex } from '@/types/skill'
 import { progressiveDisclosure, extractToolInfo } from './toolDisclosure'
-import { createTrace, type TurnTrace } from './observability'
+import { createTrace, estimateTokens, type TurnTrace } from './observability'
+import { ContextWindowManager } from './contextWindowManager'
 
 // ====== Agent 自带工具的事件类型 ======
 
@@ -537,18 +538,23 @@ export async function getMCPSdkTools(autoMode?: boolean): Promise<Record<string,
 }
 
 export interface ChatStreamEvent {
-  type: 'text-delta' | 'tool-call' | 'tool-result' | 'done'
+  type: 'text-delta' | 'tool-call' | 'tool-result' | 'done' | 'compression'
   text?: string
   toolName?: string
   toolInput?: unknown
   toolOutput?: unknown
   trace?: TurnTrace
+  // compression 事件字段
+  originalTokens?: number
+  compressedTokens?: number
+  limit?: number
+  summary?: string
 }
 
 export async function chat(
   messages: ModelMessage[],
   onEvent?: (event: ChatStreamEvent) => void,
-  opts?: { abortSignal?: AbortSignal; autoMode?: boolean; localModelId?: string },
+  opts?: { abortSignal?: AbortSignal; autoMode?: boolean; localModelId?: string; forceCompression?: boolean },
 ) {
   // 本地模型路径
   if (opts?.localModelId) {
@@ -595,10 +601,44 @@ export async function chat(
     if (excluded > 0) console.log(`[disclosure] ${Object.keys(mcpTools).length}→${selected.length} tools (excluded ${excluded})`)
   }
 
+  // 上下文窗口压缩
+  const cwm = new ContextWindowManager()
+  const contextWindow = cwm.getContextWindowForModel()
+
+  // 估算消息之外的固定 token 开销：system prompt + 工具定义
+  let overheadTokens = estimateTokens(systemPrompt || '')
+  for (const [name, tool] of Object.entries(filteredTools)) {
+    overheadTokens += estimateTokens(name + (tool as any).description || '')
+  }
+  const compressOpt = { ...(opts?.forceCompression ? { force: true } : {}), extraTokens: overheadTokens }
+
+  const {
+    messages: compressedMessages,
+    wasCompressed,
+    originalTokens,
+    compressedTokens,
+    summary,
+  } = await cwm.compress(messages, contextWindow, compressOpt)
+
+  if (wasCompressed) {
+    onEvent?.({
+      type: 'compression',
+      originalTokens,
+      compressedTokens,
+      limit: contextWindow,
+      summary,
+    })
+  }
+
+  // 摘要注入 system prompt，不放入 messages（避免 AI SDK 安全警告）
+  const finalSystem = summary
+    ? `${systemPrompt || ''}\n\n[对话历史摘要]\n${summary}`
+    : systemPrompt || undefined
+
   const result = streamText({
     model: model.instance,
-    system: systemPrompt || undefined,
-    messages,
+    system: finalSystem,
+    messages: compressedMessages,
     tools: Object.keys(filteredTools).length > 0 ? filteredTools : undefined,
     stopWhen: stepCountIs(25),
     abortSignal: opts?.abortSignal,
@@ -606,7 +646,7 @@ export async function chat(
 
   // 可观测性追踪
   const trace = createTrace()
-  messages.forEach(m => trace.addInput(typeof m.content === 'string' ? m.content : JSON.stringify(m.content)))
+  compressedMessages.forEach(m => trace.addInput(typeof m.content === 'string' ? m.content : JSON.stringify(m.content)))
 
   let fullText = ''
 

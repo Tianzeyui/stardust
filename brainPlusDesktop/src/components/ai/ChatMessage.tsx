@@ -2,6 +2,11 @@ import { Check, X, Shield, ShieldCheck, Cable, BookOpen, MessageSquare, FileText
 import MarkdownPreview from '@uiw/react-markdown-preview'
 import type { UIMessage, ToolCallStatus, MessageAttachment } from '@/types/chat'
 
+/** 剥离 HTML 标签，避免 MarkdownPreview 将 <tag> 当作 React 组件渲染 */
+function stripHtml(s: string): string {
+  return s.replace(/<[^>]*>/g, '')
+}
+
 interface ChatMessageProps {
   msg: UIMessage
 }
@@ -40,10 +45,10 @@ export function ChatMessage({ msg }: ChatMessageProps) {
             )}
           </div>
         ) : (
-          <div>
+          <div className="overflow-x-hidden">
             <MarkdownPreview
-              source={msg.content || (msg.streaming ? '...' : '')}
-              style={{ fontSize: 14, backgroundColor: 'transparent' }}
+              source={stripHtml(msg.content || (msg.streaming ? '...' : ''))}
+              style={{ fontSize: 14, backgroundColor: 'transparent', overflowWrap: 'break-word', wordBreak: 'break-word' }}
             />
             {(msg.modelName || msg.trace) && !msg.streaming && (
               <p className="mt-0.5 text-[10px] text-muted-foreground/40 select-none">
@@ -63,10 +68,10 @@ function ToolBubble({ tc }: { tc: ToolCallStatus }) {
   const isError = tc.status === 'error'
 
   return (
-    <div className="flex gap-3">
-      <div className="flex-1">
+    <div className="flex gap-3 max-w-full">
+      <div className="min-w-0 flex-1">
         <div
-          className={`inline-flex items-start gap-2 rounded-lg border px-3 py-2 text-xs ${
+          className={`inline-flex items-start gap-2 rounded-lg border px-3 py-2 text-xs max-w-full overflow-hidden ${
             isError
               ? 'border-destructive/30 bg-destructive/5'
               : 'border-border bg-card'
@@ -90,7 +95,7 @@ function ToolBubble({ tc }: { tc: ToolCallStatus }) {
             </div>
             {/* 沙箱入参 */}
             {tc.type === 'sandbox' && tc.input != null && (
-              <pre className="mt-1.5 max-h-32 overflow-auto rounded border border-border px-2 py-1 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-all bg-muted/30 text-muted-foreground">
+              <pre className="mt-1.5 max-h-32 overflow-auto custom-scrollbar rounded border border-border px-2 py-1 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-all bg-muted/30 text-muted-foreground">
                 {String(
                   typeof tc.input === 'object' && (tc.input as any).code
                     ? (tc.input as any).code
@@ -100,9 +105,9 @@ function ToolBubble({ tc }: { tc: ToolCallStatus }) {
             )}
             {/* 工具结果 */}
             {tc.result && (
-              <div className="mt-1.5 max-h-40 overflow-auto rounded border border-border">
+              <div className="mt-1.5 max-h-40 overflow-auto custom-scrollbar rounded border border-border max-w-full">
                 <MarkdownPreview
-                  source={String(tc.result).slice(0, 2000)}
+                  source={stripHtml(String(tc.result).slice(0, 2000))}
                   style={{ fontSize: 12, padding: '4px 8px', backgroundColor: 'transparent' }}
                 />
               </div>

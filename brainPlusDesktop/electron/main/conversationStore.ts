@@ -20,6 +20,15 @@ export interface ConversationItem {
   updatedAt: string
 }
 
+export interface CompressionSnapshot {
+  originalTokens: number
+  compressedTokens: number
+  limit: number
+  summary?: string
+  /** 压缩时的消息数量，用于检测压缩状态是否过期 */
+  messageCount: number
+}
+
 export interface Conversation {
   id: string
   title: string
@@ -27,6 +36,7 @@ export interface Conversation {
   modelName?: string
   createdAt: string
   updatedAt: string
+  compression?: CompressionSnapshot
 }
 
 function filePath(id: string): string {

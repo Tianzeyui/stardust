@@ -34,6 +34,15 @@ export interface ConsoleLine {
   status: 'ok' | 'running' | 'error' | 'info'
 }
 
+/** 压缩事件数据 */
+export interface CompressionEventData {
+  wasCompressed: boolean
+  originalTokens: number
+  compressedTokens: number
+  limit: number
+  summary?: string
+}
+
 export function detectToolType(name: string): ToolType {
   if (name.startsWith('sandbox_')) return 'sandbox'
   if (name === 'read_skill') return 'skill'

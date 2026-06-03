@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { chat, setAgentUIHandler, type ChatStreamEvent, type AskUserEvent } from '@/lib/chatService'
 import type { ModelMessage } from 'ai'
-import { formatDuration } from '@/lib/observability'
+import { formatDuration, estimateTokens } from '@/lib/observability'
+import { ContextWindowManager } from '@/lib/contextWindowManager'
 import { useKonamiCode } from '@/hooks/useKonamiCode'
 import { useModelLoader } from '@/hooks/useModelLoader'
 import { ChatMessage } from './ChatMessage'
@@ -21,8 +22,10 @@ import { getInstalledSkills, toggleSkill } from '@/lib/skillService'
 import type { InstalledSkill } from '@/types/skill'
 import {
   type ToolCallStatus, type UIMessage, type ConsoleLine,
+  type CompressionEventData,
   detectToolType,
 } from '@/types/chat'
+import { TokenUsageBar } from './TokenUsageBar'
 
 export function ChatPage() {
   const [messages, setMessages] = useState<UIMessage[]>([])
@@ -49,11 +52,42 @@ export function ChatPage() {
   const [convId, setConvId] = useState<string | null>(null)
   const [convTitle, setConvTitle] = useState('新对话')
   const [convList, setConvList] = useState<ConvInfo[]>([])
+  const [compressionInfo, setCompressionInfo] = useState<CompressionEventData | null>(null)
+  const [compressing, setCompressing] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
+  const forceCompressRef = useRef(false)
   const pickerRef = useRef<HTMLDivElement>(null)
   const messagesRef = useRef<UIMessage[]>([])
   const logId = useRef(0)
   const endRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const userScrolledUpRef = useRef(false)
+
+  const isNearBottom = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return true
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 80
+  }, [])
+
+  useEffect(() => { messagesRef.current = messages }, [messages])
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const onScroll = () => {
+      userScrolledUpRef.current = !isNearBottom()
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [isNearBottom])
+
+  useEffect(() => {
+    // 流式更新中：用户没手动滚上去才跟底，用 instant 避免动画累积
+    const streaming = messages.some(m => m.streaming)
+    if (userScrolledUpRef.current && streaming) return
+    endRef.current?.scrollIntoView({ behavior: streaming ? 'instant' : 'smooth' })
+    // streaming 消息结束时重置标记
+    if (!streaming) userScrolledUpRef.current = false
+  }, [messages])
 
   const pushLog = (icon: string, msg: string, status: ConsoleLine['status'] = 'info') => {
     const id = ++logId.current
@@ -62,8 +96,6 @@ export function ChatPage() {
   }
 
   useEffect(() => { messagesRef.current = messages }, [messages])
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
-
   // 加载对话列表
   const loadConvList = useCallback(async () => {
     if (!window.electronAPI?.conv) return
@@ -73,17 +105,25 @@ export function ChatPage() {
   useEffect(() => { setSkills(getInstalledSkills()) }, [])
   useEffect(() => { loadConvList() }, [loadConvList])
 
-  // 保存当前对话（消息变化时）
+  // 保存当前对话（消息变化时，含压缩快照）
   useEffect(() => {
     if (!convId || !window.electronAPI?.conv || messages.length === 0) return
     const modelName = activeModel ? `${activeModel.displayName} / ${activeModel.selectedModel}` : undefined
+    const compression = compressionInfo ? {
+      originalTokens: compressionInfo.originalTokens,
+      compressedTokens: compressionInfo.compressedTokens,
+      limit: compressionInfo.limit,
+      summary: compressionInfo.summary,
+      messageCount: messages.length,
+    } : undefined
     window.electronAPI.conv.save({
       id: convId, title: convTitle, messages, modelName,
       createdAt: '', updatedAt: new Date().toISOString(),
-    })
+      compression,
+    } as any)
     // 更新列表
     setConvList(prev => prev.map(c => c.id === convId ? { ...c, title: convTitle, messageCount: messages.length, updatedAt: new Date().toISOString() } : c))
-  }, [messages, convId, convTitle, activeModel])
+  }, [messages, convId, convTitle, activeModel, compressionInfo])
 
   const refreshOutputs = useCallback(async () => {
     if (window.electronAPI?.workspace) {
@@ -118,7 +158,10 @@ export function ChatPage() {
       } else if (event.type === 'update_task_list') {
         setTaskList((prev) => {
           const map = new Map(prev.map(t => [t.id, t]))
-          for (const t of event.tasks) map.set(t.id, t)
+          for (const t of event.tasks) {
+            const existing = map.get(t.id)
+            map.set(t.id, { ...existing, ...t, title: t.title || existing?.title || '' })
+          }
           return Array.from(map.values())
         })
       }
@@ -131,7 +174,7 @@ export function ChatPage() {
     const api = window.electronAPI?.conv
     if (!api) return
     const c = await api.create('新对话')
-    setConvId(c.id); setConvTitle('新对话'); setMessages([])
+    setConvId(c.id); setConvTitle('新对话'); setMessages([]); setCompressionInfo(null)
     setConvList(prev => [{ id: c.id, title: '新对话', messageCount: 0, updatedAt: c.updatedAt }, ...prev])
   }, [])
 
@@ -140,7 +183,22 @@ export function ChatPage() {
     const api = window.electronAPI?.conv
     if (!api) return
     const c = await api.get(id)
-    if (c) { setConvId(c.id); setConvTitle(c.title); setMessages(c.messages || []) }
+    if (c) {
+      setConvId(c.id); setConvTitle(c.title); setMessages(c.messages || [])
+      // 恢复压缩状态（若消息数未变化则有效，否则视为过期）
+      const snap = (c as any).compression
+      if (snap && snap.messageCount === (c.messages || []).length) {
+        setCompressionInfo({
+          wasCompressed: true,
+          originalTokens: snap.originalTokens,
+          compressedTokens: snap.compressedTokens,
+          limit: snap.limit,
+          summary: snap.summary,
+        })
+      } else {
+        setCompressionInfo(null)
+      }
+    }
   }, [])
 
   // 删除对话
@@ -272,6 +330,9 @@ export function ChatPage() {
     const controller = new AbortController()
     abortRef.current = controller
 
+    // 新一轮对话，重置旧的压缩数据
+    setCompressionInfo(null)
+
     try {
       let resolvedContent = userContent
       if (Array.isArray(userContent)) {
@@ -312,6 +373,14 @@ export function ChatPage() {
           pushLog(ok ? 'OK' : 'ERR', `${event.toolName || 'tool'} ${ok ? 'done' : 'fail'}`, ok ? 'ok' : 'error')
           if (detectToolType(event.toolName || '') === 'agent') pushLog('OUT', String(event.toolOutput ?? ''), 'info')
           setStatusText('')
+        } else if (event.type === 'compression') {
+          setCompressionInfo({
+            wasCompressed: true,
+            originalTokens: event.originalTokens || 0,
+            compressedTokens: event.compressedTokens || 0,
+            limit: event.limit || 0,
+            summary: event.summary,
+          })
         } else if (event.type === 'done') {
           pushLog('DONE', `回复 (${streamed.length}字)`, streamed ? 'ok' : 'info')
           if (event.trace) {
@@ -332,7 +401,13 @@ export function ChatPage() {
           }
           setMessages(prev => { const n = [...prev]; const l = n[n.length - 1]; if (l?.role === 'assistant' && l.streaming) { if (streamed) { l.content = streamed; l.streaming = false } else n.pop() } return [...n] })
         }
-      }, { abortSignal: controller.signal, autoMode, localModelId: localModelId ?? undefined })
+      }, {
+        abortSignal: controller.signal,
+        autoMode,
+        localModelId: localModelId ?? undefined,
+        forceCompression: forceCompressRef.current ? true : undefined,
+      })
+      forceCompressRef.current = false
     } catch (e: any) {
       const isAbort = e.name === 'AbortError' || controller.signal.aborted
       setMessages(prev => prev.map(m => {
@@ -395,6 +470,48 @@ export function ChatPage() {
     setAskUser(null)
   }, [askUser])
 
+  // Token 用量（排除 tool 消息——它们不会被发给 API，只用于 UI 展示）
+  const estimatedTokens = messages
+    .filter(m => m.role !== 'tool')
+    .reduce((sum, m) => sum + estimateTokens(m.content) + 4, 0)
+  const contextWindowLimit =
+    compressionInfo?.limit
+    || activeModel?.availableModels?.find(m => m.id === activeModel.selectedModel)?.contextWindow
+    || 8192
+
+  const compressingRef = useRef(false)
+
+  /** 主动压缩当前消息（不等下一条发送） */
+  const compressNow = useCallback(async () => {
+    if (compressingRef.current || messages.length === 0) return
+    compressingRef.current = true
+    setCompressing(true)
+    try {
+      const cwm = new ContextWindowManager()
+      const modelMessages = messages
+        .filter(m => !m.streaming && m.role !== 'tool')
+        .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+      const result = await cwm.compress(modelMessages, contextWindowLimit, { force: true })
+      if (result.wasCompressed) {
+        setCompressionInfo({
+          wasCompressed: true,
+          originalTokens: result.originalTokens,
+          compressedTokens: result.compressedTokens,
+          limit: result.limit,
+          summary: result.summary,
+        })
+      }
+    } finally {
+      compressingRef.current = false
+      setCompressing(false)
+    }
+  }, [messages, contextWindowLimit])
+
+  // 切换模型时重置压缩状态（上下文窗口大小不同了）
+  useEffect(() => {
+    setCompressionInfo(null)
+  }, [activeModel?.selectedModel])
+
   return (
     <div className="flex h-full flex-col">
       <ConversationBar
@@ -406,7 +523,7 @@ export function ChatPage() {
         onDelete={handleDeleteConv}
         onRename={handleRenameConv}
       />
-      <div className="flex-1 overflow-auto">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar">
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
             <Bot className="h-16 w-16 opacity-20" />
@@ -414,7 +531,7 @@ export function ChatPage() {
             <p className="text-sm">{configuredModels.length === 0 ? '请先在设置中配置模型' : activeModel ? `当前模型: ${activeModel.displayName}` : '选择一个模型'}</p>
           </div>
         ) : (
-          <div className="w-full px-4 py-4 space-y-4">
+          <div className="chat-messages w-full px-4 py-4 space-y-4">
             {messages.map((msg, i) => <ChatMessage key={i} msg={msg} />)}
             {taskList.length > 0 && <TaskListCard tasks={taskList} />}
             <div ref={endRef} />
@@ -432,6 +549,17 @@ export function ChatPage() {
           {progressMsg || statusText}
         </div>
       )}
+
+      {/* Token 用量条 */}
+      <TokenUsageBar
+        estimatedTokens={estimatedTokens}
+        limit={contextWindowLimit}
+        wasCompressed={compressionInfo?.wasCompressed || false}
+        originalTokens={compressionInfo?.originalTokens}
+        compressedTokens={compressionInfo?.compressedTokens}
+        compressing={compressing}
+        onForceCompress={compressNow}
+      />
 
       {/* 输入区 */}
       <div className="border-t border-border px-3 py-2">
@@ -457,7 +585,7 @@ export function ChatPage() {
         {/* 输入行 */}
         <div className="rounded-lg border border-input bg-background focus-within:ring-1 focus-within:ring-ring">
           <textarea
-            className="w-full resize-none bg-transparent px-3 pt-2 pb-0 text-sm leading-relaxed placeholder:text-muted-foreground outline-none disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full resize-none bg-transparent px-3 pt-2 pb-0 text-sm leading-relaxed placeholder:text-muted-foreground outline-none disabled:cursor-not-allowed disabled:opacity-50 custom-scrollbar"
             rows={3}
             placeholder={localModelId ? '向本地模型提问...' : activeModel ? `向 ${activeModel.displayName} 提问...` : '请先配置模型'}
             value={input}
