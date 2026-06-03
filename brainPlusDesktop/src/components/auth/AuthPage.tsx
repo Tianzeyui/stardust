@@ -21,7 +21,7 @@ export function AuthPage() {
   const hasConfig = isSupabaseConfigured()
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-gradient-to-br from-slate-50 to-slate-100 px-4 dark:from-slate-950 dark:to-slate-900">
+    <div className="relative flex min-h-screen flex-col items-center justify-center gap-6 bg-gradient-to-br from-slate-50 to-slate-100 px-4 dark:from-slate-950 dark:to-slate-900">
       {/* 头部 */}
       <div className="flex items-center gap-3">
         <Brain className="h-8 w-8 text-primary" />
@@ -84,6 +84,16 @@ export function AuthPage() {
 
       {/* 设置弹窗 */}
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+
+      {/* 底部信息 — 绝对定位，不影响卡片居中 */}
+      <div className="absolute bottom-4 left-0 right-0 text-center space-y-1">
+        <p className="text-[11px] text-muted-foreground/30">
+          Licensed under Apache License 2.0
+        </p>
+        <p className="text-[11px] text-muted-foreground/30">
+          沉浸位工作室 © {__BUILD_YEAR__}
+        </p>
+      </div>
     </div>
   )
 }

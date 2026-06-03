@@ -7,7 +7,12 @@ import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
+const BUILD_YEAR = new Date().getFullYear()
+
 export default defineConfig({
+  define: {
+    __BUILD_YEAR__: JSON.stringify(BUILD_YEAR),
+  },
   plugins: [
     react(),
     electron([

@@ -3,6 +3,12 @@ const { contextBridge, ipcRenderer } = require('electron')
 contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
 
+  onShowAbout: (cb: () => void) => {
+    const listener = () => cb()
+    ipcRenderer.on('showAbout', listener)
+    return () => ipcRenderer.removeListener('showAbout', listener)
+  },
+
   dialog: {
     openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),
     openFile: (opts?: { filters?: Array<{ name: string; extensions: string[] }> }) =>

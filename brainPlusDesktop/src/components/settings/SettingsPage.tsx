@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Settings, Cpu, Server, Trash2, Plus, RefreshCw, Check, Wrench, FolderOpen, MessageSquare, Play, ChevronDown, Loader2, X, Download, HardDrive, ArrowLeft } from 'lucide-react'
+import { Settings, Cpu, Server, Trash2, Plus, RefreshCw, Check, Wrench, FolderOpen, MessageSquare, Play, ChevronDown, Loader2, X, Download, HardDrive, ArrowLeft, Info } from 'lucide-react'
+import { APP_VERSION } from '@/lib/version'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,10 +15,10 @@ import {
 import { listTools, listResources, listPrompts, callTool, readResource, getPrompt, connect, addServer as addMcpServer, updateServer as updateMcpServer, removeServer as removeMcpServer } from '@/lib/mcpClient'
 import type { MCPTool, MCPResource, MCPPrompt } from '@/types/electron'
 
-type Tab = 'general' | 'ai' | 'model' | 'mcp'
+type Tab = 'general' | 'ai' | 'model' | 'mcp' | 'about'
 
-export function SettingsPage({ onClose }: { onClose?: () => void }) {
-  const [tab, setTab] = useState<Tab>('general')
+export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; initialTab?: Tab }) {
+  const [tab, setTab] = useState<Tab>(initialTab || 'general')
   const [saved, setSaved] = useState(false)
 
   // 通用
@@ -242,6 +243,7 @@ export function SettingsPage({ onClose }: { onClose?: () => void }) {
             { id: 'ai' as const, label: '云模型', icon: Cpu },
             { id: 'model' as const, label: '本地模型', icon: Cpu },
             { id: 'mcp' as const, label: 'MCP 服务器', icon: Server },
+            { id: 'about' as const, label: '关于', icon: Info },
           ]).map((t) => (
             <button
               key={t.id}
@@ -615,6 +617,29 @@ export function SettingsPage({ onClose }: { onClose?: () => void }) {
                 </div>
               ))
             )}
+          </div>
+        )}
+
+        {/* ===== 关于 ===== */}
+        {tab === 'about' && (
+          <div className="flex flex-col items-center text-center py-8">
+            <img src="/assets/icons/icon.png" alt="BrainPlus" className="w-20 h-20 rounded-2xl mb-4 shadow-sm" />
+            <h2 className="text-xl font-bold text-foreground mb-1">BrainPlus</h2>
+            <p className="text-sm text-muted-foreground mb-6">Version {APP_VERSION}</p>
+            <p className="text-sm text-muted-foreground leading-relaxed max-w-xs mb-8">
+              AI 赋能创作，让灵感自由流淌。<br />
+              AI 辅助内容创作软件，通过灵感收集记录、知识蒸馏等功能，帮助多媒体创作者高效产出内容。
+            </p>
+            <div className="relative inline-block mb-3">
+              <img src="/assets/logo/immersionBitLogo.png" alt="沉浸位工作室" className="w-32" />
+              <sup className="absolute -top-1 -right-3 text-[10px] font-bold text-muted-foreground/70">™</sup>
+            </div>
+            <p className="text-xs text-muted-foreground/50">
+              © {__BUILD_YEAR__} 沉浸位工作室
+            </p>
+            <p className="text-[11px] text-muted-foreground/40 mt-3 max-w-xs leading-relaxed">
+              基于 Apache License 2.0 开源。Free as in Freedom.
+            </p>
           </div>
         )}
 

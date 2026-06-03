@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, shell, Menu } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { fileURLToPath } from 'url'
@@ -29,12 +29,20 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
+// macOS 开发模式下替换菜单栏显示名称
+if (process.platform === 'darwin') app.setName('BrainPlus')
+
 let mainWindow: BrowserWindow | null = null
+
+const appIconPath = path.join(__dirname, '../public/assets/icons/icon.png')
+const appIcon = fs.existsSync(appIconPath) ? appIconPath : undefined
 
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    title: 'BrainPlus',
+    icon: appIcon,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -399,12 +407,49 @@ ipcMain.handle('conv:save', (_e, conv: any) => { saveConversation(conv); return 
 ipcMain.handle('conv:delete', (_e, id: string) => deleteConversation(id))
 ipcMain.handle('conv:create', (_e, title?: string, modelName?: string) => createConversation(title, modelName))
 
+// ==================== 关于窗口 ====================
+
+function showAbout() {
+  mainWindow?.webContents.send('showAbout')
+}
+
 // ==================== App Lifecycle ====================
 
 app.whenReady().then(() => {
   preInit()
   initWorkspace()
   createWindow()
+  // macOS Dock 图标 + 关于信息
+  if (process.platform === 'darwin' && appIcon && app.dock) {
+    app.dock.setIcon(appIcon)
+  }
+  app.setAboutPanelOptions({
+    applicationName: 'BrainPlus',
+    applicationVersion: app.getVersion(),
+    copyright: `© ${__BUILD_YEAR__} 沉浸位工作室`,
+    credits: 'AI 赋能创作，让灵感自由流淌。',
+    website: 'https://github.com/Tianzeyui/brainPlus',
+    iconPath: appIcon,
+  })
+  // Windows/Linux 移除菜单栏；macOS 保留应用名菜单
+  if (process.platform === 'darwin') {
+    Menu.setApplicationMenu(Menu.buildFromTemplate([
+      {
+        label: 'BrainPlus',
+        submenu: [
+          { label: '关于 BrainPlus', click: showAbout },
+          { type: 'separator' },
+          { role: 'hide' },
+          { role: 'hideOthers' },
+          { role: 'unhide' },
+          { type: 'separator' },
+          { role: 'quit' },
+        ],
+      },
+    ]))
+  } else {
+    Menu.setApplicationMenu(null)
+  }
 })
 
 app.on('window-all-closed', () => {

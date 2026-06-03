@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Sidebar, type NavItem } from './Sidebar'
 import { ChatPage } from '@/components/ai/ChatPage'
 import { AIPage } from '@/components/ai/AIPage'
@@ -12,6 +12,16 @@ export function AppLayout() {
   const [activeNav, setActiveNav] = useState<NavItem>('chat')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsTab, setSettingsTab] = useState<'about' | undefined>(undefined)
+
+  useEffect(() => {
+    const api = window.electronAPI as any
+    if (!api?.onShowAbout) return
+    return api.onShowAbout(() => {
+      setSettingsTab('about')
+      setSettingsOpen(true)
+    })
+  }, [])
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -25,13 +35,13 @@ export function AppLayout() {
         onNavChange={setActiveNav}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSettings={() => { setSettingsTab(undefined); setSettingsOpen(true) }}
         onCloseSettings={() => setSettingsOpen(false)}
       />
 
       <main className="flex-1 overflow-auto relative">
         {settingsOpen ? (
-          <SettingsPage onClose={() => setSettingsOpen(false)} />
+          <SettingsPage onClose={() => { setSettingsOpen(false); setSettingsTab(undefined) }} initialTab={settingsTab} />
         ) : (
           <>
             {activeNav === 'chat' && <ChatPage />}

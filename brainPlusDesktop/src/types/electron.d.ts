@@ -39,6 +39,7 @@ export interface MCPPrompt {
 
 export interface ElectronAPI {
   platform: string
+  onShowAbout: (cb: () => void) => () => void
   dialog: {
     openDirectory: () => Promise<{ success: boolean; path?: string; error?: string }>
     openFile: (opts?: { filters?: Array<{ name: string; extensions: string[] }> }) =>
@@ -131,6 +132,8 @@ export interface ElectronAPI {
 }
 
 declare global {
+  /** Vite define — 构建时注入，不受用户系统时间影响 */
+  var __BUILD_YEAR__: number
   interface Window {
     electronAPI?: ElectronAPI
   }
