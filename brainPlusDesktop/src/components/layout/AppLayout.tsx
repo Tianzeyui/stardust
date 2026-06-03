@@ -8,6 +8,7 @@ import { InspirationPage } from '@/components/inspiration/InspirationPage'
 import { SettingsPage } from '@/components/settings/SettingsPage'
 import { SkillsPage } from '@/components/skills/SkillsPage'
 import { FileManagerPage } from '@/components/files/FileManagerPage'
+import { AgentsPage } from '@/components/agents/AgentsPage'
 
 export function AppLayout() {
   const [activeNav, setActiveNav] = useState<NavItem>('chat')
@@ -64,6 +65,7 @@ export function AppLayout() {
               {activeNav === 'inspiration' && <InspirationPage />}
               {activeNav === 'skills' && <SkillsPage />}
               {activeNav === 'files' && <FileManagerPage />}
+              {activeNav === 'agents' && <AgentsPage />}
             </>
           )}
         </main>
