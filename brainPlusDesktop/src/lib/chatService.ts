@@ -248,6 +248,21 @@ export async function getMCPSdkTools(autoMode?: boolean): Promise<Record<string,
 
           const allLines = content.split('\n')
 
+          // 构建文档地图：总行数 + 已读范围 + 所有段落索引（引导 AI 按需继续读）
+          const buildDocMap = (readStart: number, readEnd: number) => {
+            const pct = Math.round((readEnd - readStart + 1) / allLines.length * 100)
+            const sectionsHint = skill.sections.length > 0
+              ? skill.sections
+                  .filter(s => s.startLine > readEnd || s.endLine < readStart)
+                  .map(s => `  ${s.title} (L${s.startLine}-${s.endLine}, ${s.endLine - s.startLine + 1}行)`)
+                  .join('\n')
+              : ''
+            const nextHint = skill.sections.length > 0
+              ? `用 read_skill("${name}", "${filePath}", {lines: "${Math.max(readEnd + 1, 1)}-${allLines.length}"}) 继续读取剩余内容。`
+              : ''
+            return `\n\n---\n📋 ${filePath}: ${allLines.length}行，已读 ${readEnd - readStart + 1}行 (${pct}%)\n${sectionsHint ? '其他段落:\n' + sectionsHint + '\n' : ''}${nextHint}`
+          }
+
           // section 查询：精确匹配优先，再 fallback 包含匹配
           if (section) {
             const lowerSection = section.toLowerCase()
@@ -255,9 +270,10 @@ export async function getMCPSdkTools(autoMode?: boolean): Promise<Record<string,
               ?? skill.sections.find(s => s.title.toLowerCase().includes(lowerSection))
             if (sec) {
               const slice = allLines.slice(sec.startLine - 1, sec.endLine)
-              return `## ${sec.title} (L${sec.startLine}-${sec.endLine})\n\`\`\`\n${slice.join('\n')}\n\`\`\``
+              const docMap = buildDocMap(sec.startLine, sec.endLine)
+              return `## ${sec.title} (L${sec.startLine}-${sec.endLine})\n\`\`\`\n${slice.join('\n')}\n\`\`\`${docMap}`
             }
-            return `未找到段落 "${section}"。可用段落: ${skill.sections.map(s => s.title).join(', ')}`
+            return `未找到段落 "${section}"。可用段落: ${skill.sections.map(s => `${s.title}(L${s.startLine}-${s.endLine})`).join(', ')}`
           }
 
           // lines 查询
@@ -266,7 +282,8 @@ export async function getMCPSdkTools(autoMode?: boolean): Promise<Record<string,
             if (!match) return `行格式错误: "${lines}"。例: "1-50"、"100-end"`
             const start = Math.max(1, parseInt(match[1])) - 1
             const end = !match[2] ? start + 1 : match[3]?.toLowerCase() === 'end' ? allLines.length : parseInt(match[3])
-            return allLines.slice(start, end).join('\n')
+            const docMap = buildDocMap(start + 1, Math.min(end, allLines.length))
+            return allLines.slice(start, end).join('\n') + docMap
           }
 
           return content
@@ -712,19 +729,26 @@ export async function chat(
   // 保存完整工具集引用（渐进式披露筛选后，enable_tool 需要访问完整集合）
   const fullToolSet = toolsForDisclosure
 
-  // 已启用的技能：只注入名称+描述+段落索引（不注入完整文件内容，节省 token）
+  // Skills 渐进式披露（参考 OpenClaw 三层架构）
+  // Level 1: 元数据（name + description），~100 tokens/skill，注入系统提示
+  // Level 2: 完整 SKILL.md，通过 read_skill 按需加载
+  // Level 3: 附属文件（references/scripts），通过 read_skill(name, file) 按需读取
   const enabledSkills = getInstalledSkills().filter(s => s.enabled)
-  const skillInjection = enabledSkills.length > 0
-    ? '已启用技能列表（使用 read_skill 工具按需读取详细内容）:\n' +
-      enabledSkills.map(s => {
-        const parts = [`- 名称: ${s.name}`, `描述: ${s.description}`]
-        if (s.sections.length > 0) {
-          parts.push(`段落索引: [${s.sections.map(sec => sec.title).join(', ')}]`)
-        }
-        parts.push(`文件: ${s.fileList.join(', ')}`)
-        return parts.join('\n  ')
-      }).join('\n')
-    : undefined
+  let skillInjection: string | undefined
+  if (enabledSkills.length > 0) {
+    if (enabledSkills.length <= 10) {
+      // Tier 1: 完整格式 name + description
+      skillInjection = '已启用技能（使用 read_skill 工具按需读取详细内容）:\n' +
+        enabledSkills.map(s => `- ${s.name}: ${s.description}`).join('\n')
+    } else if (enabledSkills.length <= 30) {
+      // Tier 2: 紧凑格式 name only
+      skillInjection = `已启用 ${enabledSkills.length} 个技能（紧凑模式，使用 read_skill 查看详情）:\n` +
+        enabledSkills.map(s => `- ${s.name}`).join('\n')
+    } else {
+      // Tier 3: 极简格式，仅提示数量
+      skillInjection = `已启用 ${enabledSkills.length} 个技能。使用 read_skill("技能名") 查看具体技能详情。`
+    }
+  }
 
   // Agent 行为规则（始终注入）
   const agentRules =

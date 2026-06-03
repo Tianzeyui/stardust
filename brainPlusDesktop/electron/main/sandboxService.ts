@@ -184,22 +184,33 @@ function transpileTS(code: string): string {
 }
 
 /** 扫描 CWD 中生成的输出文件并复制到工作区 output 目录 */
+let preExecFiles: Set<string> | null = null
+
+/** 执行前拍快照，记录 CWD 中已存在的文件（避免复制项目静态文件） */
+function snapshotBeforeExec(cwd: string): void {
+  try {
+    preExecFiles = new Set(fs.readdirSync(cwd))
+  } catch { preExecFiles = new Set() }
+}
+
 function collectOutputFiles(cwd: string): string[] {
   try {
+    if (!preExecFiles) return []
     const outputDir = getWorkspacePaths().output
     const exts = ['.pptx', '.docx', '.xlsx', '.pdf', '.png', '.jpg', '.jpeg', '.svg', '.csv', '.json', '.txt', '.md']
     const files = fs.readdirSync(cwd)
     const collected: string[] = []
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true })
     for (const f of files) {
-      if (exts.includes(path.extname(f).toLowerCase())) {
+      if (!preExecFiles.has(f) && exts.includes(path.extname(f).toLowerCase())) {
         const src = path.join(cwd, f)
         const dest = path.join(outputDir, f)
         try { fs.copyFileSync(src, dest); collected.push(dest) } catch {}
       }
     }
+    preExecFiles = null
     return collected
-  } catch { return [] }
+  } catch { preExecFiles = null; return [] }
 }
 
 // ====== JS 执行（核心） ======
@@ -208,6 +219,7 @@ export async function executeJS(code: string, packages?: string[]): Promise<Sand
   // 有 npm 包需求 → 持久化 npm 项目 + node 执行（包缓存，避免每次下载）
   if (packages && packages.length > 0) {
     // 1. 确保依赖已安装
+    snapshotBeforeExec(getNpmProjectDir())
     const installResult = await installNpmPackages(packages)
     if (!installResult.success) {
       return { success: false, error: `npm 包安装失败: ${installResult.error}` }
@@ -269,6 +281,7 @@ async function getPythonCmd(): Promise<string> {
 
 export async function executePython(code: string, packages?: string[]): Promise<SandboxResult> {
   return new Promise(resolve => {
+    snapshotBeforeExec(process.cwd())
     getPythonCmd().then(cmd => {
       let args: string[]
       if (cmd === 'uv' && packages && packages.length > 0) {

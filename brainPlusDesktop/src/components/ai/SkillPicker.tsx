@@ -39,8 +39,8 @@ export function SkillPicker({ skills, onToggle }: SkillPickerProps) {
                     onClick={() => onToggle(s)}
                   >
                     <div className="min-w-0 flex-1">
-                      <span className="truncate block">{s.name}</span>
-                      <span className="text-[10px] text-muted-foreground/50 truncate block">{s.description}</span>
+                      <span className="truncate block" title={s.name}>{s.name}</span>
+                      <span className="text-[10px] text-muted-foreground/50 line-clamp-2" title={s.description}>{s.description}</span>
                     </div>
                     <span className={`relative inline-flex h-4 w-7 items-center rounded-full shrink-0 ml-2 transition-colors ${s.enabled ? 'bg-primary' : 'bg-muted'}`}>
                       <span className={`inline-block h-3 w-3 rounded-full bg-white transition-transform ${s.enabled ? 'translate-x-3' : 'translate-x-0.5'}`} />
