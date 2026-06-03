@@ -24,6 +24,7 @@ export interface UIMessage {
   attachments?: MessageAttachment[]
   modelName?: string
   trace?: string  // 可观测性信息
+  parentAgent?: string  // 子 Agent 标签，工具消息渲染到 Agent 容器内
 }
 
 export interface ConsoleLine {

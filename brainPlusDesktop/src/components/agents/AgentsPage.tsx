@@ -15,7 +15,7 @@ function emptySkill(): AgentSkill {
 
 function emptyAgent(): Agent {
   return {
-    name: '', description: '', url: '', type: 'remote', version: '1.0.0',
+    name: '', description: '', systemPrompt: '', url: '', type: 'remote', version: '1.0.0',
     capabilities: { streaming: true, pushNotifications: false },
     status: 'draft', skills: [],
   }
@@ -125,6 +125,17 @@ export function AgentsPage() {
               <div className="grid gap-1.5">
                 <Label className="text-xs">描述</Label>
                 <Input className="h-8 text-sm" value={editing.description} onChange={e => setEditing({ ...editing, description: e.target.value })} placeholder="如: 擅长Python代码审查和优化" />
+              </div>
+              <div className="grid gap-3">
+                <div className="grid gap-1.5">
+                  <Label className="text-xs">System Prompt</Label>
+                  <textarea
+                    className="h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                    value={editing.systemPrompt}
+                    onChange={e => setEditing({ ...editing, systemPrompt: e.target.value })}
+                    placeholder="自定义 Agent 的系统提示词（选填）。留空则自动从 Skills 生成。"
+                  />
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="grid gap-1.5">

@@ -26,6 +26,7 @@ export interface Agent {
   id?: string
   name: string
   description: string
+  systemPrompt: string        // 自定义系统提示词
   url: string                 // remote endpoint
   type: 'local' | 'remote'
   version: string
@@ -56,6 +57,7 @@ function mapAgent(a: any): Agent {
     name: a.name,
     description: a.description || '',
     url: a.url || '',
+    systemPrompt: a.system_prompt || '',
     type: a.type || 'remote',
     version: a.version || '1.0.0',
     capabilities: a.capabilities || { streaming: true, pushNotifications: false },
@@ -118,6 +120,7 @@ export async function saveAgent(agent: Agent, userId: string): Promise<Agent | n
       version: agent.version,
       capabilities: agent.capabilities,
       status: agent.status,
+      system_prompt: agent.systemPrompt,
       updated_at: new Date().toISOString(),
     }).eq('id', agent.id).eq('user_id', userId)
     if (error) { console.warn('[agentStore] update failed:', error.message); return null }
@@ -133,6 +136,7 @@ export async function saveAgent(agent: Agent, userId: string): Promise<Agent | n
       version: agent.version,
       capabilities: agent.capabilities,
       status: agent.status,
+      system_prompt: agent.systemPrompt,
     }).select('id').single()
     if (error || !data) { console.warn('[agentStore] create failed:', error?.message); return null }
     agent.id = data.id

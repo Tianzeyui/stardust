@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS public.agents (
   version       TEXT DEFAULT '1.0.0',                   -- Agent Card: version
   capabilities  JSONB DEFAULT '{"streaming":true,"pushNotifications":false}'::jsonb,
   status        TEXT DEFAULT 'draft',                   -- 'draft' | 'active' | 'paused'
+  system_prompt TEXT DEFAULT '',                        -- 自定义系统提示词
   created_at    TIMESTAMPTZ DEFAULT NOW(),
   updated_at    TIMESTAMPTZ DEFAULT NOW()
 );

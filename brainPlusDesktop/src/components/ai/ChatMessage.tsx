@@ -41,7 +41,11 @@ const TOOL_STYLE: Record<string, {
 
 export function ChatMessage({ msg }: ChatMessageProps) {
   if (msg.role === 'tool' && msg.toolCall) {
-    return <ToolBubble tc={msg.toolCall} />
+    return msg.parentAgent ? (
+      <div className="ml-4 border-l-2 border-primary/20 pl-3 my-1">
+        <ToolBubble tc={msg.toolCall} />
+      </div>
+    ) : <ToolBubble tc={msg.toolCall} />
   }
 
   return (
@@ -58,6 +62,24 @@ export function ChatMessage({ msg }: ChatMessageProps) {
                   <AttachmentChip key={i} att={att} />
                 ))}
               </div>
+            )}
+          </div>
+        ) : msg.modelName?.startsWith('Agent:') ? (
+          // Agent 子对话输出：独立视觉容器 + 实时流式
+          <div className="rounded-lg border border-border bg-card overflow-x-hidden">
+            <div className="flex items-center gap-1.5 border-b border-border/50 px-3 py-1.5 bg-muted/30">
+              <MessageSquare className="h-3 w-3 text-primary/50" />
+              <span className="text-[11px] font-medium text-primary/70">{msg.modelName}</span>
+              {msg.streaming && <span className="text-[10px] text-muted-foreground/50">输出中...</span>}
+            </div>
+            <div className="px-3 py-2">
+              <MarkdownPreview
+                source={stripHtml(msg.content || (msg.streaming ? '...' : ''))}
+                style={{ fontSize: 14, backgroundColor: 'transparent', overflowWrap: 'break-word', wordBreak: 'break-word' }}
+              />
+            </div>
+            {msg.trace && !msg.streaming && (
+              <p className="px-3 pb-1.5 text-[10px] text-muted-foreground/40 select-none">{msg.trace}</p>
             )}
           </div>
         ) : (

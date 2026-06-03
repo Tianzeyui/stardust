@@ -50,10 +50,15 @@ export async function registerAgentTools(tools: ToolMap, userId: string) {
       _agentDisplayName: agent.name,
       execute: async ({ task }: { task: string }) => {
         try {
-          const { delegateToModel } = await import('../chatService')
-          const systemPrompt = `你是 "${agent.name}"，一个专业的 AI 助手。\n${agent.description}\n${skillDesc}\n\n请直接回答问题或执行任务，简洁专业。`
-          const result = await delegateToModel('balanced', task, systemPrompt)
-          return `[${agent.name}]\n${result.result}`
+          const { runAgent } = await import('../agentRunner')
+          const systemPrompt = agent.systemPrompt
+            || `你是 "${agent.name}"，一个专业的 AI 助手。\n${agent.description}${skillDesc}\n\n请直接回答问题或执行任务，简洁专业。`
+          const { getAgentStreamHandler } = await import('./agent')
+          const handler = getAgentStreamHandler()
+          const result = await runAgent(systemPrompt, task, agent.name, { onEvent: handler || undefined })
+          if (!result.success) return `[${agent.name}] 执行失败: ${result.error}`
+          const toolInfo = result.toolCalls.length > 0 ? `\n(调用工具: ${result.toolCalls.join(', ')})` : ''
+          return `[${agent.name}]\n${result.text}${toolInfo}`
         } catch (e: any) {
           return `Agent ${agent.name} 执行失败: ${e.message}`
         }

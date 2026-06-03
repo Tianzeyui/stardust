@@ -147,7 +147,6 @@ export async function delegateToModel(
 
 /** 从 MCP 服务器获取工具（各来源通过独立模块注册） */
 export async function getMCPSdkTools(autoMode?: boolean, userId?: string): Promise<Record<string, any>> {
-  if (!window.electronAPI?.mcp) return {}
   const tools: Record<string, any> = {}
   try {
     const { registerMCPBusinessTools } = await import('./tools/mcpBusiness')
@@ -172,7 +171,7 @@ export async function getMCPSdkTools(autoMode?: boolean, userId?: string): Promi
 }
 
 export interface ChatStreamEvent {
-  type: 'text-delta' | 'tool-call' | 'tool-result' | 'done' | 'compression' | 'disclosure' | 'system-log'
+  type: 'text-delta' | 'tool-call' | 'tool-result' | 'done' | 'compression' | 'disclosure' | 'system-log' | 'agent-tool-call' | 'agent-tool-result' | 'agent-text-delta' | 'agent-done'
   text?: string
   toolName?: string
   toolInput?: unknown
@@ -183,6 +182,8 @@ export interface ChatStreamEvent {
   compressedTokens?: number
   limit?: number
   summary?: string
+  // agent 事件字段
+  agentName?: string
   // disclosure 事件字段
   disclosureResult?: DisclosureResult
 }
@@ -200,6 +201,9 @@ export async function chat(
   const model = getChatModel()
   if (!model) throw new Error('请先在设置中启用一个 AI 模型')
 
+  // 注入 Agent 流式回调，让 delegate_task 能把 Agent 执行过程"开窗"到主对话
+  const { setAgentStreamHandler } = await import('./tools/agent')
+  setAgentStreamHandler(onEvent as any || null)
   const mcpTools = await getMCPSdkTools(opts?.autoMode, opts?.userId)
 
   // 应用用户手动选择的 MCP 工具过滤
@@ -241,9 +245,9 @@ export async function chat(
   // Agent 行为规则（始终注入）
   const agentRules =
     '你是用户的工作助手。\n' +
-    '1. 需要用户决策时调用 ask_user 工具，不要在文字中写问题等待回复。\n' +
-    '2. 优先使用工具目录中的工具完成任务，不要凭空猜测。\n' +
-    '3. 长任务调用 show_progress，完成后调用 notify_complete。\n'
+    '1. 调用 delegate_task 委托 Agent 后等待返回，把 Agent 返回的结果呈现给用户，不要重复执行。' +
+    '2. 需要用户决策时调用 ask_user，长任务调用 show_progress。' +
+    '3. 不要自己替代 Agent 执行任务。'
 
   // 渐进式披露：只筛选 MCP 业务工具（含 __ 分隔符），内建工具始终全部预加载
   const threshold = getDisclosureThreshold()

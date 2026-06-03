@@ -12,6 +12,17 @@ export function setAgentToolHandler(handler: ((event: any) => void) | null) {
   onAgentUIEvent = handler
 }
 
+/** AgentRunner 流式事件回调，由 chat() 注入 */
+let onAgentStreamEvent: ((event: { type: string; text?: string; toolName?: string; toolInput?: unknown; toolOutput?: unknown; agentName?: string }) => void) | null = null
+
+export function setAgentStreamHandler(handler: typeof onAgentStreamEvent) {
+  onAgentStreamEvent = handler
+}
+
+export function getAgentStreamHandler() {
+  return onAgentStreamEvent
+}
+
 export function registerAgentTools(tools: ToolMap, autoMode?: boolean) {
   tools['ask_user'] = {
     description:
@@ -152,18 +163,23 @@ export function registerAgentTools(tools: ToolMap, autoMode?: boolean) {
       }),
       execute: async (args: { tier?: string; agentName?: string; task: string }) => {
         try {
-          // Agent 路由优先
+          // Agent 路由
           if (args.agentName) {
-            const { delegateToModel } = await import('../chatService')
-            const safeName = 'agent__' + args.agentName.replace(/[^a-zA-Z0-9一-鰿_-]/g, '_')
-            const agentTools = tools as Record<string, any>
-            const agentTool = agentTools[safeName]
-            if (agentTool) {
-              return await agentTool.execute({ task: args.task })
-            }
-            // Agent 未找到，fallback 到通用模型
-            const result = await delegateToModel('balanced', args.task, `你是${args.agentName}。请专业地完成任务。`)
-            return `[${args.agentName}]\n${result.result}`
+            try {
+              const { listAgents } = await import('../agentStore')
+              const { delegateToAgent } = await import('../orchestrator')
+              const agents = await listAgents((window as any).__supabaseUser?.id || '')
+              const matched = agents.find(a => a.status === 'active' && a.name === args.agentName)
+              if (matched) {
+                const res = await delegateToAgent(matched, args.task)
+                return res.html
+              }
+            } catch {}
+            const { runAgent } = await import('../agentRunner')
+            const result = await runAgent(`你是${args.agentName}。请专业地完成任务。`, args.task, args.agentName, { onEvent: onAgentStreamEvent || undefined })
+            return result.success
+              ? `✅ ${args.agentName}:\n\n${result.text}`
+              : `❌ ${args.agentName}: ${result.error}`
           }
           // 通用模型路由
           const result = await delegateToModel(args.tier as 'fast' | 'balanced' | 'powerful', args.task)

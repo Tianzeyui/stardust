@@ -80,6 +80,9 @@ export function ChatPage() {
   const messagesRef = useRef<UIMessage[]>([])
   // enable_tool 代理映射：AI SDK 工具名 → 实际显示名
   const toolNameProxyRef = useRef<Map<string, string>>(new Map())
+  // Agent 流式输出跟踪：区分主对话输出和 Agent 输出
+  const agentActiveRef = useRef<string | null>(null)  // 当前活跃的 Agent 名称
+  const agentStreamedRef = useRef('')
   // 记忆管理器（convId 变化时重建，绑定新会话）
   const memoryManagerRef = useRef<MemoryManager | null>(null)
   // 始终创建 MemoryManager 用于查看长期记忆（即使无 convId）
@@ -368,12 +371,90 @@ export function ChatPage() {
 
       let streamed = ''
       setConsoleLog([]); setTaskList([]); setActivatedToolNames(new Set())
+      agentStreamedRef.current = ''
       pushLog('--', '开始处理', 'info')
 
       await chat(history, (event: ChatStreamEvent) => {
-        if (event.type === 'text-delta') {
+        // ===== Agent 事件处理 =====
+        // 主 AI 调用 delegate_task 时记录
+        if (event.type === 'tool-call' && event.toolName === 'delegate_task') {
+          const agent = (event.toolInput as any)?.agentName || 'unknown'
+          console.log(`[chat] 🤖 主AI → delegate_task("${agent}")`)
+          pushLog('🤖', `委托 Agent: ${agent}`, 'info')
+        }
+        // AgentRunner 流式事件：写入 Agent 容器文本流，首条事件时立即创建容器
+        const ensureAgentContainer = (label: string) => {
+          const content = agentStreamedRef.current
+          if (!content) return
+          setMessages(prev => {
+            const n = [...prev]
+            const l = n[n.length - 1]
+            const hasContainer = l?.role === 'assistant' && l.modelName?.startsWith('Agent:')
+            if (hasContainer) {
+              l.content = content  // 更新已有容器的内容
+            } else {
+              if (l?.role === 'assistant' && l.streaming) { l.streaming = false }
+              n.push({ role: 'assistant', content, streaming: true, modelName: label })
+            }
+            return [...n]
+          })
+        }
+        if (event.type === 'agent-tool-call') {
+          const code = typeof event.toolInput === 'object' && (event.toolInput as any)?.code
+            ? `\n\`\`\`js\n${(event.toolInput as any).code}\n\`\`\`\n`
+            : ''
+          agentStreamedRef.current += `\n\n🔧 **${event.toolName}** 执行中...${code}\n`
+          ensureAgentContainer(event.agentName ? `Agent: ${event.agentName}` : 'Agent')
+        } else if (event.type === 'agent-tool-result') {
+          const output = String(event.toolOutput ?? '').slice(0, 2000)
+          const ok = !output.startsWith('Error')
+          agentStreamedRef.current += `\n${ok ? '✅' : '❌'} **${event.toolName}** ${ok ? '完成' : '失败'}\n\`\`\`\n${output}\n\`\`\`\n`
+          ensureAgentContainer(event.agentName ? `Agent: ${event.agentName}` : 'Agent')
+        } else if (event.type === 'agent-text-delta') {
+          // Agent 流式文字输出：带 Agent 标签的独立消息
+          const agentLabel = event.agentName ? `Agent: ${event.agentName}` : 'Agent'
+          agentStreamedRef.current += event.text || ''
+          setMessages(prev => {
+            const n = [...prev]
+            const l = n[n.length - 1]
+            // Agent 输出未开始时，关闭主对话气泡，新建 Agent 标签消息
+            if (!l || l.role !== 'assistant' || l.modelName !== agentLabel) {
+              if (l?.role === 'assistant' && l.streaming) { l.streaming = false }
+              n.push({ role: 'assistant', content: agentStreamedRef.current, streaming: true, modelName: agentLabel })
+            } else {
+              l.content = agentStreamedRef.current
+            }
+            return [...n]
+          })
+        } else if (event.type === 'agent-done') {
+          // Agent 结束，确保有容器（纯工具调用无文本时兜底），关闭流式
+          const agentLabel = event.agentName ? `Agent: ${event.agentName}` : 'Agent'
+          setMessages(prev => {
+            const n = [...prev]
+            const l = n[n.length - 1]
+            const hasContainer = l?.role === 'assistant' && l.modelName?.startsWith('Agent:')
+            if (!hasContainer && agentStreamedRef.current.trim()) {
+              if (l?.role === 'assistant' && l.streaming) { l.streaming = false }
+              n.push({ role: 'assistant', content: agentStreamedRef.current, streaming: false, modelName: agentLabel })
+            } else {
+              n.forEach(m => { if (m.role === 'assistant' && m.streaming && m.modelName?.startsWith('Agent:')) m.streaming = false })
+            }
+            return [...n]
+          })
+          agentStreamedRef.current = ''
+        } else if (event.type === 'text-delta') {
           streamed += event.text || ''
-          setMessages(prev => { const n = [...prev]; const l = n[n.length - 1]; if (l?.role === 'assistant' && l.streaming) l.content = streamed; return [...n] })
+          setMessages(prev => {
+            const n = [...prev]; const l = n[n.length - 1]
+            if (l?.role === 'assistant' && l.streaming) {
+              l.content = streamed
+            } else {
+              // Agent 结束或新段落：创建新的主 AI 消息
+              if (l?.role === 'assistant') l.streaming = false
+              n.push({ role: 'assistant', content: streamed, streaming: true, modelName })
+            }
+            return [...n]
+          })
         } else if (event.type === 'tool-call') {
           let toolName = event.toolName || 'unknown'
           let toolType = detectToolType(toolName)
