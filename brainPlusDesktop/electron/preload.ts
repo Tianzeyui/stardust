@@ -125,7 +125,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getServers: () => ipcRenderer.invoke('mcp:getServers'),
     addServer: (config: any) => ipcRenderer.invoke('mcp:addServer', config),
     removeServer: (serverId: string) => ipcRenderer.invoke('mcp:removeServer', serverId),
-    updateServer: (serverId: string, patch: any) => ipcRenderer.invoke('mcp:updateServer', serverId),
+    updateServer: (serverId: string, patch: any) => ipcRenderer.invoke('mcp:updateServer', serverId, patch),
 
     connect: (serverId: string) => ipcRenderer.invoke('mcp:connect', serverId),
     disconnect: (serverId: string) => ipcRenderer.invoke('mcp:disconnect', serverId),
