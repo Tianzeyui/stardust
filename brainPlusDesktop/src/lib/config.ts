@@ -154,3 +154,21 @@ export function saveDisclosureThreshold(threshold: number): void {
   const n = Math.max(1, Math.min(50, Math.round(threshold)))
   localStorage.setItem(DISCLOSURE_THRESHOLD_KEY, String(n))
 }
+
+// ========== Agent 最大任务步数 ==========
+
+const AGENT_MAX_STEPS_KEY = 'brainplus_agent_max_steps'
+const DEFAULT_MAX_STEPS = 25
+
+export function getAgentMaxSteps(): number {
+  try {
+    const v = localStorage.getItem(AGENT_MAX_STEPS_KEY)
+    if (v) { const n = parseInt(v); if (n >= 5 && n <= 100) return n }
+  } catch {}
+  return DEFAULT_MAX_STEPS
+}
+
+export function saveAgentMaxSteps(steps: number): void {
+  const n = Math.max(5, Math.min(100, Math.round(steps)))
+  localStorage.setItem(AGENT_MAX_STEPS_KEY, String(n))
+}

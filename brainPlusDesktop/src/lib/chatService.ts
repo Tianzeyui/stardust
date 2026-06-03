@@ -3,7 +3,7 @@ import { createOpenAI } from '@ai-sdk/openai'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { createDeepSeek } from '@ai-sdk/deepseek'
-import { getAIModels, getDisclosureThreshold, type AIModelConfig } from './config'
+import { getAIModels, getDisclosureThreshold, getAgentMaxSteps, type AIModelConfig } from './config'
 import { getAllTools } from './mcpClient'
 import { getInstalledSkills } from './skillService'
 import type { SectionIndex } from '@/types/skill'
@@ -733,30 +733,37 @@ export async function chat(
     '2. 优先使用工具目录中的工具完成任务，不要凭空猜测。\n' +
     '3. 长任务调用 show_progress，完成后调用 notify_complete。\n'
 
-  // 渐进式披露：工具数超过阈值时根据用户输入筛选最相关的工具
+  // 渐进式披露：只筛选 MCP 业务工具（含 __ 分隔符），内建工具始终全部预加载
   const threshold = getDisclosureThreshold()
-  let filteredTools = toolsForDisclosure
-  const totalToolCount = Object.keys(toolsForDisclosure).length
+  const allNames = Object.keys(toolsForDisclosure)
+  const builtinNames = allNames.filter(n => !n.includes('__'))
+  const mcpNames = allNames.filter(n => n.includes('__'))
+
+  // 内建工具（沙箱/工作区/Agent/Skill/网关）始终保留，不参与筛选
+  const builtinTools = Object.fromEntries(builtinNames.map(n => [n, toolsForDisclosure[n]]))
+  let mcpFiltered = Object.fromEntries(mcpNames.map(n => [n, toolsForDisclosure[n]]))
   let disclosureResult: DisclosureResult
-  if (totalToolCount > threshold) {
+
+  if (mcpNames.length > threshold) {
     const lastMsg = messages[messages.length - 1]?.content
     const userText = typeof lastMsg === 'string' ? lastMsg : ''
-    const toolInfo = extractToolInfo(toolsForDisclosure)
+    const toolInfo = extractToolInfo(mcpFiltered)
     disclosureResult = progressiveDisclosure(toolInfo, userText, { maxTools: threshold })
-    filteredTools = Object.fromEntries(disclosureResult.tools.map(name => [name, toolsForDisclosure[name]]))
-    const excluded = totalToolCount - disclosureResult.tools.length
-    if (excluded > 0) console.log(`[disclosure] ${totalToolCount}→${disclosureResult.tools.length} tools (excluded ${excluded}, threshold ${threshold})`)
+    mcpFiltered = Object.fromEntries(disclosureResult.tools.map(name => [name, mcpFiltered[name]]))
+    const excluded = mcpNames.length - disclosureResult.tools.length
+    if (excluded > 0) console.log(`[disclosure] MCP ${mcpNames.length}→${disclosureResult.tools.length} tools (excluded ${excluded}, threshold ${threshold}), built-in ${builtinNames.length} always loaded`)
   } else {
-    // 工具数未超阈值时，全部匹配（无需筛选），也生成 disclosureResult 供 UI 展示
     disclosureResult = {
-      tools: Object.keys(toolsForDisclosure),
+      tools: mcpNames,
       excluded: [],
-      scores: Object.fromEntries(
-        Object.keys(toolsForDisclosure).map(name => [name, { score: 0, matched: true }])
-      ),
+      scores: Object.fromEntries(mcpNames.map(name => [name, { score: 0, matched: true }])),
     }
   }
-  // 始终发送 disclosure 事件，确保 UI 中的工具索引随每次对话更新
+
+  // 合并：内建工具始终全部保留 + 筛选后的 MCP 工具
+  let filteredTools = { ...builtinTools, ...mcpFiltered }
+  const builtinScores = Object.fromEntries(builtinNames.map(name => [name, { score: 100, matched: true }]))
+  disclosureResult = { ...disclosureResult, scores: { ...builtinScores, ...disclosureResult.scores } }
   onEvent?.({ type: 'disclosure', disclosureResult })
 
   // 注册 enable_tool：AI 可通过它按需激活并调用任何在目录中但未预加载的工具
@@ -870,7 +877,7 @@ export async function chat(
     system: finalSystem,
     messages: compressedMessages,
     tools: Object.keys(filteredTools).length > 0 ? filteredTools : undefined,
-    stopWhen: stepCountIs(25),
+    stopWhen: stepCountIs(getAgentMaxSteps()),
     abortSignal: opts?.abortSignal,
   })
 

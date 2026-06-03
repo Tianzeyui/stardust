@@ -9,6 +9,7 @@ import { execFile } from 'child_process'
 import { app } from 'electron'
 import fs from 'fs'
 import path from 'path'
+import { getWorkspacePaths } from './workspace.js'
 
 // ====== 持久化 npm 项目（userData/sandbox-npm/） ======
 
@@ -182,6 +183,25 @@ function transpileTS(code: string): string {
     .replace(/\bas\s+\w+/g, '')
 }
 
+/** 扫描 CWD 中生成的输出文件并复制到工作区 output 目录 */
+function collectOutputFiles(cwd: string): string[] {
+  try {
+    const outputDir = getWorkspacePaths().output
+    const exts = ['.pptx', '.docx', '.xlsx', '.pdf', '.png', '.jpg', '.jpeg', '.svg', '.csv', '.json', '.txt', '.md']
+    const files = fs.readdirSync(cwd)
+    const collected: string[] = []
+    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true })
+    for (const f of files) {
+      if (exts.includes(path.extname(f).toLowerCase())) {
+        const src = path.join(cwd, f)
+        const dest = path.join(outputDir, f)
+        try { fs.copyFileSync(src, dest); collected.push(dest) } catch {}
+      }
+    }
+    return collected
+  } catch { return [] }
+}
+
 // ====== JS 执行（核心） ======
 
 export async function executeJS(code: string, packages?: string[]): Promise<SandboxResult> {
@@ -214,7 +234,12 @@ export async function executeJS(code: string, packages?: string[]): Promise<Sand
             return
           }
           // 成功：返回 stdout，如果有 stderr 也附上（可能是 console.warn）
-          const result = stdout.trim() || stderr.trim() || '(无输出)'
+          let result = stdout.trim() || stderr.trim() || '(无输出)'
+          // 扫描并复制生成的文件到工作区 output
+          const outFiles = collectOutputFiles(getNpmProjectDir())
+          if (outFiles.length > 0) {
+            result += '\n\n📁 输出文件:\n' + outFiles.map(f => `- ${f}`).join('\n')
+          }
           resolve({ success: true, result })
         },
       )
@@ -263,7 +288,12 @@ export async function executePython(code: string, packages?: string[]): Promise<
           }
           return
         }
-        resolve({ success: true, result: stdout.trim() || stderr.trim() || '(无输出)' })
+        let result = stdout.trim() || stderr.trim() || '(无输出)'
+        const outFiles = collectOutputFiles(process.cwd())
+        if (outFiles.length > 0) {
+          result += '\n\n📁 输出文件:\n' + outFiles.map(f => `- ${f}`).join('\n')
+        }
+        resolve({ success: true, result })
       })
     }).catch(e => resolve({ success: false, error: e.message }))
   })

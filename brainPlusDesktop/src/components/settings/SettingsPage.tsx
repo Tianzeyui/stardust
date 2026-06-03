@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Settings, Cpu, Server, Trash2, Plus, RefreshCw, Check, Wrench, FolderOpen, MessageSquare, Play, ChevronDown, Loader2, X, Download, HardDrive, ArrowLeft, Info } from 'lucide-react'
+import { Settings, Cpu, Server, Trash2, Plus, RefreshCw, Check, Wrench, FolderOpen, MessageSquare, Play, ChevronDown, Loader2, X, Download, HardDrive, ArrowLeft, Info, Bot } from 'lucide-react'
 import { APP_VERSION } from '@/lib/version'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,11 +12,12 @@ import {
   getAIModels, saveAIModels,
   type AIModelConfig, type MCPServerConfig,
   getDisclosureThreshold, saveDisclosureThreshold,
+  getAgentMaxSteps, saveAgentMaxSteps,
 } from '@/lib/config'
 import { listTools, listResources, listPrompts, callTool, readResource, getPrompt, connect, disconnect, addServer as addMcpServer, updateServer as updateMcpServer, removeServer as removeMcpServer } from '@/lib/mcpClient'
 import type { MCPTool, MCPResource, MCPPrompt } from '@/types/electron'
 
-type Tab = 'general' | 'ai' | 'model' | 'mcp' | 'about'
+type Tab = 'general' | 'agent' | 'ai' | 'model' | 'mcp' | 'about'
 
 export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; initialTab?: Tab }) {
   const [tab, setTab] = useState<Tab>(initialTab || 'general')
@@ -50,6 +51,7 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
   const [callResult, setCallResult] = useState<string | null>(null)
   const [callLoading, setCallLoading] = useState(false)
   const [disclosureThreshold, setDisclosureThreshold] = useState(getDisclosureThreshold)
+  const [maxSteps, setMaxSteps] = useState(getAgentMaxSteps)
 
   useEffect(() => {
     // 通用
@@ -282,6 +284,7 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
           <div className="flex items-center gap-1 rounded-lg bg-muted p-0.5">
           {([
             { id: 'general' as const, label: '通用', icon: Settings },
+            { id: 'agent' as const, label: 'Agent', icon: Bot },
             { id: 'ai' as const, label: '云模型', icon: Cpu },
             { id: 'model' as const, label: '本地模型', icon: Cpu },
             { id: 'mcp' as const, label: 'MCP 服务器', icon: Server },
@@ -339,6 +342,41 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
                 <Button size="sm" onClick={saveGeneral}>保存</Button>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ===== Agent 设置 ===== */}
+        {tab === 'agent' && (
+          <div className="w-full space-y-6">
+            <fieldset className="rounded-lg border border-border p-4">
+              <legend className="px-2 text-sm font-semibold">最大任务步数</legend>
+              <p className="text-xs text-muted-foreground leading-relaxed mb-3">
+                AI 在一次对话中最多执行多少步工具调用（包括读取文档、调用技能、沙箱执行等）。
+                步数决定 AI 能完成多复杂的任务。建议值 10-50，简单任务 10 步足够，PPT 等复杂任务建议 30+。
+              </p>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="icon" className="h-7 w-7"
+                  onClick={() => { const n = Math.max(5, maxSteps - 5); setMaxSteps(n); saveAgentMaxSteps(n) }}
+                  disabled={maxSteps <= 5}>
+                  −
+                </Button>
+                <Input
+                  type="number" min={5} max={100}
+                  value={maxSteps}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value)
+                    if (!isNaN(v) && v >= 5 && v <= 100) { setMaxSteps(v); saveAgentMaxSteps(v) }
+                  }}
+                  className="h-8 w-20 text-center text-sm"
+                />
+                <Button variant="outline" size="icon" className="h-7 w-7"
+                  onClick={() => { const n = Math.min(100, maxSteps + 5); setMaxSteps(n); saveAgentMaxSteps(n) }}
+                  disabled={maxSteps >= 100}>
+                  +
+                </Button>
+                <span className="ml-3 text-xs text-muted-foreground">默认 25 步</span>
+              </div>
+            </fieldset>
           </div>
         )}
 
