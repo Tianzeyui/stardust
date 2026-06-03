@@ -72,12 +72,12 @@ agent_tasks (
 
 **目标**：Agent 成为可调用的"工具"，出现在 AI 工具列表中
 
-- [ ] `SkillRegistry.registerAgent(agentCard)` —— Agent 作为 Skill 注册
-- [ ] Agent 在聊天中可见（工具选择器 + 渐进式披露）
-- [ ] Agent 类型图标/标签（与 MCP/Sandbox/Skill 并列）
-- [ ] Agent 启用/停用开关
+- [x] `SkillRegistry.registerAgent(agentCard)` —— Agent 作为 Skill 注册
+- [x] Agent 在聊天中可见（工具选择器 + 渐进式披露）
+- [x] Agent 类型图标/标签（与 MCP/Sandbox/Skill 并列）
+- [x] Agent 启用/停用开关
 
-**验证**：聊天工具面板出现 Agent，AI 可以调用 Agent
+**验证**：聊天工具面板出现 Agent，AI 可以调用 Agent ✅
 
 ---
 

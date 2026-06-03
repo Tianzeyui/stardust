@@ -146,7 +146,7 @@ export async function delegateToModel(
 }
 
 /** 从 MCP 服务器获取工具（各来源通过独立模块注册） */
-export async function getMCPSdkTools(autoMode?: boolean): Promise<Record<string, any>> {
+export async function getMCPSdkTools(autoMode?: boolean, userId?: string): Promise<Record<string, any>> {
   if (!window.electronAPI?.mcp) return {}
   const tools: Record<string, any> = {}
   try {
@@ -156,6 +156,7 @@ export async function getMCPSdkTools(autoMode?: boolean): Promise<Record<string,
     const { registerMCPGatewayTools } = await import('./tools/mcpGateway')
     const { registerSandboxTools } = await import('./tools/sandbox')
     const { registerWorkspaceTools } = await import('./tools/workspace')
+    const { registerAgentTools: registerAgentDefs } = await import('./tools/agentRegistry')
 
     await registerMCPBusinessTools(tools)
     registerSkillTools(tools)
@@ -163,6 +164,7 @@ export async function getMCPSdkTools(autoMode?: boolean): Promise<Record<string,
     registerMCPGatewayTools(tools)
     await registerSandboxTools(tools)
     await registerWorkspaceTools(tools)
+    if (userId) await registerAgentDefs(tools, userId)
   } catch {
     return {}
   }
@@ -188,7 +190,7 @@ export interface ChatStreamEvent {
 export async function chat(
   messages: ModelMessage[],
   onEvent?: (event: ChatStreamEvent) => void,
-  opts?: { abortSignal?: AbortSignal; autoMode?: boolean; localModelId?: string; forceCompression?: boolean; selectedTools?: Set<string> | null; memoryInjection?: string },
+  opts?: { abortSignal?: AbortSignal; autoMode?: boolean; localModelId?: string; forceCompression?: boolean; selectedTools?: Set<string> | null; memoryInjection?: string; userId?: string },
 ) {
   // 本地模型路径
   if (opts?.localModelId) {
@@ -198,7 +200,7 @@ export async function chat(
   const model = getChatModel()
   if (!model) throw new Error('请先在设置中启用一个 AI 模型')
 
-  const mcpTools = await getMCPSdkTools(opts?.autoMode)
+  const mcpTools = await getMCPSdkTools(opts?.autoMode, opts?.userId)
 
   // 应用用户手动选择的 MCP 工具过滤
   let toolsForDisclosure = mcpTools
@@ -246,8 +248,8 @@ export async function chat(
   // 渐进式披露：只筛选 MCP 业务工具（含 __ 分隔符），内建工具始终全部预加载
   const threshold = getDisclosureThreshold()
   const allNames = Object.keys(toolsForDisclosure)
-  const builtinNames = allNames.filter(n => !n.includes('__'))
-  const mcpNames = allNames.filter(n => n.includes('__'))
+  const builtinNames = allNames.filter(n => !n.includes('__') || n.startsWith('agent__'))
+  const mcpNames = allNames.filter(n => n.includes('__') && !n.startsWith('agent__'))
 
   // 内建工具（沙箱/工作区/Agent/Skill/网关）始终保留，不参与筛选
   const builtinTools = Object.fromEntries(builtinNames.map(n => [n, toolsForDisclosure[n]]))
@@ -329,7 +331,7 @@ export async function chat(
   // 工具目录：标注每个工具是预加载还是需激活（在披露之后生成，确保状态准确）
   // 工具目录：只列 MCP 业务工具（serverName__toolName 格式），排除沙箱/代理/网关等内建工具
   const preloadedNames = new Set(Object.keys(filteredTools))
-  const mcpToolNames = Object.keys(fullToolSet).filter(n => n.includes('__'))
+  const mcpToolNames = Object.keys(fullToolSet).filter(n => n.includes('__') && !n.startsWith('agent__'))
   const toolCatalog = mcpToolNames.length > 0
     ? '可用 MCP 工具目录（共 ' + mcpToolNames.length + ' 个）:\n' +
       mcpToolNames.map(name => {

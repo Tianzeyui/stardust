@@ -136,20 +136,36 @@ export function registerAgentTools(tools: ToolMap, autoMode?: boolean) {
   if (autoMode) {
     tools['delegate_task'] = {
       description:
-        '将复杂子任务委托给更合适的模型处理。' +
-        'tier: "fast" 简单任务(分类/摘要/翻译), "balanced" 日常任务, "powerful" 复杂任务(推理/代码/长文)。' +
-        'task 描述要具体，包含上下文。委托后你会收到子任务结果，继续基于结果回复用户。',
+        '将复杂子任务委托给更合适的模型或 Agent 处理。' +
+        'tier: "fast" 简单任务, "balanced" 日常, "powerful" 复杂推理。' +
+        'agentName: 指定 Agent 名称（如 "代码助手"），将任务路由给该 Agent 执行。传 agentName 时 tier 可选。' +
+        'task 描述要具体，包含上下文。',
       inputSchema: jsonSchema({
         type: 'object',
         properties: {
-          tier: { type: 'string', enum: ['fast', 'balanced', 'powerful'], description: '目标模型层级' },
+          tier: { type: 'string', enum: ['fast', 'balanced', 'powerful'], description: '目标模型层级（使用通用模型时必填）' },
+          agentName: { type: 'string', description: 'Agent 名称（如"代码助手"），优先使用 Agent 执行' },
           task: { type: 'string', description: '子任务描述（含必要上下文）' },
           reason: { type: 'string', description: '委托原因（可选）' },
         },
-        required: ['tier', 'task'],
+        required: ['task'],
       }),
-      execute: async (args: { tier: string; task: string }) => {
+      execute: async (args: { tier?: string; agentName?: string; task: string }) => {
         try {
+          // Agent 路由优先
+          if (args.agentName) {
+            const { delegateToModel } = await import('../chatService')
+            const safeName = 'agent__' + args.agentName.replace(/[^a-zA-Z0-9一-鰿_-]/g, '_')
+            const agentTools = tools as Record<string, any>
+            const agentTool = agentTools[safeName]
+            if (agentTool) {
+              return await agentTool.execute({ task: args.task })
+            }
+            // Agent 未找到，fallback 到通用模型
+            const result = await delegateToModel('balanced', args.task, `你是${args.agentName}。请专业地完成任务。`)
+            return `[${args.agentName}]\n${result.result}`
+          }
+          // 通用模型路由
           const result = await delegateToModel(args.tier as 'fast' | 'balanced' | 'powerful', args.task)
           return `[${result.modelName}]\n${result.result}`
         } catch (e: any) {

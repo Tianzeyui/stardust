@@ -28,6 +28,8 @@ import { createLocalMemoryStore } from '@/lib/memory/store-local'
 import { createSupabaseMemoryStore } from '@/lib/memory/store-supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { MemoryPopup } from './MemoryPopup'
+import { AgentPicker } from './AgentPicker'
+import { agentDisplayNames } from '@/lib/tools/agentRegistry'
 import {
   type ToolCallStatus, type UIMessage, type ConsoleLine,
   type CompressionEventData,
@@ -384,6 +386,12 @@ export function ChatPage() {
               toolType = detectToolType(proxied)  // 根据实际工具名判定类型
             }
           }
+          // Agent 工具显示友好名称
+          if (toolName.startsWith('agent__')) {
+            const rawName = toolName
+            toolName = agentDisplayNames.get(rawName) || rawName.replace(/^agent__/, '').replace(/_+/g, ' ').trim() || 'Agent'
+            toolNameProxyRef.current.set(rawName, toolName)
+          }
           const tc: ToolCallStatus = { id: Math.random().toString(36).slice(2, 8), name: toolName, type: toolType, status: 'running', input: event.toolInput }
           // 记录本轮激活的工具名
           setActivatedToolNames(prev => { const next = new Set(prev); next.add(toolName); return next })
@@ -447,6 +455,7 @@ export function ChatPage() {
         memoryInjection: sessionMemoryEnabled
           ? await memoryManagerRef.current?.getInjectionText(input.trim()) ?? undefined
           : undefined,
+        userId: user?.id,
       })
       forceCompressRef.current = false
     } catch (e: any) {
@@ -690,6 +699,7 @@ export function ChatPage() {
               onToggle={() => setSessionMemoryEnabled(v => !v)}
               shortCount={shortMemoryCount}
             />
+            <AgentPicker />
             <SkillPicker skills={skills} onToggle={async (s) => { await toggleSkill(s.id, !s.enabled); setSkills(getInstalledSkills()) }} />
             <MCPToolPicker
               selectedTools={selectedMCPTools}

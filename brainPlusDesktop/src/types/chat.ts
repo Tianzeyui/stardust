@@ -53,6 +53,8 @@ export function detectToolType(name: string): ToolType {
     return 'gateway'
   // enable_tool 本质是代理 MCP 业务工具调用，视觉上归类为 MCP
   if (name === 'enable_tool') return 'mcp'
+  // Agent 工具（agent__name 格式）
+  if (name.startsWith('agent__')) return 'agent'
   // 工作区工具
   if (name.startsWith('workspace_')) return 'workspace'
   // 真正的 MCP 业务工具（serverName__toolName 格式）

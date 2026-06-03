@@ -162,6 +162,7 @@ export function extractToolInfo(
     const isBuiltin = alwaysKeep.has(name)
       || name.startsWith('sandbox_')   // 沙箱工具始终可用
       || name.startsWith('workspace_') // 工作区工具始终可用
+      || name.startsWith('agent__')    // A2A Agent 始终可用
     result[name] = {
       description: tool.description || name,
       isAgent: isBuiltin,
