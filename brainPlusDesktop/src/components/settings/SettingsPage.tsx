@@ -12,7 +12,7 @@ import {
   getAIModels, saveAIModels,
   type AIModelConfig, type MCPServerConfig,
 } from '@/lib/config'
-import { listTools, listResources, listPrompts, callTool, readResource, getPrompt, connect, addServer as addMcpServer, updateServer as updateMcpServer, removeServer as removeMcpServer } from '@/lib/mcpClient'
+import { listTools, listResources, listPrompts, callTool, readResource, getPrompt, connect, disconnect, addServer as addMcpServer, updateServer as updateMcpServer, removeServer as removeMcpServer } from '@/lib/mcpClient'
 import type { MCPTool, MCPResource, MCPPrompt } from '@/types/electron'
 
 type Tab = 'general' | 'ai' | 'model' | 'mcp' | 'about'
@@ -167,13 +167,26 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
 
   const toggleServer = async (id: string) => {
     const srv = servers.find((s) => s.id === id)
-    if (srv) {
-      await updateMcpServer(id, { enabled: !srv.enabled })
-      setServers(await window.electronAPI!.mcp.getServers() as MCPServerConfig[])
+    if (!srv) return
+    const newEnabled = !srv.enabled
+    setServers(prev => prev.map(s => s.id === id ? { ...s, enabled: newEnabled } : s))
+    try {
+      if (!newEnabled) {
+        // 关闭时：断开连接并收起展开面板
+        await disconnect(id).catch(() => {})
+        if (expandedSrv === id) setExpandedSrv(null)
+      }
+      await updateMcpServer(id, { enabled: newEnabled })
+    } catch (e: any) {
+      setServers(prev => prev.map(s => s.id === id ? { ...s, enabled: !newEnabled } : s))
+      alert(`操作失败：${e.message || '未知错误'}`)
     }
   }
 
   const loadServerDetail = async (serverId: string) => {
+    const srv = servers.find(s => s.id === serverId)
+    // 服务器未启用时不允许展开
+    if (!srv?.enabled) return
     if (expandedSrv === serverId) { setExpandedSrv(null); return }
     setExpandedSrv(serverId)
     setLoadingDetail(true)
@@ -476,7 +489,7 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
             ) : (
               servers.map((srv) => (
                 <div key={srv.id} className="rounded-lg border border-border transition-colors">
-                  <div className="flex items-center justify-between px-4 py-3 cursor-pointer" onClick={() => loadServerDetail(srv.id)}>
+                  <div className={`flex items-center justify-between px-4 py-3 ${srv.enabled ? 'cursor-pointer' : ''}`} onClick={() => loadServerDetail(srv.id)}>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate">{srv.name}</p>
                       <p className="text-xs text-muted-foreground truncate">{srv.url || srv.command || '未配置'}</p>
@@ -491,7 +504,9 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
                       <button className="rounded p-1 text-muted-foreground hover:text-destructive" onClick={() => deleteServer(srv.id)}>
                         <Trash2 className="h-4 w-4" />
                       </button>
-                      <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${expandedSrv === srv.id ? 'rotate-180' : ''}`} />
+                      <button className="rounded p-0.5 text-muted-foreground hover:text-foreground transition-colors" onClick={() => loadServerDetail(srv.id)} title={srv.enabled ? (expandedSrv === srv.id ? '收起' : '展开') : '请先启用服务器'}>
+                        <ChevronDown className={`h-4 w-4 transition-transform ${expandedSrv === srv.id ? 'rotate-180' : ''}`} />
+                      </button>
                     </div>
                   </div>
                   {/* 详情编辑 */}
