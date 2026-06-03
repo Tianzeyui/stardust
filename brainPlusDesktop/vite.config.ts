@@ -19,6 +19,9 @@ export default defineConfig({
       {
         entry: 'electron/main.ts',
         vite: {
+          define: {
+            __BUILD_YEAR__: JSON.stringify(BUILD_YEAR),
+          },
           build: {
             rollupOptions: {
               external: [
