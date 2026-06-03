@@ -44,34 +44,29 @@ export function AppLayout() {
           <div className="absolute bottom-[-10%] left-[-10%] h-[30%] w-[30%] rounded-full bg-tertiary/5 blur-[100px]" />
         </div>
 
-        <div
-          className="flex-1 flex overflow-hidden"
-          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        >
-          <Sidebar
-            activeNav={activeNav}
-            onNavChange={setActiveNav}
-            collapsed={sidebarCollapsed}
-            onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
-            onOpenSettings={() => { setSettingsTab(undefined); setSettingsOpen(true) }}
-            onCloseSettings={() => setSettingsOpen(false)}
-          />
+        <Sidebar
+          activeNav={activeNav}
+          onNavChange={setActiveNav}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
+          onOpenSettings={() => { setSettingsTab(undefined); setSettingsOpen(true) }}
+          onCloseSettings={() => setSettingsOpen(false)}
+        />
 
-          <main className="flex-1 overflow-auto relative">
-            {settingsOpen ? (
-              <SettingsPage onClose={() => { setSettingsOpen(false); setSettingsTab(undefined) }} initialTab={settingsTab} />
-            ) : (
-              <>
-                {activeNav === 'chat' && <ChatPage />}
-                {activeNav === 'ai' && <AIPage />}
-                {activeNav === 'diary' && <DiaryPage />}
-                {activeNav === 'inspiration' && <InspirationPage />}
-                {activeNav === 'skills' && <SkillsPage />}
-                {activeNav === 'files' && <FileManagerPage />}
-              </>
-            )}
-          </main>
-        </div>
+        <main className="flex-1 overflow-auto relative">
+          {settingsOpen ? (
+            <SettingsPage onClose={() => { setSettingsOpen(false); setSettingsTab(undefined) }} initialTab={settingsTab} />
+          ) : (
+            <>
+              {activeNav === 'chat' && <ChatPage />}
+              {activeNav === 'ai' && <AIPage />}
+              {activeNav === 'diary' && <DiaryPage />}
+              {activeNav === 'inspiration' && <InspirationPage />}
+              {activeNav === 'skills' && <SkillsPage />}
+              {activeNav === 'files' && <FileManagerPage />}
+            </>
+          )}
+        </main>
       </div>
     </div>
   )

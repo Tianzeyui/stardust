@@ -446,6 +446,10 @@ ipcMain.handle('ai:openModel', async (_e, url: string, iconUrl?: string) => {
   })
   modelWindow.setMenu(null)
   modelWindow.loadURL(url)
+
+  modelWindow.webContents.on('did-fail-load', (_e, code, desc) => {
+    modelWindow.webContents.loadURL(`data:text/html,<h2 style="font-family:sans-serif;text-align:center;margin-top:40vh;color:%23666">无法加载页面</h2><p style="text-align:center;color:%23999">${desc}</p>`)
+  })
 })
 
 // ==================== 关于窗口 ====================

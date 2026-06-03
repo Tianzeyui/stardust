@@ -411,12 +411,20 @@ export function ChatPage() {
     } catch (e: any) {
       const isAbort = e.name === 'AbortError' || controller.signal.aborted
       setMessages(prev => prev.map(m => {
-        if (m.role === 'assistant' && m.streaming) return { ...m, content: (m.content || '') + '\n\n*[用户已中断]*', streaming: false }
-        if (m.role === 'tool' && m.toolCall?.status === 'running') return { ...m, toolCall: { ...m.toolCall, status: 'error' as const, result: '[已中断]' } }
+        if (m.role === 'assistant' && m.streaming) return { ...m, content: (m.content || '') + `\n\n*[${isAbort ? '用户已中断' : '连接失败'}] *`, streaming: false }
+        if (m.role === 'tool' && m.toolCall?.status === 'running') return { ...m, toolCall: { ...m.toolCall, status: 'error' as const, result: isAbort ? '[已中断]' : '[连接失败]' } }
         return m
       }))
-      if (isAbort) { pushLog('STOP', '用户中断', 'info'); setProgressMsg(''); setTaskList(prev => prev.map(t => t.status === 'running' ? { ...t, status: 'cancelled' } : t)) }
-    } finally { abortRef.current = null; setLoading(false); setTimeout(() => setStatusText(''), 3000) }
+      if (isAbort) {
+        pushLog('STOP', '用户中断', 'info')
+        setProgressMsg('')
+        setTaskList(prev => prev.map(t => t.status === 'running' ? { ...t, status: 'cancelled' } : t))
+      } else {
+        const msg = e.message || '网络连接失败'
+        pushLog('ERR', msg, 'error')
+        setStatusText(`连接失败：${msg.slice(0, 40)}`)
+      }
+    } finally { abortRef.current = null; setLoading(false); setTimeout(() => setStatusText(''), 8000) }
 
     // 首条消息后自动生成标题（用 ref 避免闭包过期）
     if (isFirstMsg && cid) {
