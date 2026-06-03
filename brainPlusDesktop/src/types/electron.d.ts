@@ -39,6 +39,9 @@ export interface MCPPrompt {
 
 export interface ElectronAPI {
   platform: string
+  ai: {
+    openModel: (url: string, iconUrl?: string) => Promise<void>
+  }
   onShowAbout: (cb: () => void) => () => void
   dialog: {
     openDirectory: () => Promise<{ success: boolean; path?: string; error?: string }>

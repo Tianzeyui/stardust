@@ -74,8 +74,8 @@ export function AIPage() {
     } catch { /* ignore */ }
   }
 
-  const handleOpenModel = (url: string) => {
-    if (url) window.open(url, '_blank')
+  const handleOpenModel = (url: string, icon?: string) => {
+    if (url) window.electronAPI?.ai?.openModel(url, icon ? iconSrc(icon) : undefined)
   }
 
   return (
@@ -108,7 +108,7 @@ export function AIPage() {
                 <button
                   key={fav.id}
                   className="group relative flex flex-col items-center gap-1.5 rounded-lg border border-border bg-card p-2.5 text-center transition-all hover:border-primary/40 hover:shadow-sm"
-                  onClick={() => handleOpenModel(fav.model_url)}
+                  onClick={() => handleOpenModel(fav.model_url, fav.model_icon)}
                   onContextMenu={(e) => { e.preventDefault(); handleRemoveFavorite(fav) }}
                   title={`右键取消收藏 | ${fav.model_name}`}
                 >
@@ -145,7 +145,7 @@ export function AIPage() {
                 <button
                   key={model.id}
                   className="group relative flex flex-col items-center gap-1.5 rounded-lg border border-border bg-card p-2.5 text-center transition-all hover:border-primary/40 hover:shadow-sm"
-                  onClick={() => handleOpenModel(model.url)}
+                  onClick={() => handleOpenModel(model.url, model.icon)}
                   onContextMenu={(e) => { e.preventDefault(); handleAddFavorite(model) }}
                   title={`右键添加收藏 | ${model.name}`}
                 >

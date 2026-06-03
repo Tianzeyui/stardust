@@ -411,6 +411,43 @@ ipcMain.handle('conv:save', (_e, conv: any) => { saveConversation(conv); return 
 ipcMain.handle('conv:delete', (_e, id: string) => deleteConversation(id))
 ipcMain.handle('conv:create', (_e, title?: string, modelName?: string) => createConversation(title, modelName))
 
+// ==================== AI 模型独立窗口 ====================
+
+ipcMain.handle('ai:openModel', async (_e, url: string, iconUrl?: string) => {
+  // 尝试下载模型图标作为窗口图标
+  let winIcon = appIcon
+  if (iconUrl) {
+    try {
+      const { nativeImage } = require('electron')
+      const https = require('https')
+      const http = require('http')
+      const imgData: Buffer = await new Promise((resolve, reject) => {
+        const get = iconUrl.startsWith('https') ? https.get : http.get
+        get(iconUrl, (res: any) => {
+          if (res.statusCode !== 200) return reject(new Error(`HTTP ${res.statusCode}`))
+          const chunks: Buffer[] = []
+          res.on('data', (c: Buffer) => chunks.push(c))
+          res.on('end', () => resolve(Buffer.concat(chunks)))
+        }).on('error', reject)
+      })
+      winIcon = nativeImage.createFromBuffer(imgData)
+    } catch { /* 回退到默认图标 */ }
+  }
+
+  const modelWindow = new BrowserWindow({
+    width: 1100,
+    height: 750,
+    title: 'AI 模型',
+    icon: winIcon,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+  modelWindow.setMenu(null)
+  modelWindow.loadURL(url)
+})
+
 // ==================== 关于窗口 ====================
 
 function showAbout() {

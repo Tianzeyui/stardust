@@ -3,6 +3,10 @@ const { contextBridge, ipcRenderer } = require('electron')
 contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
 
+  ai: {
+    openModel: (url: string, iconUrl?: string) => ipcRenderer.invoke('ai:openModel', url, iconUrl),
+  },
+
   onShowAbout: (cb: () => void) => {
     const listener = () => cb()
     ipcRenderer.on('showAbout', listener)
