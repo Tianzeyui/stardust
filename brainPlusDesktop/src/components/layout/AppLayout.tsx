@@ -24,7 +24,10 @@ export function AppLayout() {
   }, [])
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div
+      className="flex h-screen overflow-hidden bg-background"
+      style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+    >
       <div className="pointer-events-none fixed inset-0 -z-10">
         <div className="absolute top-[-10%] right-[-10%] h-[40%] w-[40%] rounded-full bg-primary/5 blur-[120px]" />
         <div className="absolute bottom-[-10%] left-[-10%] h-[30%] w-[30%] rounded-full bg-tertiary/5 blur-[100px]" />
@@ -39,7 +42,10 @@ export function AppLayout() {
         onCloseSettings={() => setSettingsOpen(false)}
       />
 
-      <main className="flex-1 overflow-auto relative pt-9">
+      <main
+        className="flex-1 overflow-auto relative pt-9"
+        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+      >
         {settingsOpen ? (
           <SettingsPage onClose={() => { setSettingsOpen(false); setSettingsTab(undefined) }} initialTab={settingsTab} />
         ) : (

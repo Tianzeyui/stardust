@@ -38,6 +38,7 @@ export function Sidebar({ activeNav, onNavChange, collapsed, onToggleCollapse, o
         'flex h-screen flex-col border-r border-border bg-card pt-9 pb-4 transition-all duration-200',
         collapsed ? 'w-16 items-center' : 'w-52 items-stretch px-3',
       )}
+      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
     >
       {/* 顶部：Logo + 折叠按钮 */}
       <div className={cn('mb-6 flex items-center', collapsed ? 'flex-col gap-2' : 'justify-between')}>
