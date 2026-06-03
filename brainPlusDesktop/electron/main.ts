@@ -43,6 +43,10 @@ function createWindow() {
     height: 800,
     title: 'BrainPlus',
     icon: appIcon,
+    titleBarStyle: process.platform === 'darwin' ? 'hidden' : 'default',
+    ...(process.platform !== 'darwin' ? {
+      titleBarOverlay: { color: '#ffffff', symbolColor: '#1a1a1a', height: 36 },
+    } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

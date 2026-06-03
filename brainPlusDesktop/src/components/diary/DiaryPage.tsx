@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { Plus, PenLine } from 'lucide-react'
+import { Plus, PenLine, BookOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DiaryTimeline } from './DiaryTimeline'
 import { DiaryContent } from './DiaryContent'
@@ -64,47 +64,40 @@ export function DiaryPage() {
   }
 
   return (
-    <div className="flex h-full">
-      {/* 左侧时间轴 */}
-      <div className="flex w-72 shrink-0 flex-col border-r border-border bg-card/50">
-        <div className="flex items-center justify-between border-b border-border px-4 py-4">
-          <h2 className="font-semibold">日记</h2>
-          <Button size="sm" onClick={handleNew}>
-            <Plus className="mr-1 h-4 w-4" />
-            新建
+    <div className="flex h-full flex-col">
+      {/* 统一顶栏 */}
+      <div className="flex h-11 items-center gap-2 border-b border-border px-4">
+        <BookOpen className="h-4 w-4 text-muted-foreground shrink-0" />
+        <h2 className="text-sm font-semibold">日记</h2>
+        <div className="flex-1" />
+        <p className="text-sm text-muted-foreground">
+          {new Date(selectedDate).toLocaleDateString('zh-CN', {
+            year: 'numeric', month: 'long', day: 'numeric', weekday: 'long',
+          })}
+        </p>
+        {!editing && (
+          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setEditing(true)}>
+            <PenLine className="mr-1 h-3.5 w-3.5" />
+            {selectedEntry ? '编辑' : '写日记'}
           </Button>
-        </div>
-
-        <DiaryTimeline
-          entries={entries}
-          selectedDate={selectedDate}
-          onSelect={handleSelectDate}
-          loading={loading}
-        />
+        )}
+        <Button size="sm" className="h-7 text-xs" onClick={handleNew}>
+          <Plus className="mr-1 h-3.5 w-3.5" />
+          新建
+        </Button>
       </div>
 
-      {/* 右侧：内容 + 编辑 */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        {/* 顶栏 */}
-        <div className="flex items-center justify-between border-b border-border px-6 py-4">
-          <p className="text-sm text-muted-foreground">
-            {new Date(selectedDate).toLocaleDateString('zh-CN', {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-              weekday: 'long',
-            })}
-          </p>
-          {!editing && (
-            <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-              <PenLine className="mr-1 h-4 w-4" />
-              {selectedEntry ? '编辑' : '写日记'}
-            </Button>
-          )}
+      {/* 内容区：时间轴 + 正文 */}
+      <div className="flex flex-1 overflow-hidden">
+        <div className="flex w-72 shrink-0 flex-col border-r border-border">
+          <DiaryTimeline
+            entries={entries}
+            selectedDate={selectedDate}
+            onSelect={handleSelectDate}
+            loading={loading}
+          />
         </div>
-
-        {/* 内容 / 编辑器 */}
-        <div className="flex-1 overflow-auto p-8">
+        <div className="flex flex-1 flex-col overflow-auto p-4">
           <DiaryContent
             entry={selectedEntry}
             editing={editing}

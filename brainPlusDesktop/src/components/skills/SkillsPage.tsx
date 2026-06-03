@@ -113,54 +113,36 @@ export function SkillsPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-border px-6 py-3">
-        <h2 className="text-sm font-semibold flex items-center gap-2">
-          <Package className="h-4 w-4" /> Skills
-        </h2>
+      <div className="flex h-11 items-center gap-2 border-b border-border px-4">
+        <Package className="h-4 w-4 text-muted-foreground shrink-0" />
+        <h2 className="text-sm font-semibold">Skills</h2>
+        <div className="flex-1" />
+        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleBrowse}>
+          <FolderSearch className="mr-1 h-3.5 w-3.5" />浏览
+        </Button>
+        <Button size="sm" className="h-7 text-xs" onClick={handleInstall} disabled={installing || !installPath.trim()}>
+          {installing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Plus className="mr-1 h-3.5 w-3.5" />}
+          安装
+        </Button>
       </div>
 
-      <div className="flex-1 overflow-auto p-6">
-        {/* 安装区域 */}
-        <div className="mb-6 rounded-lg border border-border p-4">
-          <h3 className="mb-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            安装 Skill
-          </h3>
-          <p className="mb-3 text-xs text-muted-foreground">
-            选择包含 SKILL.md 的 Skill 目录进行安装。系统会自动扫描文件并提取依赖。
-          </p>
+      <div className="flex-1 overflow-auto p-4">
+        {/* 安装路径 */}
+        <div className="mb-4 rounded-lg border border-border p-3">
+          <h3 className="mb-2 text-xs font-medium text-muted-foreground">安装 Skill</h3>
           <div className="flex gap-2">
             <Input
-              className="flex-1 font-mono text-xs"
-              placeholder="/path/to/skill-package"
+              className="flex-1 h-7 font-mono text-xs"
+              placeholder="选择包含 SKILL.md 的目录..."
               value={installPath}
               onChange={e => setInstallPath(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleInstall()}
             />
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleBrowse}
-              title="选择目录"
-            >
-              <FolderSearch className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleInstall}
-              disabled={installing || !installPath.trim()}
-            >
-              {installing ? (
-                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Plus className="mr-1 h-3.5 w-3.5" />
-              )}
-              安装
-            </Button>
           </div>
         </div>
 
         {/* 已安装列表 */}
-        <h3 className="mb-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+        <h3 className="mb-3 text-xs font-medium text-muted-foreground">
           已安装 ({skills.length})
         </h3>
 

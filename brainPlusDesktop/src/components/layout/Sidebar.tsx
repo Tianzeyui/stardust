@@ -35,7 +35,7 @@ export function Sidebar({ activeNav, onNavChange, collapsed, onToggleCollapse, o
   return (
     <aside
       className={cn(
-        'flex h-screen flex-col border-r border-border bg-card py-4 transition-all duration-200',
+        'flex h-screen flex-col border-r border-border bg-card pt-9 pb-4 transition-all duration-200',
         collapsed ? 'w-16 items-center' : 'w-52 items-stretch px-3',
       )}
     >

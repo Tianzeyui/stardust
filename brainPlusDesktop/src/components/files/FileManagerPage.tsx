@@ -285,7 +285,7 @@ export function FileManagerPage() {
   return (
     <div className="flex h-full flex-col">
       {/* 顶部栏 */}
-      <div className="border-b border-border px-4 py-2 flex items-center gap-2">
+      <div className="flex h-11 items-center gap-2 px-4">
         <FolderOpen className="h-4 w-4 text-muted-foreground shrink-0" />
         <h2 className="text-sm font-semibold shrink-0">文件</h2>
 
@@ -359,7 +359,7 @@ export function FileManagerPage() {
         </Button>
       </div>
 
-      {/* 路径栏 */}
+      {/* 路径栏 + 新建（统一 border-b 区域） */}
       <div className="border-b border-border px-4 py-1.5 flex items-center gap-1">
         <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={goBack} disabled={!parentDir} title="后退">
           <ArrowLeft className="h-3.5 w-3.5" />
@@ -380,7 +380,7 @@ export function FileManagerPage() {
 
       {/* 新建文件/文件夹命名 */}
       {newItemPrompt && (
-        <div className="border-b border-border px-4 py-1.5 flex items-center gap-2 bg-muted/30">
+        <div className="px-4 py-1.5 flex items-center gap-2 bg-muted/30">
           <span className="text-xs text-muted-foreground shrink-0">
             {newItemPrompt.type === 'folder' ? '新建文件夹：' : `新建 .${newItemPrompt.ext} 文件：`}
           </span>
@@ -437,7 +437,7 @@ export function FileManagerPage() {
           ) : (
             <div className="flex flex-col h-full">
               {/* 文件信息头 */}
-              <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-muted/30">
+              <div className="flex h-11 items-center justify-between px-4 bg-muted/30">
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">{selectedFile.name}</p>
                   <p className="text-[10px] text-muted-foreground font-mono truncate">

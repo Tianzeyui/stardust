@@ -230,7 +230,7 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
   return (
     <div className="flex h-full flex-col">
       {/* 顶栏：标签切换 */}
-      <div className="flex items-center justify-between border-b border-border px-6 py-3">
+      <div className="flex h-11 items-center justify-between border-b border-border px-4">
         <div className="flex items-center gap-2">
           {onClose && (
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose} title="返回">
@@ -257,7 +257,7 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-4">
         {/* ===== 通用设置 ===== */}
         {tab === 'general' && (
           <div className="w-full space-y-6">
@@ -375,7 +375,7 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
 
         {/* ===== MCP 服务器设置 ===== */}
         {tab === 'model' && (
-          <div className="flex-1 overflow-auto p-6">
+          <div className="flex-1 overflow-auto p-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold">本地模型管理</h3>
               <Button size="sm" variant="outline" className="h-7 text-xs"

@@ -54,10 +54,10 @@ export function DiaryTimeline({ entries, selectedDate, onSelect, loading }: Diar
   const groups = groupByMonth(entries)
 
   return (
-    <div className="flex-1 overflow-auto">
+    <div className="flex-1 overflow-auto py-2">
       {groups.map((group) => (
         <div key={group.month}>
-          <div className="sticky top-0 bg-card/80 px-4 py-2 text-xs font-medium text-muted-foreground backdrop-blur-sm">
+          <div className="sticky top-0 bg-muted/80 px-4 py-2 text-xs font-medium text-muted-foreground backdrop-blur-sm">
             {formatMonth(group.month)}
           </div>
           {group.entries.map((entry) => {

@@ -237,7 +237,7 @@ export function InspirationPage() {
   // ====== 内联编辑面板 ======
   const editorPanel = (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+      <div className="flex h-11 items-center justify-between px-4">
         <h2 className="text-sm font-semibold">{editId ? '编辑灵感' : '新建灵感'}</h2>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={cancelEdit}>取消</Button>
@@ -319,40 +319,9 @@ export function InspirationPage() {
     </div>
   )
 
-  // ====== 左侧列表 ======
+  // ====== 左侧内容 ======
   const leftPanel = (
-    <div className="flex h-full flex-col">
-      {/* 顶栏 */}
-      <div className="border-b border-border px-3 py-2.5">
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <div className="flex items-center gap-1 rounded-lg bg-muted p-0.5">
-            {([{ id: 'discover' as const, label: '发现' }, { id: 'archive' as const, label: '归档' }]).map((t) => (
-              <button
-                key={t.id}
-                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${tab === t.id ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-                onClick={() => { setTab(t.id); clearSearch(); cancelEdit() }}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={startNew}><Plus className="mr-1 h-3.5 w-3.5" />新建</Button>
-        </div>
-        <div className="relative">
-          <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input className="h-7 pl-7 pr-7 text-xs" placeholder="搜索灵感..."
-            value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSearch()} />
-          {searchQuery && (
-            <button className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground" onClick={clearSearch}>
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* 内容 */}
-      <div className="flex-1 overflow-auto">
+    <div className="flex-1 overflow-auto">
         {isSearchMode ? (
           <div className="p-3">
             <p className="mb-2 text-xs text-muted-foreground">搜索 "{searchQuery}" ({searchResults.length})</p>
@@ -365,7 +334,7 @@ export function InspirationPage() {
         ) : tab === 'archive' ? (
           /* 归档 */
           <div>
-            <div className="border-b border-border p-2">
+            <div className="p-2">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-semibold text-muted-foreground uppercase">文件夹</span>
                 <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => setShowAddFolder(!showAddFolder)}>
@@ -434,19 +403,50 @@ export function InspirationPage() {
           </div>
         )}
       </div>
-    </div>
   )
 
   return (
-    <div className="flex h-full">
-      {/* 左侧：列表 */}
-      <div className="flex w-80 shrink-0 flex-col border-r border-border bg-card/50">
-        {leftPanel}
+    <div className="flex h-full flex-col">
+      {/* 统一顶栏 */}
+      <div className="flex h-11 items-center gap-2 border-b border-border px-4">
+        <Lightbulb className="h-4 w-4 text-muted-foreground shrink-0" />
+        <h2 className="text-sm font-semibold">灵感</h2>
+        <div className="flex items-center gap-1 rounded-lg bg-muted p-0.5">
+          {([{ id: 'discover' as const, label: '发现' }, { id: 'archive' as const, label: '归档' }]).map((t) => (
+            <button
+              key={t.id}
+              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${tab === t.id ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              onClick={() => { setTab(t.id); clearSearch(); cancelEdit() }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex-1" />
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input className="h-7 pl-7 pr-7 text-xs w-40" placeholder="搜索..."
+            value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()} />
+          {searchQuery && (
+            <button className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground" onClick={clearSearch}>
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+        <Button size="sm" className="h-7 text-xs" onClick={startNew}>
+          <Plus className="mr-1 h-3.5 w-3.5" />新建
+        </Button>
       </div>
 
-      {/* 右侧：编辑器 */}
-      <div className="flex flex-1 flex-col overflow-hidden bg-background">
-        {editing ? editorPanel : emptyPanel}
+      {/* 内容区 */}
+      <div className="flex flex-1 overflow-hidden">
+        <div className="flex w-80 shrink-0 flex-col border-r border-border">
+          {leftPanel}
+        </div>
+        <div className="flex flex-1 flex-col overflow-auto">
+          {editing ? editorPanel : emptyPanel}
+        </div>
       </div>
     </div>
   )

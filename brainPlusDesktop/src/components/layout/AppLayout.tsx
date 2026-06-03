@@ -39,7 +39,7 @@ export function AppLayout() {
         onCloseSettings={() => setSettingsOpen(false)}
       />
 
-      <main className="flex-1 overflow-auto relative">
+      <main className="flex-1 overflow-auto relative pt-9">
         {settingsOpen ? (
           <SettingsPage onClose={() => { setSettingsOpen(false); setSettingsTab(undefined) }} initialTab={settingsTab} />
         ) : (

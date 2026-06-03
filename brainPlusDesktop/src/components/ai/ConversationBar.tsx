@@ -43,7 +43,7 @@ export function ConversationBar({
 
   return (
     <div className="relative border-b border-border">
-      <div className="flex items-center gap-2 px-4 py-2">
+      <div className="flex h-11 items-center gap-2 px-4">
         <button
           className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
           onClick={() => setShowList(!showList)}

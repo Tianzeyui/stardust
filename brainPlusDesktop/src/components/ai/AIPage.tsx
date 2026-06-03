@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Search, Star, ChevronDown, ChevronRight } from 'lucide-react'
+import { Search, Star, ChevronDown, ChevronRight, MessageSquare } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { fetchFavorites, addFavorite, removeFavorite } from '@/lib/aiService'
@@ -80,13 +80,16 @@ export function AIPage() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* 搜索栏 */}
-      <div className="border-b border-border px-4 py-3">
+      {/* 统一顶栏 */}
+      <div className="flex h-11 items-center gap-2 border-b border-border px-4">
+        <MessageSquare className="h-4 w-4 text-muted-foreground shrink-0" />
+        <h2 className="text-sm font-semibold">AI 工具箱</h2>
+        <div className="flex-1" />
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
-            className="h-9 pl-9 text-sm"
-            placeholder="搜索 AI 模型..."
+            className="h-7 pl-7 pr-2 text-xs w-48"
+            placeholder="搜索..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
