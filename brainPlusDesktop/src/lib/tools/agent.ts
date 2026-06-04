@@ -163,25 +163,15 @@ export function registerAgentTools(tools: ToolMap, autoMode?: boolean) {
       }),
       execute: async (args: { tier?: string; agentName?: string; task: string }) => {
         try {
-          // Agent 路由
           if (args.agentName) {
-            try {
-              const { listAgents } = await import('../agentStore')
-              const { delegateToAgent } = await import('../orchestrator')
-              const agents = await listAgents((window as any).__supabaseUser?.id || '')
-              const matched = agents.find(a => a.status === 'active' && a.name === args.agentName)
-              if (matched) {
-                const res = await delegateToAgent(matched, args.task)
-                return res.html
-              }
-            } catch {}
-            const { runAgent } = await import('../agentRunner')
-            const result = await runAgent(`你是${args.agentName}。请专业地完成任务。`, args.task, args.agentName, { onEvent: onAgentStreamEvent || undefined })
-            return result.success
-              ? `✅ ${args.agentName}:\n\n${result.text}`
-              : `❌ ${args.agentName}: ${result.error}`
+            const { findAgent, delegateToAgent } = await import('../orchestrator')
+            const { agent, available } = await findAgent(args.agentName)
+            if (agent) {
+              const res = await delegateToAgent(agent, args.task)
+              return res.html
+            }
+            return `Agent "${args.agentName}" 未找到。可用: ${available.join(', ') || '(无)'}`
           }
-          // 通用模型路由
           const result = await delegateToModel(args.tier as 'fast' | 'balanced' | 'powerful', args.task)
           return `[${result.modelName}]\n${result.result}`
         } catch (e: any) {
@@ -190,4 +180,71 @@ export function registerAgentTools(tools: ToolMap, autoMode?: boolean) {
       },
     }
   }
+// delegate_batch: 并行执行多个 Agent
+    tools['delegate_batch'] = {
+      description:
+        '并行委托多个 Agent 执行独立任务，结果合并返回。agents: [{ agentName, task }, ...]。适合无依赖关系的子任务。',
+      inputSchema: jsonSchema({
+        type: 'object',
+        properties: {
+          agents: {
+            type: 'array', items: {
+              type: 'object',
+              properties: {
+                agentName: { type: 'string', description: 'Agent 名称' },
+                task: { type: 'string', description: '任务描述' },
+              },
+              required: ['agentName', 'task'],
+            },
+          },
+        },
+        required: ['agents'],
+      }),
+      execute: async (args: { agents: Array<{ agentName: string; task: string }> }) => {
+        try {
+          const { findAgent, delegateBatch } = await import('../orchestrator')
+          const items: Array<{ agent: any; task: string }> = []
+          for (const a of args.agents) {
+            const { agent, available } = await findAgent(a.agentName)
+            if (!agent) return `Agent "${a.agentName}" 未找到。可用: ${available.join(', ') || '(无)'}`
+            items.push({ agent, task: a.task })
+          }
+          return await delegateBatch(items)
+        } catch (e: any) { return `并行执行失败: ${e.message}` }
+      },
+    }
+
+    // delegate_chain: 串行执行 Agent 链
+    tools['delegate_chain'] = {
+      description:
+        '串行执行多个 Agent，前一个的输出作为下一个的输入。steps: [{ agentName, task }, ...]。按顺序执行。',
+      inputSchema: jsonSchema({
+        type: 'object',
+        properties: {
+          steps: {
+            type: 'array', items: {
+              type: 'object',
+              properties: {
+                agentName: { type: 'string' },
+                task: { type: 'string' },
+              },
+              required: ['agentName', 'task'],
+            },
+          },
+        },
+        required: ['steps'],
+      }),
+      execute: async (args: { steps: Array<{ agentName: string; task: string }> }) => {
+        try {
+          const { findAgent, delegateChain } = await import('../orchestrator')
+          const steps: Array<{ agent: any; task: string }> = []
+          for (const s of args.steps) {
+            const { agent, available } = await findAgent(s.agentName)
+            if (!agent) return `Agent "${s.agentName}" 未找到。可用: ${available.join(', ') || '(无)'}`
+            steps.push({ agent, task: s.task })
+          }
+          return await delegateChain(steps)
+        } catch (e: any) { return `链式执行失败: ${e.message}` }
+      },
+    }
 }

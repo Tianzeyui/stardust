@@ -73,10 +73,17 @@ export function ChatMessage({ msg }: ChatMessageProps) {
               {msg.streaming && <span className="text-[10px] text-muted-foreground/50">输出中...</span>}
             </div>
             <div className="px-3 py-2">
-              <MarkdownPreview
-                source={stripHtml(msg.content || (msg.streaming ? '...' : ''))}
-                style={{ fontSize: 14, backgroundColor: 'transparent', overflowWrap: 'break-word', wordBreak: 'break-word' }}
-              />
+              {msg.streaming && !msg.content && (
+                <p className="text-sm text-muted-foreground/40 py-2 select-none">
+                  <span className="animate-dots"><span>.</span><span>.</span><span>.</span></span>
+                </p>
+              )}
+              {(!msg.streaming || msg.content) && (
+                <MarkdownPreview
+                  source={stripHtml(msg.content || '')}
+                  style={{ fontSize: 14, backgroundColor: 'transparent', overflowWrap: 'break-word', wordBreak: 'break-word' }}
+                />
+              )}
             </div>
             {msg.trace && !msg.streaming && (
               <p className="px-3 pb-1.5 text-[10px] text-muted-foreground/40 select-none">{msg.trace}</p>
@@ -84,14 +91,19 @@ export function ChatMessage({ msg }: ChatMessageProps) {
           </div>
         ) : (
           <div className="overflow-x-hidden">
-            <MarkdownPreview
-              source={stripHtml(msg.content || (msg.streaming ? '...' : ''))}
-              style={{ fontSize: 14, backgroundColor: 'transparent', overflowWrap: 'break-word', wordBreak: 'break-word' }}
-            />
-            {(msg.modelName || msg.trace) && !msg.streaming && (
-              <p className="mt-0.5 text-[10px] text-muted-foreground/40 select-none">
-                {[msg.modelName ? `by ${msg.modelName}` : '', msg.trace].filter(Boolean).join(' · ')}
+            {msg.streaming && !msg.content && (
+              <p className="text-sm text-muted-foreground/40 py-2 select-none">
+                <span className="animate-dots"><span>.</span><span>.</span><span>.</span></span>
               </p>
+            )}
+            {(!msg.streaming || msg.content) && (
+              <MarkdownPreview
+                source={stripHtml(msg.content || '')}
+                style={{ fontSize: 14, backgroundColor: 'transparent', overflowWrap: 'break-word', wordBreak: 'break-word' }}
+              />
+            )}
+            {msg.trace && !msg.streaming && (
+              <p className="mt-0.5 text-[10px] text-muted-foreground/40 select-none">{msg.trace}</p>
             )}
           </div>
         )}

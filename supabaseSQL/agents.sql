@@ -14,7 +14,13 @@ CREATE TABLE IF NOT EXISTS public.agents (
   version       TEXT DEFAULT '1.0.0',                   -- Agent Card: version
   capabilities  JSONB DEFAULT '{"streaming":true,"pushNotifications":false}'::jsonb,
   status        TEXT DEFAULT 'draft',                   -- 'draft' | 'active' | 'paused'
-  system_prompt TEXT DEFAULT '',                        -- 自定义系统提示词
+  system_prompt       TEXT DEFAULT '',                  -- 自定义系统提示词
+  provider_organization TEXT DEFAULT '',                -- A2A Card: provider.organization
+  provider_url         TEXT DEFAULT '',                 -- A2A Card: provider.url
+  documentation_url    TEXT DEFAULT '',                 -- A2A Card: documentationUrl
+  input_modes          TEXT[] DEFAULT '{text}',         -- A2A Card: defaultInputModes
+  output_modes         TEXT[] DEFAULT '{text}',         -- A2A Card: defaultOutputModes
+  security_schemes     JSONB DEFAULT '{}',              -- A2A Card: securitySchemes
   created_at    TIMESTAMPTZ DEFAULT NOW(),
   updated_at    TIMESTAMPTZ DEFAULT NOW()
 );

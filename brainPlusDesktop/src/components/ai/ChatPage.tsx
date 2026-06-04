@@ -30,6 +30,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { MemoryPopup } from './MemoryPopup'
 import { AgentPicker } from './AgentPicker'
 import { agentDisplayNames } from '@/lib/tools/agentRegistry'
+import { setTaskEventHandler } from '@/lib/taskManager'
 import {
   type ToolCallStatus, type UIMessage, type ConsoleLine,
   type CompressionEventData,
@@ -137,6 +138,14 @@ export function ChatPage() {
     setConvList(list)
   }, [])
   useEffect(() => { setSkills(getInstalledSkills()) }, [])
+  // TaskManager 注入 userId
+  useEffect(() => {
+    (async () => {
+      const { setTaskUserId } = await import('@/lib/taskManager')
+      setTaskUserId(() => user?.id ?? null)
+    })()
+    return () => { import('@/lib/taskManager').then(m => m.setTaskUserId(() => null)) }
+  }, [user?.id])
   // 切换对话时重置 MCP 工具选择
   useEffect(() => {
     setSelectedMCPTools(null); setDisclosureResult(null); setShortMemoryCount(0)
@@ -299,9 +308,12 @@ export function ChatPage() {
 
   const removeAttachment = useCallback((id: string) => setAttachments(prev => prev.filter(a => a.id !== id)), [])
 
+  const sendingRef = useRef(false)
+
   // 发送消息
   const handleSend = useCallback(async () => {
-    if (!input.trim() || loading || !activeModel) return
+    if (sendingRef.current || loading || !input.trim() || !activeModel) return
+    sendingRef.current = true
 
     // 确保有对话
     let cid = convId
@@ -415,16 +427,15 @@ export function ChatPage() {
           const agentLabel = event.agentName ? `Agent: ${event.agentName}` : 'Agent'
           agentStreamedRef.current += event.text || ''
           setMessages(prev => {
-            const n = [...prev]
+            const n = prev.map(m => ({ ...m }))
             const l = n[n.length - 1]
-            // Agent 输出未开始时，关闭主对话气泡，新建 Agent 标签消息
             if (!l || l.role !== 'assistant' || l.modelName !== agentLabel) {
-              if (l?.role === 'assistant' && l.streaming) { l.streaming = false }
+              if (l?.role === 'assistant' && l.streaming) { n[n.length - 1] = { ...l, streaming: false } }
               n.push({ role: 'assistant', content: agentStreamedRef.current, streaming: true, modelName: agentLabel })
             } else {
-              l.content = agentStreamedRef.current
+              n[n.length - 1] = { ...l, content: agentStreamedRef.current }
             }
-            return [...n]
+            return n
           })
         } else if (event.type === 'agent-done') {
           // Agent 结束，确保有容器（纯工具调用无文本时兜底），关闭流式
@@ -445,15 +456,15 @@ export function ChatPage() {
         } else if (event.type === 'text-delta') {
           streamed += event.text || ''
           setMessages(prev => {
-            const n = [...prev]; const l = n[n.length - 1]
+            const n = prev.map(m => ({ ...m }))
+            const l = n[n.length - 1]
             if (l?.role === 'assistant' && l.streaming) {
-              l.content = streamed
+              n[n.length - 1] = { ...l, content: streamed }
             } else {
-              // Agent 结束或新段落：创建新的主 AI 消息
-              if (l?.role === 'assistant') l.streaming = false
+              if (l?.role === 'assistant') n[n.length - 1] = { ...l, streaming: false }
               n.push({ role: 'assistant', content: streamed, streaming: true, modelName })
             }
-            return [...n]
+            return n
           })
         } else if (event.type === 'tool-call') {
           let toolName = event.toolName || 'unknown'
@@ -498,6 +509,11 @@ export function ChatPage() {
           setStatusText('')
         } else if (event.type === 'system-log') {
           pushLog('SYS', event.text || '', 'info')
+        } else if (event.type === 'task-status') {
+          const s = event.taskStatus || '?'
+          pushLog(s === 'running' ? '🔄' : s === 'completed' ? '✅' : '❌',
+            `Task ${(event.taskId || '').slice(0, 12)}: ${event.taskAgentName || ''} ${s}${event.text ? ` (${event.text.length}字)` : ''}`,
+            s === 'completed' ? 'ok' : s === 'failed' ? 'error' : 'info')
         } else if (event.type === 'disclosure') {
           if (event.disclosureResult) setDisclosureResult(event.disclosureResult)
         } else if (event.type === 'compression') {
@@ -526,7 +542,7 @@ export function ChatPage() {
               return [...n]
             })
           }
-          setMessages(prev => { const n = [...prev]; const l = n[n.length - 1]; if (l?.role === 'assistant' && l.streaming) { if (streamed) { l.content = streamed; l.streaming = false } else n.pop() } return [...n] })
+          setMessages(prev => { const n = prev.map(m => ({ ...m })); const l = n[n.length - 1]; if (l?.role === 'assistant' && l.streaming) { if (streamed) { n[n.length - 1] = { ...l, content: streamed, streaming: false } } else n.pop() } return n })
         }
       }, {
         abortSignal: controller.signal,
@@ -558,7 +574,7 @@ export function ChatPage() {
         pushLog('ERR', msg, 'error')
         setStatusText(`连接失败：${msg.slice(0, 40)}`)
       }
-    } finally { abortRef.current = null; setLoading(false); setTimeout(() => setStatusText(''), 8000) }
+    } finally { sendingRef.current = false; abortRef.current = null; setLoading(false); setTimeout(() => setStatusText(''), 8000) }
 
     // 后台异步提取记忆（fire-and-forget，不阻塞用户）
     const memMgr = memoryManagerRef.current

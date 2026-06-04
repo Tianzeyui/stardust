@@ -15,7 +15,7 @@ function emptySkill(): AgentSkill {
 
 function emptyAgent(): Agent {
   return {
-    name: '', description: '', systemPrompt: '', url: '', type: 'remote', version: '1.0.0',
+    name: '', description: '', systemPrompt: '', providerOrg: '', providerUrl: '', documentationUrl: '', inputModes: ['text'], outputModes: ['text'], securitySchemes: {}, url: '', type: 'remote', version: '1.0.0',
     capabilities: { streaming: true, pushNotifications: false },
     status: 'draft', skills: [],
   }
@@ -121,6 +121,7 @@ export function AgentsPage() {
                   <Label className="text-xs">版本</Label>
                   <Input className="h-8 text-sm" value={editing.version} onChange={e => setEditing({ ...editing, version: e.target.value })} placeholder="1.0.0" />
                 </div>
+
               </div>
               <div className="grid gap-1.5">
                 <Label className="text-xs">描述</Label>

@@ -171,7 +171,7 @@ export async function getMCPSdkTools(autoMode?: boolean, userId?: string): Promi
 }
 
 export interface ChatStreamEvent {
-  type: 'text-delta' | 'tool-call' | 'tool-result' | 'done' | 'compression' | 'disclosure' | 'system-log' | 'agent-tool-call' | 'agent-tool-result' | 'agent-text-delta' | 'agent-done'
+  type: 'text-delta' | 'tool-call' | 'tool-result' | 'done' | 'compression' | 'disclosure' | 'system-log' | 'agent-tool-call' | 'agent-tool-result' | 'agent-text-delta' | 'agent-done' | 'task-status'
   text?: string
   toolName?: string
   toolInput?: unknown
@@ -184,6 +184,8 @@ export interface ChatStreamEvent {
   summary?: string
   // agent 事件字段
   agentName?: string
+  // task 事件字段
+  taskStatus?: string; taskId?: string; taskAgentName?: string
   // disclosure 事件字段
   disclosureResult?: DisclosureResult
 }

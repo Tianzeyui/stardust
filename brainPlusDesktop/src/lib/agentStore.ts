@@ -27,6 +27,12 @@ export interface Agent {
   name: string
   description: string
   systemPrompt: string        // 自定义系统提示词
+  providerOrg: string         // A2A: provider.organization
+  providerUrl: string         // A2A: provider.url
+  documentationUrl: string    // A2A: documentationUrl
+  inputModes: string[]        // A2A: defaultInputModes
+  outputModes: string[]       // A2A: defaultOutputModes
+  securitySchemes: Record<string, any>  // A2A: securitySchemes
   url: string                 // remote endpoint
   type: 'local' | 'remote'
   version: string
@@ -58,6 +64,12 @@ function mapAgent(a: any): Agent {
     description: a.description || '',
     url: a.url || '',
     systemPrompt: a.system_prompt || '',
+    providerOrg: a.provider_organization || '',
+    providerUrl: a.provider_url || '',
+    documentationUrl: a.documentation_url || '',
+    inputModes: a.input_modes || ['text'],
+    outputModes: a.output_modes || ['text'],
+    securitySchemes: a.security_schemes || {},
     type: a.type || 'remote',
     version: a.version || '1.0.0',
     capabilities: a.capabilities || { streaming: true, pushNotifications: false },
@@ -78,14 +90,19 @@ function mapAgent(a: any): Agent {
 
 // ====== CRUD ======
 
-export async function listAgents(userId: string): Promise<Agent[]> {
+export async function listAgents(userId?: string): Promise<Agent[]> {
   const sb = getSupabaseClient()
-  if (!sb || !userId) return []
+  let uid = userId || ''
+  if (!uid && sb) {
+    try { uid = (await sb.auth.getSession()).data.session?.user?.id || '' } catch {}
+  }
+  console.log(`[agentStore] listAgents userId=${userId} resolved=${uid} hasClient=${!!sb}`)
+  if (!sb || !uid) return []
 
   const { data, error } = await sb
     .from('agents')
     .select('*, agent_skills(*)')
-    .eq('user_id', userId)
+    .eq('user_id', uid)
     .order('updated_at', { ascending: false })
   if (error || !data) { console.warn('[agentStore] listAgents error:', error?.message); return [] }
 
@@ -121,6 +138,12 @@ export async function saveAgent(agent: Agent, userId: string): Promise<Agent | n
       capabilities: agent.capabilities,
       status: agent.status,
       system_prompt: agent.systemPrompt,
+      provider_organization: agent.providerOrg,
+      provider_url: agent.providerUrl,
+      documentation_url: agent.documentationUrl,
+      input_modes: agent.inputModes,
+      output_modes: agent.outputModes,
+      security_schemes: agent.securitySchemes,
       updated_at: new Date().toISOString(),
     }).eq('id', agent.id).eq('user_id', userId)
     if (error) { console.warn('[agentStore] update failed:', error.message); return null }
@@ -137,6 +160,12 @@ export async function saveAgent(agent: Agent, userId: string): Promise<Agent | n
       capabilities: agent.capabilities,
       status: agent.status,
       system_prompt: agent.systemPrompt,
+      provider_organization: agent.providerOrg,
+      provider_url: agent.providerUrl,
+      documentation_url: agent.documentationUrl,
+      input_modes: agent.inputModes,
+      output_modes: agent.outputModes,
+      security_schemes: agent.securitySchemes,
     }).select('id').single()
     if (error || !data) { console.warn('[agentStore] create failed:', error?.message); return null }
     agent.id = data.id
@@ -164,6 +193,37 @@ export async function deleteAgent(id: string, userId: string): Promise<boolean> 
   if (!sb || !userId) return false
   const { error } = await sb.from('agents').delete().eq('id', id).eq('user_id', userId)
   return !error
+}
+
+/** 生成标准 A2A Agent Card JSON */
+export function buildAgentCard(agent: Agent): Record<string, any> {
+  return {
+    name: agent.name,
+    description: agent.description,
+    url: agent.url || undefined,
+    version: agent.version,
+    provider: {
+      organization: agent.providerOrg || undefined,
+      url: agent.providerUrl || undefined,
+    },
+    documentationUrl: agent.documentationUrl || undefined,
+    capabilities: {
+      streaming: agent.capabilities.streaming ?? true,
+      pushNotifications: agent.capabilities.pushNotifications ?? false,
+    },
+    defaultInputModes: agent.inputModes || ['text'],
+    defaultOutputModes: agent.outputModes || ['text'],
+    skills: agent.skills.map(s => ({
+      id: s.id,
+      name: s.name,
+      description: s.description,
+      tags: s.tags,
+      examples: s.examples,
+      inputModes: s.inputModes,
+      outputModes: s.outputModes,
+    })),
+    securitySchemes: agent.securitySchemes || undefined,
+  }
 }
 
 export async function listTasks(agentId: string, userId: string): Promise<AgentTask[]> {
