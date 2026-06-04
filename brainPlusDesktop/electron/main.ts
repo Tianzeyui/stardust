@@ -3,6 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import { fileURLToPath } from 'url'
 import { mcpService, type MCPServer } from './main/mcp/MCPService.js'
+import { startA2AServer, stopA2AServer, completeA2ATask, getA2ATask, syncAgents, setA2AToken } from './main/a2aServer.js'
 import { executeJS, executePython, preInit } from './main/sandboxService.js'
 import { initWorkspace, getWorkspacePaths, listOutputFiles, openFile, deleteFile, clearOutputFiles } from './main/workspace.js'
 import { writeSkillFiles, readSkillFile, deleteSkillFiles } from './main/skillDiskStore.js'
@@ -468,6 +469,7 @@ function showAbout() {
 
 app.whenReady().then(() => {
   preInit()
+  startA2AServer(9090)  // A2A HTTP Server
   initWorkspace()
   createWindow()
   // macOS Dock 图标 + 关于信息
@@ -540,6 +542,24 @@ app.on('activate', () => {
     createWindow()
   }
 })
+
+// ==================== A2A IPC ====================
+
+ipcMain.handle('a2a:completeTask', (_e, taskId: string, output: string, error?: string) => {
+  completeA2ATask(taskId, output, error)
+  return true
+})
+
+ipcMain.handle('a2a:getTask', (_e, taskId: string) => {
+  return getA2ATask(taskId) || null
+})
+
+ipcMain.handle('a2a:getPort', () => 9090)
+ipcMain.handle('a2a:syncAgents', (_e, agents: any[]) => { syncAgents(agents); return true })
+ipcMain.handle('a2a:start', (_e, port: number) => { startA2AServer(port); return true })
+ipcMain.handle('a2a:stop', () => { stopA2AServer(); return true })
+ipcMain.handle('a2a:status', () => ({ running: true, port: 9090 }))  // TODO: track actual running state
+ipcMain.handle('a2a:setToken', (_e, token: string) => { setA2AToken(token); return true })
 
 app.on('before-quit', async () => {
   await mcpService.cleanup()

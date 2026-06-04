@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Settings, Cpu, Server, Trash2, Plus, RefreshCw, Check, Wrench, FolderOpen, MessageSquare, Play, ChevronDown, Loader2, X, ArrowLeft, Info, Bot } from 'lucide-react'
+import { Settings, Cpu, Server, Trash2, Plus, RefreshCw, Check, Wrench, FolderOpen, MessageSquare, Play, ChevronDown, Loader2, X, ArrowLeft, Info, Bot, Globe } from 'lucide-react'
 import { APP_VERSION } from '@/lib/version'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,6 +14,7 @@ import {
   getDisclosureThreshold, saveDisclosureThreshold,
   getAgentMaxSteps, saveAgentMaxSteps,
   getMemoryEnabled, saveMemoryEnabled,
+  getA2AEnabled, saveA2AEnabled, getA2APort, saveA2APort, getA2AToken, saveA2AToken,
 } from '@/lib/config'
 import { listTools, listResources, listPrompts, callTool, readResource, getPrompt, connect, disconnect, addServer as addMcpServer, updateServer as updateMcpServer, removeServer as removeMcpServer } from '@/lib/mcpClient'
 import type { MCPTool, MCPResource, MCPPrompt } from '@/types/electron'
@@ -23,7 +24,7 @@ import { createSupabaseMemoryStore } from '@/lib/memory/store-supabase'
 import { createLocalMemoryStore } from '@/lib/memory/store-local'
 import { useAuth } from '@/contexts/AuthContext'
 
-type Tab = 'general' | 'agent' | 'ai' | 'mcp' | 'about'
+type Tab = 'general' | 'agent' | 'a2a' | 'ai' | 'mcp' | 'about'
 
 export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; initialTab?: Tab }) {
   const { user } = useAuth()
@@ -55,6 +56,9 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
   const [disclosureThreshold, setDisclosureThreshold] = useState(getDisclosureThreshold)
   const [maxSteps, setMaxSteps] = useState(getAgentMaxSteps)
   const [memoryEnabled, setMemoryEnabled] = useState(getMemoryEnabled)
+  const [a2aEnabled, setA2AEnabled] = useState(getA2AEnabled)
+  const [a2aPort, setA2APortState] = useState(getA2APort)
+  const [a2aToken, setA2AToken] = useState(getA2AToken)
   const memoryManagerRef = useRef(new MemoryManager(
     // 短期记忆只读 —— 设置页无法确定当前 convId，仅展示长期记忆
     createLocalMemoryStore('settings'),
@@ -278,6 +282,7 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
           {([
             { id: 'general' as const, label: '通用', icon: Settings },
             { id: 'agent' as const, label: 'Agent', icon: Bot },
+            { id: 'a2a' as const, label: 'A2A', icon: Globe },
             { id: 'ai' as const, label: 'AI模型', icon: Cpu },
             { id: 'mcp' as const, label: 'MCP 服务器', icon: Server },
             { id: 'about' as const, label: '关于', icon: Info },
@@ -388,6 +393,48 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
             </fieldset>
 
             <MemoryPanel manager={memoryManagerRef.current} />
+          </div>
+        )}
+
+        {/* ===== A2A 设置 ===== */}
+        {tab === 'a2a' && (
+          <div className="w-full space-y-6">
+            <fieldset className="rounded-lg border border-border p-4">
+              <legend className="px-2 text-sm font-semibold">A2A Server</legend>
+              <p className="text-xs text-muted-foreground leading-relaxed mb-3">
+                开启后 BrainPlus 作为 A2A Agent 服务端，外部可通过 HTTP 调用你的 Agent。
+                访问 http://localhost:{a2aPort}/.well-known/agent-card.json 查看 Agent Card。
+              </p>
+              <div className="flex items-center gap-2 mb-3">
+                <button
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${a2aEnabled ? 'bg-primary' : 'bg-muted'}`}
+                  onClick={() => { const v = !a2aEnabled; setA2AEnabled(v); saveA2AEnabled(v); v ? window.electronAPI?.a2a?.start(a2aPort) : window.electronAPI?.a2a?.stop() }}
+                >
+                  <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${a2aEnabled ? 'translate-x-4' : 'translate-x-1'}`} />
+                </button>
+                <span className="text-xs text-muted-foreground">{a2aEnabled ? '运行中' : '已关闭'}</span>
+              </div>
+              <div className="flex items-center gap-2 mb-3">
+                <Label className="text-xs">端口</Label>
+                <Input type="number" min={1024} max={65535} value={a2aPort}
+                  onChange={e => { const p = parseInt(e.target.value) || 9090; setA2APortState(p); saveA2APort(p) }}
+                  className="h-8 w-24 text-center text-sm" />
+              </div>
+              <div className="flex items-center gap-2">
+                <Label className="text-xs">Token</Label>
+                <Input value={a2aToken}
+                  onChange={e => { setA2AToken(e.target.value); saveA2AToken(e.target.value); window.electronAPI?.a2a?.setToken?.(e.target.value) }}
+                  placeholder="留空不鉴权"
+                  className="h-8 text-sm flex-1 font-mono" />
+                <Button variant="outline" size="sm" className="h-8 text-xs shrink-0"
+                  onClick={() => {
+                    const t = 'a2a_' + crypto.randomUUID().replace(/-/g, '').slice(0, 24)
+                    setA2AToken(t); saveA2AToken(t); window.electronAPI?.a2a?.setToken?.(t)
+                  }}>
+                  <RefreshCw className="mr-1 h-3 w-3" />生成
+                </Button>
+              </div>
+            </fieldset>
           </div>
         )}
 

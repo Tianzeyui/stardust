@@ -138,6 +138,13 @@ export function ChatPage() {
     setConvList(list)
   }, [])
   useEffect(() => { setSkills(getInstalledSkills()) }, [])
+  // A2A Server 初始同步
+  useEffect(() => {
+    if (!user?.id) return
+    import('@/lib/agentStore').then(m => m.listAgents(user.id)).then(list => {
+      ;(window as any).electronAPI?.a2a?.syncAgents?.(list).catch(() => {})
+    }).catch(() => {})
+  }, [user?.id])
   // TaskManager 注入 userId
   useEffect(() => {
     (async () => {

@@ -30,7 +30,7 @@ export function AgentsPage() {
   const [saving, setSaving] = useState(false)
 
   const refresh = useCallback(async () => {
-    setAgents(await listAgents(uid))
+    const list = await listAgents(uid); setAgents(list); (window as any).electronAPI?.a2a?.syncAgents?.(list).catch(() => {})
     setLoading(false)
   }, [])
 
@@ -44,7 +44,7 @@ export function AgentsPage() {
     console.log('[AgentsPage] saved:', saved)
     if (saved) {
       await refresh()
-      setEditing(null)
+      setEditing(null); (async () => { const l = await listAgents(uid); (window as any).electronAPI?.a2a?.syncAgents?.(l).catch(() => {}) })()
     } else {
       alert('保存失败，请确认已登录 Supabase 且在 SQL Editor 中执行了 agents.sql 建表')
     }

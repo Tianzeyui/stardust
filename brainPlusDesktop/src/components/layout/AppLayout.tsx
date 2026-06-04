@@ -16,6 +16,27 @@ export function AppLayout() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsTab, setSettingsTab] = useState<'about' | undefined>(undefined)
 
+  // A2A 远程任务监听（始终挂载，不在 ChatPage 依赖）
+  useEffect(() => {
+    const api = window.electronAPI as any
+    if (!api?.on) return
+    return api.on('a2a:newTask', async (data: any) => {
+      console.log('[AppLayout] A2A 远程任务:', data)
+      try {
+        const { listAgents } = await import('@/lib/agentStore')
+        const { delegateToAgent } = await import('@/lib/orchestrator')
+        const agents = await listAgents()
+        const agent = agents.find((a: any) => a.status === 'active' && a.name === data.agentName)
+        if (agent) {
+          const result = await delegateToAgent(agent, data.input)
+          api.a2a?.completeTask(data.id, result.plainText, result.error).catch(() => {})
+        } else {
+          api.a2a?.completeTask(data.id, '', `Agent "${data.agentName}" 未找到`).catch(() => {})
+        }
+      } catch (e: any) { console.warn('[AppLayout] A2A 执行失败:', e.message) }
+    })
+  }, [])
+
   useEffect(() => {
     const api = window.electronAPI as any
     if (!api?.onShowAbout) return

@@ -1,6 +1,21 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
+const ipcListeners = new Map<string, Set<(...args: any[]) => void>>()
+
 contextBridge.exposeInMainWorld('electronAPI', {
+  on: (channel: string, cb: (...args: any[]) => void) => {
+    if (!ipcListeners.has(channel)) {
+      ipcListeners.set(channel, new Set())
+      ipcRenderer.on(channel, (_e, ...args) => {
+        ipcListeners.get(channel)?.forEach(fn => fn(...args))
+      })
+    }
+    ipcListeners.get(channel)!.add(cb)
+    return () => ipcListeners.get(channel)?.delete(cb)
+  },
+  off: (channel: string, cb: (...args: any[]) => void) => {
+    ipcListeners.get(channel)?.delete(cb)
+  },
   platform: process.platform,
 
   ai: {
@@ -144,5 +159,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getAllPrompts: () => ipcRenderer.invoke('mcp:getAllPrompts'),
     getPrompt: (serverId: string, promptName: string, args: any) =>
       ipcRenderer.invoke('mcp:getPrompt', serverId, promptName, args),
+  },
+
+  a2a: {
+    completeTask: (taskId: string, output: string, error?: string) =>
+      ipcRenderer.invoke('a2a:completeTask', taskId, output, error),
+    getTask: (taskId: string) => ipcRenderer.invoke('a2a:getTask', taskId),
+    getPort: () => ipcRenderer.invoke('a2a:getPort'),
+    syncAgents: (agents: any[]) => ipcRenderer.invoke('a2a:syncAgents', agents),
+    start: (port: number) => ipcRenderer.invoke('a2a:start', port),
+    stop: () => ipcRenderer.invoke('a2a:stop'),
+    status: () => ipcRenderer.invoke('a2a:status'),
+    setToken: (token: string) => ipcRenderer.invoke('a2a:setToken', token),
   },
 })

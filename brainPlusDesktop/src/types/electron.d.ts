@@ -134,6 +134,18 @@ export interface ElectronAPI {
     getAllPrompts: () => Promise<{ prompts: MCPPrompt[]; errors: Array<{ serverName: string; error: string }> }>
     getPrompt: (serverId: string, promptName: string, args: any) => Promise<any>
   }
+  on: (channel: string, cb: (...args: any[]) => void) => () => void
+  off: (channel: string, cb: (...args: any[]) => void) => void
+  a2a: {
+    completeTask: (taskId: string, output: string, error?: string) => Promise<boolean>
+    getTask: (taskId: string) => Promise<any>
+    syncAgents: (agents: any[]) => Promise<boolean>
+    start: (port: number) => Promise<boolean>
+    stop: () => Promise<boolean>
+    status: () => Promise<{ running: boolean; port: number }>
+    setToken: (token: string) => Promise<boolean>
+    getPort: () => Promise<number>
+  }
 }
 
 declare global {

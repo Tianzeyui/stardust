@@ -113,6 +113,8 @@ export async function delegateToAgent(
 
     TaskManager.complete(task, plainText, artifacts.length > 0 ? artifacts : undefined)
     streamHandler?.({ type: 'task-status', taskId: task.id, taskAgentName: agent.name, taskStatus: 'completed', text: plainText.slice(0, 100) } as any)
+    // 通知 A2A HTTP Server（如果有外部客户端在等待）
+    ;(window as any).electronAPI?.a2a?.completeTask(task.id, plainText).catch(() => {})
     log(`Task ${task.id} 完成: 输出${fullText.length}字, 工具${toolCalls.length}次`)
 
     return {
@@ -125,6 +127,7 @@ export async function delegateToAgent(
   } catch (e: any) {
     streamHandler?.({ type: 'agent-done', agentName: agent.name })
     TaskManager.fail(task, e.message)
+    ;(window as any).electronAPI?.a2a?.completeTask(task.id, '', e.message).catch(() => {})
     log(`Task ${task.id} 失败: ${e.message}`)
     return { agentName: agent.name, success: false, taskId: task.id, html: '', plainText: '', error: e.message }
   }
