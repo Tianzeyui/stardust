@@ -3,8 +3,11 @@ name: Build & Release
 on:
   push:
     tags:
-      - 'v*'           # 推送 v 开头的 tag 时触发
-  workflow_dispatch:    # 手动触发
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -43,8 +46,6 @@ jobs:
         run: npx vite build
 
       - name: Package (${{ matrix.platform }})
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         timeout-minutes: 30
         run: npx electron-builder --${{ matrix.platform }} --publish=never
 
@@ -69,4 +70,4 @@ jobs:
             BrainPlus-win/*
             BrainPlus-linux/*
           draft: true
-          generateReleaseNotes: true
+          generate_release_notes: true
