@@ -253,3 +253,96 @@ export function getTokenLimit(): number {
 export function saveTokenLimit(limit: number): void {
   localStorage.setItem(TOKEN_LIMIT_KEY, String(limit))
 }
+
+// ========== 沙箱开关（JS / Python 独立） ==========
+
+const SANDBOX_JS_KEY = 'brainplus_sandbox_js'
+const SANDBOX_PYTHON_KEY = 'brainplus_sandbox_python'
+
+export function getJSSandboxEnabled(): boolean {
+  try { const v = localStorage.getItem(SANDBOX_JS_KEY); if (v !== null) return v === 'true' } catch {}
+  return true
+}
+export function saveJSSandboxEnabled(v: boolean): void { localStorage.setItem(SANDBOX_JS_KEY, String(v)) }
+
+export function getPythonSandboxEnabled(): boolean {
+  try { const v = localStorage.getItem(SANDBOX_PYTHON_KEY); if (v !== null) return v === 'true' } catch {}
+  return true
+}
+export function savePythonSandboxEnabled(v: boolean): void { localStorage.setItem(SANDBOX_PYTHON_KEY, String(v)) }
+
+/** 沙箱权限：至少有一个引擎可用时才授予 */
+export function isAnySandboxEnabled(): boolean {
+  return getJSSandboxEnabled() || getPythonSandboxEnabled()
+}
+
+// ========== DuckDuckGo 搜索开关 ==========
+
+const DUCKDUCKGO_ENABLED_KEY = 'brainplus_duckduckgo_enabled'
+
+export function getDuckDuckGoEnabled(): boolean {
+  try {
+    const v = localStorage.getItem(DUCKDUCKGO_ENABLED_KEY)
+    if (v !== null) return v === 'true'
+  } catch {}
+  return true  // 默认开启
+}
+
+export function saveDuckDuckGoEnabled(enabled: boolean): void {
+  localStorage.setItem(DUCKDUCKGO_ENABLED_KEY, String(enabled))
+}
+
+const DDG_RESULT_COUNT_KEY = 'brainplus_ddg_result_count'
+const DDG_TIMEOUT_KEY = 'brainplus_ddg_timeout'
+
+export function getDDGResultCount(): number {
+  try {
+    const v = localStorage.getItem(DDG_RESULT_COUNT_KEY)
+    if (v) { const n = parseInt(v); if (n >= 1 && n <= 20) return n }
+  } catch {}
+  return 5
+}
+
+export function saveDDGResultCount(count: number): void {
+  localStorage.setItem(DDG_RESULT_COUNT_KEY, String(Math.max(1, Math.min(20, count))))
+}
+
+export function getDDGTimeout(): number {
+  try {
+    const v = localStorage.getItem(DDG_TIMEOUT_KEY)
+    if (v) { const n = parseInt(v); if (n >= 3 && n <= 60) return n }
+  } catch {}
+  return 10
+}
+
+export function saveDDGTimeout(sec: number): void {
+  localStorage.setItem(DDG_TIMEOUT_KEY, String(Math.max(3, Math.min(60, sec))))
+}
+
+// ========== Bing 搜索开关 ==========
+
+const BING_ENABLED_KEY = 'brainplus_bing_enabled'
+const BING_RESULT_COUNT_KEY = 'brainplus_bing_result_count'
+const BING_TIMEOUT_KEY = 'brainplus_bing_timeout'
+
+export function getBingEnabled(): boolean {
+  try { const v = localStorage.getItem(BING_ENABLED_KEY); if (v !== null) return v === 'true' } catch {}
+  return true
+}
+export function saveBingEnabled(v: boolean): void { localStorage.setItem(BING_ENABLED_KEY, String(v)) }
+
+export function getBingResultCount(): number {
+  try { const v = localStorage.getItem(BING_RESULT_COUNT_KEY); if (v) { const n = parseInt(v); if (n >= 1 && n <= 20) return n } } catch {}
+  return 5
+}
+export function saveBingResultCount(count: number): void {
+  localStorage.setItem(BING_RESULT_COUNT_KEY, String(Math.max(1, Math.min(20, count))))
+}
+
+export function getBingTimeout(): number {
+  try { const v = localStorage.getItem(BING_TIMEOUT_KEY); if (v) { const n = parseInt(v); if (n >= 3 && n <= 60) return n } } catch {}
+  return 10
+}
+export function saveBingTimeout(sec: number): void {
+  localStorage.setItem(BING_TIMEOUT_KEY, String(Math.max(3, Math.min(60, sec))))
+}

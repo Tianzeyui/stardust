@@ -1,15 +1,8 @@
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { Sidebar, type NavItem } from './Sidebar'
-import { ChatPage } from '@/components/ai/ChatPage'
-import { AIPage } from '@/components/ai/AIPage'
-import { DiaryPage } from '@/components/diary/DiaryPage'
-import { InspirationPage } from '@/components/inspiration/InspirationPage'
 import { SettingsPage } from '@/components/settings/SettingsPage'
-import { SkillsPage } from '@/components/skills/SkillsPage'
-import { FileManagerPage } from '@/components/files/FileManagerPage'
-import { AgentsPage } from '@/components/agents/AgentsPage'
-import { UsageStatsPage } from '@/components/usage/UsageStatsPage'
+import { DynamicRoute } from './DynamicRoute'
 
 export function AppLayout() {
   const [activeNav, setActiveNav] = useState<NavItem>('chat')
@@ -80,16 +73,7 @@ export function AppLayout() {
           {settingsOpen ? (
             <SettingsPage onClose={() => { setSettingsOpen(false); setSettingsTab(undefined) }} initialTab={settingsTab} />
           ) : (
-            <>
-              {activeNav === 'chat' && <ChatPage />}
-              {activeNav === 'ai' && <AIPage />}
-              {activeNav === 'diary' && <DiaryPage />}
-              {activeNav === 'inspiration' && <InspirationPage />}
-              {activeNav === 'skills' && <SkillsPage />}
-              {activeNav === 'files' && <FileManagerPage />}
-              {activeNav === 'agents' && <AgentsPage />}
-              {activeNav === 'usage' && <UsageStatsPage onClose={() => setActiveNav('chat')} />}
-            </>
+            <DynamicRoute nav={activeNav} onNavChange={setActiveNav} />
           )}
         </main>
       </div>

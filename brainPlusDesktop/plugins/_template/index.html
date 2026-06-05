@@ -1,0 +1,46 @@
+<!--
+  插件页面模板 — Tailwind CSS 紧凑黑白风格
+  可用 Token: text-foreground, text-muted-foreground, bg-card, bg-muted, bg-accent, border-border
+-->
+
+<!-- 欢迎 / 介绍 -->
+<div class="rounded-lg border border-border bg-card p-4 mb-3">
+  <div class="flex items-center gap-2.5 mb-2">
+    <svg class="h-5 w-5 text-muted-foreground shrink-0" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="4"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
+    <div class="min-w-0">
+      <h2 class="text-sm font-semibold text-foreground truncate">我的插件</h2>
+      <p class="text-[10px] text-muted-foreground">v1.0.0</p>
+    </div>
+  </div>
+  <p class="text-xs text-muted-foreground leading-relaxed">
+    在这里介绍你的插件功能。页面使用 Tailwind CSS 渲染，自动适配明暗主题。
+  </p>
+</div>
+
+<!-- 功能说明 -->
+<div class="rounded-lg border border-border bg-card p-4 mb-3">
+  <div class="flex items-center gap-2 mb-3">
+    <svg class="h-4 w-4 text-muted-foreground shrink-0" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+    <h3 class="text-xs font-semibold text-foreground">功能</h3>
+  </div>
+  <p class="text-[11px] text-muted-foreground leading-relaxed">
+    描述插件提供的功能。可使用任何 Tailwind CSS 类构建 UI。
+  </p>
+</div>
+
+<!-- 多列卡片 -->
+<div class="grid gap-2 sm:grid-cols-2 mb-3">
+  <div class="rounded border border-border bg-card p-3">
+    <h4 class="text-[11px] font-medium text-foreground mb-1">特性 A</h4>
+    <p class="text-[10px] text-muted-foreground leading-relaxed">描述特性 A 的详细信息。</p>
+  </div>
+  <div class="rounded border border-border bg-card p-3">
+    <h4 class="text-[11px] font-medium text-foreground mb-1">特性 B</h4>
+    <p class="text-[10px] text-muted-foreground leading-relaxed">描述特性 B 的详细信息。</p>
+  </div>
+</div>
+
+<!-- 提示 -->
+<div class="rounded border border-border bg-muted/20 px-3 py-2 text-[10px] text-muted-foreground">
+  提示：在 <code class="text-[10px] bg-muted px-1 rounded">manifest.json</code> 中配置插件的 id、名称、权限和 AI 工具。
+</div>

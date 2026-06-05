@@ -1,0 +1,10 @@
+{
+  "id": "my-plugin",
+  "name": "我的插件",
+  "version": "1.0.0",
+  "description": "一个示例插件",
+  "icon": "Package",
+  "navOrder": 90,
+  "enabled": true,
+  "permissions": ["ai"]
+}

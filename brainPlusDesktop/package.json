@@ -24,6 +24,7 @@
     "ai": "^6.0.193",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "esbuild": "^0.28.0",
     "lucide-react": "^0.468.0",
     "mammoth": "^1.12.0",
     "node-llama-cpp": "^3.18.1",

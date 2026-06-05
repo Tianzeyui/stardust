@@ -136,6 +136,20 @@ export interface ElectronAPI {
   }
   on: (channel: string, cb: (...args: any[]) => void) => () => void
   off: (channel: string, cb: (...args: any[]) => void) => void
+  plugin: {
+    load: (dirPath: string) => Promise<{ success: boolean; error?: string; manifest?: any; page?: string | null; pluginDir?: string }>
+    install: (dirPath: string) => Promise<{ success: boolean; error?: string; manifest?: any; page?: string | null; pluginDir?: string }>
+    installDeps: (dirPath: string) => Promise<{ success: boolean; error?: string }>
+    compile: (dirPath: string) => Promise<{ success: boolean; error?: string; code?: string }>
+    uninstall: (pluginId: string) => Promise<{ success: boolean; error?: string }>
+  }
+  search: {
+    fetch: (url: string, timeout: number) => Promise<{ success: boolean; error?: string; data?: string }>
+  }
+  http: {
+    fetch: (url: string, opts?: { method?: string; headers?: Record<string, string>; body?: string; timeout?: number }) =>
+      Promise<{ success: boolean; error?: string; data?: string; status?: number }>
+  }
   a2a: {
     completeTask: (taskId: string, output: string, error?: string) => Promise<boolean>
     getTask: (taskId: string) => Promise<any>

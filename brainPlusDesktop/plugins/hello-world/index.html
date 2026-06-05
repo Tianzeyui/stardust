@@ -1,0 +1,247 @@
+<!--
+  Hello World 插件页面 — Tailwind CSS 紧凑黑白风格
+  演示：AI 工具、权限系统、Supabase 当前用户查询
+-->
+
+<!-- 当前用户 — Supabase 集成演示 -->
+<div class="rounded-lg border border-border bg-card p-4 mb-3">
+  <div class="flex items-center gap-2 mb-3">
+    <svg class="h-4 w-4 text-muted-foreground shrink-0" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    <h3 class="text-xs font-semibold text-foreground">当前登录用户</h3>
+    <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium bg-foreground/10 text-foreground">supabase</span>
+  </div>
+  <div id="user-section">
+    <p class="text-[11px] text-muted-foreground" id="user-loading">加载中…</p>
+    <div id="user-info" class="hidden grid gap-2 sm:grid-cols-2">
+      <div class="flex items-center gap-2 rounded border border-border bg-muted/30 px-3 py-2">
+        <svg class="h-3.5 w-3.5 text-muted-foreground shrink-0" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+        <div class="min-w-0"><p class="text-[10px] text-muted-foreground">邮箱</p><p class="text-[11px] font-medium text-foreground truncate" id="user-email">-</p></div>
+      </div>
+      <div class="flex items-center gap-2 rounded border border-border bg-muted/30 px-3 py-2">
+        <svg class="h-3.5 w-3.5 text-muted-foreground shrink-0" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2H3v6l8 4-8 4v6h18v-6l-8-4 8-4V2z"/></svg>
+        <div class="min-w-0"><p class="text-[10px] text-muted-foreground">用户 ID</p><p class="text-[11px] font-medium text-foreground truncate font-mono" id="user-id">-</p></div>
+      </div>
+      <div class="flex items-center gap-2 rounded border border-border bg-muted/30 px-3 py-2">
+        <svg class="h-3.5 w-3.5 text-muted-foreground shrink-0" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <div class="min-w-0"><p class="text-[10px] text-muted-foreground">注册时间</p><p class="text-[11px] font-medium text-foreground" id="user-created">-</p></div>
+      </div>
+      <div class="flex items-center gap-2 rounded border border-border bg-muted/30 px-3 py-2">
+        <svg class="h-3.5 w-3.5 text-muted-foreground shrink-0" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <div class="min-w-0"><p class="text-[10px] text-muted-foreground">最后登录</p><p class="text-[11px] font-medium text-foreground" id="user-last-signin">-</p></div>
+      </div>
+    </div>
+    <p class="hidden text-[11px] text-muted-foreground mt-2" id="user-none">未登录。请先在设置中配置 Supabase 并登录。</p>
+    <p class="hidden text-[11px] text-destructive mt-2" id="user-error"></p>
+  </div>
+</div>
+
+<script>
+  (async () => {
+    const api = window.__PLUGIN_API__
+    const loadingEl = document.getElementById('user-loading')
+    const infoEl = document.getElementById('user-info')
+    const noneEl = document.getElementById('user-none')
+    const errEl = document.getElementById('user-error')
+
+    if (!api?.supabase?.isConfigured?.()) {
+      loadingEl.classList.add('hidden')
+      noneEl.classList.remove('hidden')
+      return
+    }
+    try {
+      const client = api.supabase.getClient()
+      if (!client) throw new Error('Supabase 客户端未初始化')
+      const { data } = await client.auth.getUser()
+      if (data?.user) {
+        const u = data.user
+        document.getElementById('user-email').textContent = u.email || '-'
+        document.getElementById('user-id').textContent = (u.id || '').slice(0, 8) + '…'
+        document.getElementById('user-created').textContent = u.created_at ? new Date(u.created_at).toLocaleString('zh-CN', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '-'
+        document.getElementById('user-last-signin').textContent = u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleString('zh-CN', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '-'
+        loadingEl.classList.add('hidden')
+        infoEl.classList.remove('hidden')
+      } else {
+        loadingEl.classList.add('hidden')
+        noneEl.classList.remove('hidden')
+      }
+    } catch (e) {
+      loadingEl.classList.add('hidden')
+      errEl.textContent = e.message
+      errEl.classList.remove('hidden')
+    }
+  })()
+</script>
+
+<!-- Cloudinary 图片上传 -->
+<div class="rounded-lg border border-border bg-card p-4 mb-3">
+  <div class="flex items-center gap-2 mb-3">
+    <svg class="h-4 w-4 text-muted-foreground shrink-0" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    <h3 class="text-xs font-semibold text-foreground">图片上传</h3>
+    <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium bg-foreground/10 text-foreground">cloudinary</span>
+  </div>
+  <div id="cloudinary-section">
+    <!-- 未配置 -->
+    <p class="text-[11px] text-muted-foreground hidden" id="cld-not-configured">请先在设置中配置 Cloudinary。</p>
+    <!-- 上传区 -->
+    <div id="cld-upload-area"
+      class="rounded-md border-2 border-dashed border-border hover:border-muted-foreground/30 hover:bg-accent/50 transition-colors cursor-pointer flex flex-col items-center py-6 gap-1.5"
+      onclick="document.getElementById('cld-file-input').click()"
+      ondragover="event.preventDefault()"
+      ondrop="handleCloudinaryDrop(event)">
+      <svg class="h-5 w-5 text-muted-foreground/40" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+      <p class="text-[11px] text-muted-foreground">点击或拖拽图片到这里</p>
+      <p class="text-[10px] text-muted-foreground/50">支持 JPG、PNG、GIF、WebP</p>
+    </div>
+    <!-- 上传中 -->
+    <div id="cld-uploading" class="hidden flex items-center justify-center py-8 gap-2 text-xs text-muted-foreground">
+      <span>上传中…</span>
+    </div>
+    <!-- 结果 -->
+    <div id="cld-result" class="hidden space-y-2">
+      <div class="relative rounded-md overflow-hidden border border-border bg-muted/10">
+        <img id="cld-img" alt="uploaded" class="w-full max-h-48 object-contain" />
+        <button onclick="resetCloudinary()" class="absolute top-1 right-1 h-5 w-5 rounded bg-background/80 border border-border flex items-center justify-center hover:bg-background transition-colors">
+          <svg class="h-3 w-3" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <p id="cld-url" class="text-[10px] text-muted-foreground break-all font-mono"></p>
+      <button onclick="document.getElementById('cld-file-input').click()" class="inline-flex items-center justify-center h-7 rounded px-3 text-[11px] border border-border hover:bg-accent transition-colors cursor-pointer">
+        <svg class="h-3 w-3 mr-1" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>重新上传
+      </button>
+    </div>
+    <p id="cld-error" class="hidden mt-2 text-[11px] text-destructive"></p>
+    <input id="cld-file-input" type="file" accept="image/*" class="hidden" onchange="handleCloudinaryFile(this)" />
+  </div>
+</div>
+
+<script>
+  { // block scope 防止 StrictMode 重复执行时变量冲突
+    var _cldApi = window.__PLUGIN_API__?.cloudinary
+    if (!_cldApi?.isConfigured?.()) {
+      document.getElementById('cld-upload-area').classList.add('hidden')
+      document.getElementById('cld-not-configured').classList.remove('hidden')
+    }
+
+    window.uploadToCld = async function(file) {
+      if (!file.type.startsWith('image/')) return
+      document.getElementById('cld-upload-area').classList.add('hidden')
+      document.getElementById('cld-uploading').classList.remove('hidden')
+      document.getElementById('cld-error').classList.add('hidden')
+      try {
+        const url = await _cldApi.upload(file)
+        document.getElementById('cld-uploading').classList.add('hidden')
+        document.getElementById('cld-img').src = url
+        document.getElementById('cld-url').textContent = url
+        document.getElementById('cld-result').classList.remove('hidden')
+      } catch (e) {
+        document.getElementById('cld-uploading').classList.add('hidden')
+        document.getElementById('cld-upload-area').classList.remove('hidden')
+        document.getElementById('cld-error').textContent = e.message
+        document.getElementById('cld-error').classList.remove('hidden')
+      }
+    }
+
+    window.handleCloudinaryDrop = function(e) {
+      e.preventDefault()
+      const file = e.dataTransfer.files[0]
+      if (file) window.uploadToCld(file)
+    }
+
+    window.handleCloudinaryFile = function(input) {
+      const file = input.files[0]
+      if (file) window.uploadToCld(file)
+      input.value = ''
+    }
+
+    window.resetCloudinary = function() {
+      document.getElementById('cld-result').classList.add('hidden')
+      document.getElementById('cld-upload-area').classList.remove('hidden')
+      document.getElementById('cld-img').src = ''
+    }
+  }
+</script>
+
+<!-- 欢迎卡片 -->
+<div class="rounded-lg border border-border bg-card p-4 mb-3">
+  <div class="flex items-center gap-2.5 mb-2">
+    <svg class="h-5 w-5 text-muted-foreground shrink-0" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h5"/><path d="M16 17.5a2.5 2.5 0 0 1 5 0V22h-5z"/><circle cx="18.5" cy="14.5" r="2.5"/><path d="M10 6v.01M7 10v.01M13 10v.01"/></svg>
+    <div class="min-w-0">
+      <h2 class="text-sm font-semibold text-foreground truncate">Hello World 插件</h2>
+      <p class="text-[10px] text-muted-foreground">示例插件 · v1.0.0 · permissions: ai, supabase</p>
+    </div>
+  </div>
+  <p class="text-xs text-muted-foreground leading-relaxed">
+    演示插件系统的核心能力：导航注册、页面渲染、AI 工具注入、权限声明、<strong>Supabase 用户查询</strong>。
+  </p>
+</div>
+
+<!-- AI 工具 -->
+<div class="rounded-lg border border-border bg-card p-4 mb-3">
+  <div class="flex items-center gap-2 mb-3">
+    <svg class="h-4 w-4 text-muted-foreground shrink-0" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 9h6"/><path d="M9 13h6"/><path d="M9 17h4"/></svg>
+    <h3 class="text-xs font-semibold text-foreground">AI 工具</h3>
+  </div>
+  <div class="grid gap-2 sm:grid-cols-2">
+    <div class="rounded border border-border bg-muted/30 px-3 py-2">
+      <code class="text-[11px] font-medium text-foreground">plugin__plugin_hello</code>
+      <p class="text-[10px] text-muted-foreground mt-0.5">传入 name 返回个性化问候</p>
+    </div>
+    <div class="rounded border border-border bg-muted/30 px-3 py-2">
+      <code class="text-[11px] font-medium text-foreground">plugin__plugin_time</code>
+      <p class="text-[10px] text-muted-foreground mt-0.5">获取当前日期和时间</p>
+    </div>
+  </div>
+  <p class="mt-2.5 text-[11px] text-muted-foreground">
+    提示：在聊天中说 <span class="text-foreground font-medium">"用 Hello World 插件跟我打招呼"</span>
+  </p>
+</div>
+
+<!-- 交互式演示 -->
+<div class="rounded-lg border border-border bg-card p-4 mb-3">
+  <div class="flex items-center gap-2 mb-2.5">
+    <svg class="h-4 w-4 text-muted-foreground shrink-0" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 3h15"/><path d="M6 3v18"/><path d="M18 3v18"/><path d="M9 9h1"/><path d="M9 13h1"/><path d="M9 17h1"/><path d="M14 9h1"/><path d="M14 13h1"/><path d="M14 17h1"/><path d="M4.5 21h15"/></svg>
+    <h3 class="text-xs font-semibold text-foreground">试试打招呼</h3>
+  </div>
+  <div class="flex items-center gap-2">
+    <input id="name-input" placeholder="输入名字…"
+      class="flex-1 h-8 rounded border border-input bg-background px-2.5 text-xs text-foreground placeholder:text-muted-foreground/50 outline-none focus:ring-1 focus:ring-ring focus:border-primary transition-all" />
+    <button onclick="document.getElementById('output').textContent='你好，'+(document.getElementById('name-input').value||'世界')+'！'"
+      class="inline-flex items-center justify-center h-8 rounded px-3 text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer shrink-0">
+      打招呼
+    </button>
+  </div>
+  <div id="output" class="mt-2 rounded border border-border bg-muted/20 px-3 h-8 flex items-center text-xs text-foreground">
+    <span class="text-muted-foreground/50">等待输入…</span>
+  </div>
+</div>
+
+<!-- 开发指南 -->
+<div class="rounded-lg border border-border bg-card p-4">
+  <div class="flex items-center gap-2 mb-3">
+    <svg class="h-4 w-4 text-muted-foreground shrink-0" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+    <h3 class="text-xs font-semibold text-foreground">开发自己的插件</h3>
+  </div>
+  <div class="grid gap-2 sm:grid-cols-3">
+    <div class="flex items-start gap-2">
+      <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-foreground text-[10px] font-medium text-background">1</span>
+      <div>
+        <p class="text-[11px] font-medium text-foreground">新建目录</p>
+        <p class="text-[10px] text-muted-foreground mt-0.5">创建 manifest.json 声明 id / permissions / tools</p>
+      </div>
+    </div>
+    <div class="flex items-start gap-2">
+      <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-foreground text-[10px] font-medium text-background">2</span>
+      <div>
+        <p class="text-[11px] font-medium text-foreground">编写页面</p>
+        <p class="text-[10px] text-muted-foreground mt-0.5">创建 index.tsx (React) 或 index.html (静态)</p>
+      </div>
+    </div>
+    <div class="flex items-start gap-2">
+      <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-foreground text-[10px] font-medium text-background">3</span>
+      <div>
+        <p class="text-[11px] font-medium text-foreground">安装使用</p>
+        <p class="text-[10px] text-muted-foreground mt-0.5">在插件管理页面输入目录路径安装</p>
+      </div>
+    </div>
+  </div>
+</div>

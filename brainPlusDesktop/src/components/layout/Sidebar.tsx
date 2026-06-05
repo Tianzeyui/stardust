@@ -1,14 +1,17 @@
-import { useState } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
-  MessageSquare, Bot, BookOpen, Lightbulb, Package, BarChart3,
-  Settings, LogOut, Brain, PanelLeftClose, PanelLeftOpen,
-  FolderOpen, User, ChevronDown,
+  Bot, MessageSquare, Package, FolderOpen, BookOpen, Lightbulb, BarChart3,
+  Settings, LogOut, Brain, PanelLeftClose, PanelLeftOpen, User, ChevronDown,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
+import { pluginSystem } from '@/lib/pluginSystem'
+import type { NavItemDef } from '@/lib/pluginTypes'
 
-export type NavItem = 'chat' | 'ai' | 'diary' | 'inspiration' | 'skills' | 'files' | 'agents' | 'usage'
+import { initCorePlugins } from '@/lib/corePlugins'
+
+export type NavItem = string
 
 interface SidebarProps {
   activeNav: NavItem
@@ -19,17 +22,25 @@ interface SidebarProps {
   onCloseSettings: () => void
 }
 
-const navItems: { id: NavItem; label: string; icon: typeof BookOpen }[] = [
-  { id: 'chat', label: 'AI 助手', icon: Bot },
-  { id: 'ai', label: '工具箱', icon: MessageSquare },
-  { id: 'skills', label: 'Skills', icon: Package },
-  { id: 'agents', label: 'Agents', icon: Bot },
-  { id: 'files', label: '文件', icon: FolderOpen },
-  { id: 'diary', label: '日记', icon: BookOpen },
-  { id: 'inspiration', label: '灵感', icon: Lightbulb },
-]
+const iconMap: Record<string, any> = {
+  Bot, MessageSquare, Package, FolderOpen, BookOpen, Lightbulb, BarChart3,
+}
 
 export function Sidebar({ activeNav, onNavChange, collapsed, onToggleCollapse, onOpenSettings, onCloseSettings }: SidebarProps) {
+  const [ready, setReady] = useState(false)
+  const [version, setVersion] = useState(0)
+  const navItems = useMemo(() => ready ? pluginSystem.getNavItems() : [], [ready, version])
+
+  useEffect(() => { initCorePlugins(); setReady(true) }, [])
+  useEffect(() => {
+    // 异步恢复第三方插件
+    const paths = pluginSystem.getInstalledPaths()
+    if (paths.length > 0) {
+      Promise.all(paths.map(p => pluginSystem.restoreInstalled(p))).then(() => setVersion(pluginSystem.getVersion()))
+    }
+    // 监听插件变更（安装/卸载/启停）
+    return pluginSystem.onChange(() => setVersion(pluginSystem.getVersion()))
+  }, [])
   const { user, signOut } = useAuth()
   const [showUserMenu, setShowUserMenu] = useState(false)
 
@@ -54,17 +65,17 @@ export function Sidebar({ activeNav, onNavChange, collapsed, onToggleCollapse, o
         </Button>
       </div>
 
-      {/* 中间导航 */}
-      <nav className={cn('flex flex-1 gap-2', collapsed ? 'flex-col items-center' : 'flex-col')}>
-        {navItems.map((item) => {
-          const Icon = item.icon
+      {/* 中间导航——从 PluginSystem 动态渲染 */}
+      <nav className={cn('flex flex-1 gap-2 overflow-auto', collapsed ? 'flex-col items-center' : 'flex-col')}>
+        {navItems.map(item => {
+          const IconComponent = iconMap[item.icon] || Bot
           const isActive = activeNav === item.id
           return (
             <Button key={item.id} variant={isActive ? 'default' : 'ghost'}
               size={collapsed ? 'icon' : 'default'}
               className={cn('transition-all', collapsed ? 'h-10 w-10' : 'justify-start gap-3', !isActive && 'text-muted-foreground hover:text-foreground')}
               onClick={() => { onCloseSettings(); onNavChange(item.id) }} title={collapsed ? item.label : undefined}>
-              <Icon className="h-5 w-5 shrink-0" />
+              <IconComponent className="h-5 w-5 shrink-0" />
               {!collapsed && <span>{item.label}</span>}
             </Button>
           )
@@ -85,46 +96,34 @@ export function Sidebar({ activeNav, onNavChange, collapsed, onToggleCollapse, o
           </div>
           {!collapsed && (
             <>
-              <span className="flex-1 text-left text-xs truncate">
-                {user?.email || '用户'}
-              </span>
+              <span className="flex-1 text-left text-xs truncate">{user?.email || '用户'}</span>
               <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
             </>
           )}
         </button>
 
-        {/* 下拉菜单 */}
         {showUserMenu && (
           <div className={cn(
             'absolute z-50 rounded-lg border border-border bg-card shadow-lg py-1',
             collapsed ? 'left-full bottom-0 ml-1 w-40' : 'bottom-full left-0 mb-1 w-full',
           )}>
-            <button
-              className="flex w-full items-center gap-2 px-3 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-              onClick={() => { setShowUserMenu(false); onNavChange('usage') }}
-            >
+            <button className="flex w-full items-center gap-2 px-3 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              onClick={() => { setShowUserMenu(false); onNavChange('usage') }}>
               <BarChart3 className="h-3.5 w-3.5" /> 用量统计
             </button>
-            <button
-              className="flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded transition-colors w-full text-left"
-              onClick={() => { setShowUserMenu(false); onOpenSettings() }}
-            >
+            <button className="flex w-full items-center gap-2 px-3 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              onClick={() => { setShowUserMenu(false); onOpenSettings() }}>
               <Settings className="h-3.5 w-3.5" /> 设置
             </button>
-            <button
-              className="flex w-full items-center gap-2 px-3 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-              onClick={() => { setShowUserMenu(false); signOut() }}
-            >
+            <button className="flex w-full items-center gap-2 px-3 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              onClick={() => { setShowUserMenu(false); signOut() }}>
               <LogOut className="h-3.5 w-3.5" /> 退出登录
             </button>
           </div>
         )}
       </div>
 
-      {/* 点击空白处关闭菜单 */}
-      {showUserMenu && (
-        <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
-      )}
+      {showUserMenu && <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />}
     </aside>
   )
 }

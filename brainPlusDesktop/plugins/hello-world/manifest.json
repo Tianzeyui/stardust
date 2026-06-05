@@ -1,0 +1,32 @@
+{
+  "id": "hello-world",
+  "name": "Hello World",
+  "version": "1.0.0",
+  "description": "示例插件——演示 React/TSX、AI 工具、Supabase 集成",
+  "icon": "Package",
+  "navOrder": 90,
+  "enabled": true,
+  "permissions": ["ai", "supabase", "cloudinary", "sandbox", "files"],
+  "tools": [
+    {
+      "name": "plugin_hello",
+      "description": "打招呼。传入 name 参数返回问候语。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "description": "你的名字" }
+        }
+      },
+      "outputTemplate": "你好，${name || '世界'}！这是来自 Hello World 插件的问候。"
+    },
+    {
+      "name": "plugin_time",
+      "description": "获取当前时间。用于了解现在几点、日期等。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "outputTemplate": "现在是 ${new Date().toLocaleString('zh-CN')}"
+    }
+  ]
+}

@@ -172,4 +172,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     status: () => ipcRenderer.invoke('a2a:status'),
     setToken: (token: string) => ipcRenderer.invoke('a2a:setToken', token),
   },
+
+  plugin: {
+    load: (dirPath: string) => ipcRenderer.invoke('plugin:load', dirPath),
+    install: (dirPath: string) => ipcRenderer.invoke('plugin:install', dirPath),
+    installDeps: (dirPath: string) => ipcRenderer.invoke('plugin:installDeps', dirPath),
+    compile: (dirPath: string) => ipcRenderer.invoke('plugin:compile', dirPath),
+    uninstall: (pluginId: string) => ipcRenderer.invoke('plugin:uninstall', pluginId),
+  },
+
+  search: {
+    fetch: (url: string, timeout: number) => ipcRenderer.invoke('search:fetch', url, timeout),
+  },
+
+  http: {
+    fetch: (url: string, opts?: { method?: string; headers?: Record<string, string>; body?: string; timeout?: number }) =>
+      ipcRenderer.invoke('http:fetch', url, opts),
+  },
 })

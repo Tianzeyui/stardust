@@ -28,6 +28,7 @@ export default defineConfig({
                 'node-llama-cpp',
                 /^@node-llama-cpp\//,
                 'mammoth',
+                'esbuild',
               ],
             },
           },

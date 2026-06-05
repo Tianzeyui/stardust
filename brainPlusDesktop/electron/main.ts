@@ -561,6 +561,187 @@ ipcMain.handle('a2a:stop', () => { stopA2AServer(); return true })
 ipcMain.handle('a2a:status', () => ({ running: true, port: 9090 }))  // TODO: track actual running state
 ipcMain.handle('a2a:setToken', (_e, token: string) => { setA2AToken(token); return true })
 
+// ==================== Plugin IPC ====================
+
+ipcMain.handle('plugin:load', async (_e, dirPath: string) => {
+  try {
+    const fs = await import('fs')
+    const path = await import('path')
+    const manifestPath = path.join(dirPath, 'manifest.json')
+    if (!fs.existsSync(manifestPath)) return { success: false, error: '未找到 manifest.json' }
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
+    const htmlPath = path.join(dirPath, 'index.html')
+    const page = fs.existsSync(htmlPath) ? fs.readFileSync(htmlPath, 'utf-8') : null
+    return { success: true, manifest, page, pluginDir: dirPath }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+// 安装插件：复制到 appData 目录，后续与原路径无关
+ipcMain.handle('plugin:install', async (_e, dirPath: string) => {
+  try {
+    const fs = await import('fs')
+    const path = await import('path')
+    const manifestPath = path.join(dirPath, 'manifest.json')
+    if (!fs.existsSync(manifestPath)) return { success: false, error: '未找到 manifest.json' }
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
+    const pluginId = manifest.id || path.basename(dirPath)
+
+    // 目标目录：{userData}/plugins/{pluginId}/
+    const pluginsDir = path.join(app.getPath('userData'), 'plugins')
+    const destDir = path.join(pluginsDir, pluginId)
+
+    // 如果已存在，先删除旧版本再覆盖
+    if (fs.existsSync(destDir)) fs.rmSync(destDir, { recursive: true, force: true })
+    fs.mkdirSync(destDir, { recursive: true })
+
+    // 递归复制
+    fs.cpSync(dirPath, destDir, { recursive: true })
+
+    // 安装 npm 依赖
+    const pkgPath = path.join(destDir, 'package.json')
+    if (fs.existsSync(pkgPath)) {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'))
+      if (pkg.dependencies && Object.keys(pkg.dependencies).length > 0) {
+        if (!pkg.name) { pkg.name = pluginId; pkg.private = true; fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2), 'utf-8') }
+        if (!fs.existsSync(path.join(destDir, 'node_modules'))) {
+          const { execFile } = await import('child_process')
+          await new Promise<void>((resolve, reject) => {
+            execFile('npm', ['install', '--no-audit', '--no-fund', '--ignore-scripts'], { cwd: destDir, timeout: 120000 }, (err) => {
+              if (err) reject(err); else resolve()
+            })
+          })
+        }
+      }
+    }
+
+    // 加载 manifest + HTML
+    const htmlPath = path.join(destDir, 'index.html')
+    const page = fs.existsSync(htmlPath) ? fs.readFileSync(htmlPath, 'utf-8') : null
+    return { success: true, manifest, page, pluginDir: destDir }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+ipcMain.handle('plugin:installDeps', async (_e, dirPath: string) => {
+  try {
+    const fs = await import('fs')
+    const path = await import('path')
+    const pkgPath = path.join(dirPath, 'package.json')
+    if (!fs.existsSync(pkgPath)) return { success: true }
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'))
+    if (!pkg.dependencies || Object.keys(pkg.dependencies).length === 0) return { success: true }
+    if (!pkg.name) {
+      pkg.name = path.basename(dirPath)
+      pkg.private = true
+      fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2), 'utf-8')
+    }
+    if (fs.existsSync(path.join(dirPath, 'node_modules'))) return { success: true }
+    const { execFile } = await import('child_process')
+    return new Promise((resolve) => {
+      execFile('npm', ['install', '--no-audit', '--no-fund', '--ignore-scripts'], { cwd: dirPath, timeout: 120000 }, (err) => {
+        if (err) resolve({ success: false, error: err.message })
+        else resolve({ success: true })
+      })
+    })
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+ipcMain.handle('plugin:compile', async (_e, dirPath: string) => {
+  try {
+    const fs = await import('fs')
+    const path = await import('path')
+    const tsxPath = path.join(dirPath, 'index.tsx')
+    const jsxPath = path.join(dirPath, 'index.jsx')
+    const entryPath = fs.existsSync(tsxPath) ? tsxPath : fs.existsSync(jsxPath) ? jsxPath : null
+    if (!entryPath) return { success: false, error: '未找到 index.tsx 或 index.jsx' }
+
+    const esbuild = await import('esbuild')
+    const result = await esbuild.build({
+      entryPoints: [entryPath],
+      bundle: true,
+      write: false,
+      format: 'cjs',
+      platform: 'browser',
+      // 强制 transform 模式（忽略项目 tsconfig 的 react-jsx），用 React.createElement
+      jsx: 'transform',
+      jsxFactory: 'React.createElement',
+      jsxFragment: 'React.Fragment',
+      tsconfigRaw: JSON.stringify({ compilerOptions: { jsx: 'react' } }),
+      external: ['react', 'react-dom', 'lucide-react', '@/lib/utils', '@/components/ui/*'],
+      target: 'es2020',
+      banner: { js: "const React = require('react');" },
+    })
+    const code = result.outputFiles?.[0]?.text || ''
+    return { success: true, code }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+// 卸载插件：删除 appData 中的插件目录
+ipcMain.handle('plugin:uninstall', async (_e, pluginId: string) => {
+  try {
+    const fs = await import('fs')
+    const path = await import('path')
+    const destDir = path.join(app.getPath('userData'), 'plugins', pluginId)
+    if (fs.existsSync(destDir)) fs.rmSync(destDir, { recursive: true, force: true })
+    return { success: true }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+// 搜索代理：主进程发起 HTTP 请求（绕过渲染进程 CORS 限制）
+ipcMain.handle('search:fetch', async (_e, url: string, timeout: number) => {
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeout)
+    try {
+      const res = await fetch(url, {
+        signal: controller.signal,
+        headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36' },
+      })
+      if (!res.ok) return { success: false, error: `HTTP ${res.status}` }
+      const text = await res.text()
+      return { success: true, data: text }
+    } finally { clearTimeout(timer) }
+  } catch (e: any) {
+    if (e.name === 'AbortError') return { success: false, error: 'timeout' }
+    return { success: false, error: e.message }
+  }
+})
+
+// 通用 HTTP 代理（插件用）
+ipcMain.handle('http:fetch', async (_e, url: string, opts?: { method?: string; headers?: Record<string, string>; body?: string; timeout?: number }) => {
+  try {
+    const timeout = opts?.timeout || 15000
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeout)
+    try {
+      const res = await fetch(url, {
+        method: opts?.method || 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+          'Accept': 'text/html,application/json,*/*',
+          ...(opts?.headers || {}),
+        },
+        body: opts?.body || undefined,
+        signal: controller.signal,
+      })
+      const text = await res.text()
+      return { success: true, data: text, status: res.status }
+    } finally { clearTimeout(timer) }
+  } catch (e: any) {
+    if (e.name === 'AbortError') return { success: false, error: 'timeout' }
+    return { success: false, error: e.message }
+  }
+})
+
 app.on('before-quit', async () => {
   await mcpService.cleanup()
 })

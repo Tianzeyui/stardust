@@ -155,6 +155,7 @@ export async function getMCPSdkTools(autoMode?: boolean, userId?: string): Promi
     const { registerMCPGatewayTools } = await import('./tools/mcpGateway')
     const { registerSandboxTools } = await import('./tools/sandbox')
     const { registerWorkspaceTools } = await import('./tools/workspace')
+    const { registerSearchTools } = await import('./tools/search')
     const { registerAgentTools: registerAgentDefs } = await import('./tools/agentRegistry')
 
     await registerMCPBusinessTools(tools)
@@ -163,7 +164,11 @@ export async function getMCPSdkTools(autoMode?: boolean, userId?: string): Promi
     registerMCPGatewayTools(tools)
     await registerSandboxTools(tools)
     await registerWorkspaceTools(tools)
+    registerSearchTools(tools)
     if (userId) await registerAgentDefs(tools, userId)
+    // 注入插件 AI 工具
+    const { pluginSystem } = await import('./pluginSystem')
+    Object.assign(tools, pluginSystem.getPluginTools())
   } catch {
     return {}
   }

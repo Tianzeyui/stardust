@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Settings, Cpu, Server, Trash2, Plus, RefreshCw, Check, Wrench, FolderOpen, MessageSquare, Play, ChevronDown, Loader2, X, ArrowLeft, Info, Bot, Globe } from 'lucide-react'
+import { Settings, Cpu, Server, Trash2, Plus, RefreshCw, Check, Wrench, FolderOpen, MessageSquare, Play, ChevronDown, Loader2, X, ArrowLeft, Info, Bot, Globe, Zap, Search, Code } from 'lucide-react'
 import { APP_VERSION } from '@/lib/version'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,6 +16,14 @@ import {
   getMemoryEnabled, saveMemoryEnabled,
   getCompressThreshold, saveCompressThreshold, getTokenLimit, saveTokenLimit,
   getA2AEnabled, saveA2AEnabled, getA2APort, saveA2APort, getA2AToken, saveA2AToken,
+  getJSSandboxEnabled, saveJSSandboxEnabled,
+  getPythonSandboxEnabled, savePythonSandboxEnabled,
+  getDuckDuckGoEnabled, saveDuckDuckGoEnabled,
+  getDDGResultCount, saveDDGResultCount,
+  getDDGTimeout, saveDDGTimeout,
+  getBingEnabled, saveBingEnabled,
+  getBingResultCount, saveBingResultCount,
+  getBingTimeout, saveBingTimeout,
 } from '@/lib/config'
 import { listTools, listResources, listPrompts, callTool, readResource, getPrompt, connect, disconnect, addServer as addMcpServer, updateServer as updateMcpServer, removeServer as removeMcpServer } from '@/lib/mcpClient'
 import type { MCPTool, MCPResource, MCPPrompt } from '@/types/electron'
@@ -25,7 +33,27 @@ import { createSupabaseMemoryStore } from '@/lib/memory/store-supabase'
 import { createLocalMemoryStore } from '@/lib/memory/store-local'
 import { useAuth } from '@/contexts/AuthContext'
 
-type Tab = 'general' | 'agent' | 'a2a' | 'ai' | 'mcp' | 'about'
+function NumberField({ label, value, setValue, min, max, unit }: {
+  label: string; value: number; setValue: (n: number) => void; min: number; max: number; unit: string
+}) {
+  return (
+    <div>
+      <Label className="text-[11px]">{label}</Label>
+      <div className="flex items-center gap-1 mt-0.5">
+        <Button variant="outline" size="icon" className="h-7 w-7"
+          onClick={() => setValue(Math.max(min, value - 1))} disabled={value <= min}>−</Button>
+        <Input type="number" min={min} max={max} value={value}
+          onChange={e => { const v = parseInt(e.target.value); if (!isNaN(v) && v >= min && v <= max) setValue(v) }}
+          className="h-8 w-14 text-center text-sm" />
+        <Button variant="outline" size="icon" className="h-7 w-7"
+          onClick={() => setValue(Math.min(max, value + 1))} disabled={value >= max}>+</Button>
+        <span className="text-[10px] text-muted-foreground ml-1">{unit}</span>
+      </div>
+    </div>
+  )
+}
+
+type Tab = 'general' | 'capabilities' | 'agent' | 'a2a' | 'ai' | 'mcp' | 'about'
 
 export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; initialTab?: Tab }) {
   const { user } = useAuth()
@@ -62,6 +90,15 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
   const [a2aEnabled, setA2AEnabled] = useState(getA2AEnabled)
   const [a2aPort, setA2APortState] = useState(getA2APort)
   const [a2aToken, setA2AToken] = useState(getA2AToken)
+  const [sandboxJS, setSandboxJS] = useState(getJSSandboxEnabled)
+  const [sandboxPython, setSandboxPython] = useState(getPythonSandboxEnabled)
+  const [ddgEnabled, setDdgEnabled] = useState(getDuckDuckGoEnabled)
+  const [ddgResultCount, setDdgResultCount] = useState(getDDGResultCount)
+  const [ddgTimeout, setDdgTimeout] = useState(getDDGTimeout)
+  const [bingEnabled, setBingEnabledState] = useState(getBingEnabled)
+  const [bingResultCount, setBingResultCount] = useState(getBingResultCount)
+  const [bingTimeout, setBingTimeout] = useState(getBingTimeout)
+  const [capExpanded, setCapExpanded] = useState<Record<string, boolean>>({ sandbox: true, search: true })
   const memoryManagerRef = useRef(new MemoryManager(
     // 短期记忆只读 —— 设置页无法确定当前 convId，仅展示长期记忆
     createLocalMemoryStore('settings'),
@@ -284,6 +321,7 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
           <div className="flex items-center gap-1 rounded-lg bg-muted p-0.5">
           {([
             { id: 'general' as const, label: '通用', icon: Settings },
+            { id: 'capabilities' as const, label: '能力', icon: Zap },
             { id: 'agent' as const, label: 'Agent', icon: Bot },
             { id: 'a2a' as const, label: 'A2A', icon: Globe },
             { id: 'ai' as const, label: 'AI模型', icon: Cpu },
@@ -341,6 +379,124 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
                 {saved && <span className="text-xs text-muted-foreground">已保存</span>}
                 <Button size="sm" onClick={saveGeneral}>保存</Button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ===== 能力设置 ===== */}
+        {tab === 'capabilities' && (
+          <div className="w-full space-y-3">
+            <p className="text-xs text-muted-foreground rounded-lg bg-blue-50 dark:bg-blue-950/30 p-3 border border-blue-200 dark:border-blue-900">
+              在此管理 BrainPlus 的各项扩展能力。关闭某项后，AI 和插件将无法使用对应功能。
+            </p>
+
+            {/* ====== 执行环境 ====== */}
+            <div className="rounded-lg border border-border">
+              <div
+                className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-accent/50 transition-colors"
+                onClick={() => setCapExpanded(prev => ({ ...prev, sandbox: !prev.sandbox }))}
+              >
+                <div className="flex items-center gap-3">
+                  <Code className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium text-foreground">执行环境</p>
+                    <p className="text-[10px] text-muted-foreground">JavaScript / Python 沙箱</p>
+                  </div>
+                </div>
+                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${capExpanded.sandbox ? '' : '-rotate-90'}`} />
+              </div>
+              {capExpanded.sandbox && (
+                <div className="border-t border-border px-4 py-3 space-y-2">
+                  <div className="rounded-md border border-border bg-muted/20 px-3 py-2.5 flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-medium text-foreground">JavaScript 沙箱</p>
+                      <p className="text-[10px] text-muted-foreground">Node.js + npm 包，Worker 线程隔离执行</p>
+                    </div>
+                    <button
+                      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${sandboxJS ? 'bg-primary' : 'bg-muted'}`}
+                      onClick={() => { const v = !sandboxJS; setSandboxJS(v); saveJSSandboxEnabled(v) }}
+                    >
+                      <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${sandboxJS ? 'translate-x-4' : 'translate-x-1'}`} />
+                    </button>
+                  </div>
+                  <div className="rounded-md border border-border bg-muted/20 px-3 py-2.5 flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-medium text-foreground">Python 沙箱</p>
+                      <p className="text-[10px] text-muted-foreground">Python 3 / uv + pip 包，进程隔离执行</p>
+                    </div>
+                    <button
+                      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${sandboxPython ? 'bg-primary' : 'bg-muted'}`}
+                      onClick={() => { const v = !sandboxPython; setSandboxPython(v); savePythonSandboxEnabled(v) }}
+                    >
+                      <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${sandboxPython ? 'translate-x-4' : 'translate-x-1'}`} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ====== 外部搜索 ====== */}
+            <div className="rounded-lg border border-border">
+              <div
+                className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-accent/50 transition-colors"
+                onClick={() => setCapExpanded(prev => ({ ...prev, search: !prev.search }))}
+              >
+                <div className="flex items-center gap-3">
+                  <Search className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium text-foreground">外部搜索</p>
+                    <p className="text-[10px] text-muted-foreground">互联网搜索引擎</p>
+                  </div>
+                </div>
+                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${capExpanded.search ? '' : '-rotate-90'}`} />
+              </div>
+              {capExpanded.search && (
+                <div className="border-t border-border px-4 py-3 space-y-2">
+                  {/* Bing 搜索 */}
+                  <div className="rounded-md border border-border bg-muted/20 px-3 py-2.5 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-medium text-foreground">Bing</p>
+                        <p className="text-[10px] text-muted-foreground">网页搜索，中文支持好，全球可用</p>
+                      </div>
+                      <button
+                        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${bingEnabled ? 'bg-primary' : 'bg-muted'}`}
+                        onClick={() => { const v = !bingEnabled; setBingEnabledState(v); saveBingEnabled(v) }}
+                      >
+                        <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${bingEnabled ? 'translate-x-4' : 'translate-x-1'}`} />
+                      </button>
+                    </div>
+                    {bingEnabled && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <NumberField label="搜索结果数" value={bingResultCount} setValue={(n: number) => { setBingResultCount(n); saveBingResultCount(n) }} min={1} max={20} unit="条" />
+                        <NumberField label="超时" value={bingTimeout} setValue={(n: number) => { setBingTimeout(n); saveBingTimeout(n) }} min={3} max={60} unit="秒" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* DuckDuckGo */}
+                  <div className="rounded-md border border-border bg-muted/20 px-3 py-2.5 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-medium text-foreground">DuckDuckGo</p>
+                        <p className="text-[10px] text-muted-foreground">Instant Answer API，英文效果好，隐私优先</p>
+                      </div>
+                      <button
+                        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${ddgEnabled ? 'bg-primary' : 'bg-muted'}`}
+                        onClick={() => { const v = !ddgEnabled; setDdgEnabled(v); saveDuckDuckGoEnabled(v) }}
+                      >
+                        <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${ddgEnabled ? 'translate-x-4' : 'translate-x-1'}`} />
+                      </button>
+                    </div>
+                    {ddgEnabled && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <NumberField label="搜索结果数" value={ddgResultCount} setValue={(n: number) => { setDdgResultCount(n); saveDDGResultCount(n) }} min={1} max={20} unit="条" />
+                        <NumberField label="超时" value={ddgTimeout} setValue={(n: number) => { setDdgTimeout(n); saveDDGTimeout(n) }} min={3} max={60} unit="秒" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
