@@ -12,6 +12,7 @@ import { LoginForm } from './LoginForm'
 import { RegisterForm } from './RegisterForm'
 import { SettingsDialog } from './SettingsDialog'
 import { isSupabaseConfigured } from '@/lib/supabase'
+import { APP_VERSION } from '@/lib/version'
 
 type AuthView = 'login' | 'register'
 
@@ -87,6 +88,7 @@ export function AuthPage() {
 
       {/* 底部信息 — 绝对定位，不影响卡片居中 */}
       <div className="absolute bottom-4 left-0 right-0 text-center space-y-1">
+        <p className="text-[11px] text-muted-foreground/30">v{APP_VERSION}</p>
         <p className="text-[11px] text-muted-foreground/30">
           Licensed under Apache License 2.0
         </p>
