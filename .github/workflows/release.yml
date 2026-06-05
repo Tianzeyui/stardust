@@ -17,13 +17,10 @@ jobs:
         include:
           - os: macos-latest
             platform: mac
-            artifact: '*.dmg *.zip'
           - os: windows-latest
             platform: win
-            artifact: '*.exe *.zip'
           - os: ubuntu-latest
             platform: linux
-            artifact: '*.AppImage *.deb'
 
     runs-on: ${{ matrix.os }}
 
@@ -53,7 +50,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: BrainPlus-${{ matrix.platform }}
-          path: brainPlusDesktop/release/${{ matrix.artifact }}
+          path: brainPlusDesktop/release/*
 
   release:
     needs: build
