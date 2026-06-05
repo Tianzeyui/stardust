@@ -9,6 +9,7 @@ import { SettingsPage } from '@/components/settings/SettingsPage'
 import { SkillsPage } from '@/components/skills/SkillsPage'
 import { FileManagerPage } from '@/components/files/FileManagerPage'
 import { AgentsPage } from '@/components/agents/AgentsPage'
+import { UsageStatsPage } from '@/components/usage/UsageStatsPage'
 
 export function AppLayout() {
   const [activeNav, setActiveNav] = useState<NavItem>('chat')
@@ -87,6 +88,7 @@ export function AppLayout() {
               {activeNav === 'skills' && <SkillsPage />}
               {activeNav === 'files' && <FileManagerPage />}
               {activeNav === 'agents' && <AgentsPage />}
+              {activeNav === 'usage' && <UsageStatsPage onClose={() => setActiveNav('chat')} />}
             </>
           )}
         </main>

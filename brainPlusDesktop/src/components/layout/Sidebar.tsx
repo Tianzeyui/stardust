@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import {
-  MessageSquare, Bot, BookOpen, Lightbulb, Package,
+  MessageSquare, Bot, BookOpen, Lightbulb, Package, BarChart3,
   Settings, LogOut, Brain, PanelLeftClose, PanelLeftOpen,
   FolderOpen, User, ChevronDown,
 } from 'lucide-react'
@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
 
-export type NavItem = 'chat' | 'ai' | 'diary' | 'inspiration' | 'skills' | 'files' | 'agents'
+export type NavItem = 'chat' | 'ai' | 'diary' | 'inspiration' | 'skills' | 'files' | 'agents' | 'usage'
 
 interface SidebarProps {
   activeNav: NavItem
@@ -21,12 +21,12 @@ interface SidebarProps {
 
 const navItems: { id: NavItem; label: string; icon: typeof BookOpen }[] = [
   { id: 'chat', label: 'AI 助手', icon: Bot },
-  { id: 'ai', label: 'AI 工具箱', icon: MessageSquare },
-  { id: 'diary', label: '日记', icon: BookOpen },
-  { id: 'inspiration', label: '灵感记录', icon: Lightbulb },
+  { id: 'ai', label: '工具箱', icon: MessageSquare },
   { id: 'skills', label: 'Skills', icon: Package },
-  { id: 'files', label: '文件', icon: FolderOpen },
   { id: 'agents', label: 'Agents', icon: Bot },
+  { id: 'files', label: '文件', icon: FolderOpen },
+  { id: 'diary', label: '日记', icon: BookOpen },
+  { id: 'inspiration', label: '灵感', icon: Lightbulb },
 ]
 
 export function Sidebar({ activeNav, onNavChange, collapsed, onToggleCollapse, onOpenSettings, onCloseSettings }: SidebarProps) {
@@ -101,6 +101,12 @@ export function Sidebar({ activeNav, onNavChange, collapsed, onToggleCollapse, o
           )}>
             <button
               className="flex w-full items-center gap-2 px-3 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              onClick={() => { setShowUserMenu(false); onNavChange('usage') }}
+            >
+              <BarChart3 className="h-3.5 w-3.5" /> 用量统计
+            </button>
+            <button
+              className="flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded transition-colors w-full text-left"
               onClick={() => { setShowUserMenu(false); onOpenSettings() }}
             >
               <Settings className="h-3.5 w-3.5" /> 设置

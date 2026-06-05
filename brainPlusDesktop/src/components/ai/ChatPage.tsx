@@ -37,6 +37,7 @@ import {
   detectToolType,
 } from '@/types/chat'
 import { TokenUsageBar } from './TokenUsageBar'
+import { addTrace } from '@/lib/traceStore'
 
 export function ChatPage() {
   const { user } = useAuth()
@@ -559,6 +560,20 @@ export function ChatPage() {
             })
           }
           setMessages(prev => { const n = prev.map(m => ({ ...m })); const l = n[n.length - 1]; if (l?.role === 'assistant' && l.streaming) { if (streamed) { n[n.length - 1] = { ...l, content: streamed, streaming: false } } else n.pop() } return n })
+          // 保存本次用量追踪
+          if (event.trace) {
+            const t = event.trace
+            addTrace({
+              id: 'tr_' + Date.now(),
+              timestamp: Date.now(),
+              modelName,
+              inputTokens: t.inputTokens,
+              outputTokens: t.outputTokens,
+              agentTokens: agentTotalTokensRef.current,
+              toolCalls: t.toolCalls.length,
+              duration: t.totalDuration,
+            })
+          }
         }
       }, {
         abortSignal: controller.signal,
