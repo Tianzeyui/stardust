@@ -1,0 +1,11 @@
+{
+  "id": "diary",
+  "name": "日记",
+  "version": "1.0.0",
+  "description": "AI 辅助日记写作，时间线浏览",
+  "icon": "BookOpen",
+  "navOrder": 60,
+  "enabled": true,
+  "systemHeader": false,
+  "permissions": ["ai", "files"]
+}

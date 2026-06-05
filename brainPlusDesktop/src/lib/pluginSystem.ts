@@ -356,7 +356,7 @@ class PluginSystemImpl {
         if (typeof registerFn === 'function') {
           const pluginId = m.id
           const plugin: Plugin = {
-            manifest: { id: m.id, name: m.name, version: m.version, description: m.description || '', icon: m.icon || 'Package', navOrder: m.navOrder || 90, enabled: true },
+            manifest: { id: m.id, name: m.name, version: m.version, description: m.description || '', icon: m.icon || 'Package', navOrder: m.navOrder || 90, enabled: true, systemHeader: m.systemHeader },
             register(ctx) {
               try {
                 registerFn(ctx)
@@ -380,7 +380,7 @@ class PluginSystemImpl {
 
     // === HTML 模式（回退） ===
     const plugin: Plugin = {
-      manifest: { id: m.id, name: m.name, version: m.version, description: m.description || '', icon: m.icon || 'Package', navOrder: m.navOrder || 90, enabled: true },
+      manifest: { id: m.id, name: m.name, version: m.version, description: m.description || '', icon: m.icon || 'Package', navOrder: m.navOrder || 90, enabled: true, systemHeader: m.systemHeader },
       register(ctx) {
         if (pageHtml) {
           const pid = m.id; const pname = m.name; const pver = m.version; const pdesc = m.description; const phtml = pageHtml

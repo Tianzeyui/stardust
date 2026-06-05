@@ -1,0 +1,4 @@
+# 插件 Supabase SQL 规范
+# 所有数据库 schema/migration 放在此目录下
+# 文件格式: YYYYMMDD_description.sql, 如 20250101_create_tables.sql
+# 安装插件时系统会自动执行这些 SQL（需要 supabase 权限）

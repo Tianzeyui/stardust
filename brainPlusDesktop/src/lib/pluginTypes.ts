@@ -12,6 +12,7 @@ export interface PluginManifest {
   navOrder: number        // 导航排序，越小越前
   enabled: boolean
   permissions?: string[]
+  systemHeader?: boolean   // 是否使用系统顶栏，默认 true
 }
 
 export interface NavItemDef {

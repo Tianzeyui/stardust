@@ -1,6 +1,6 @@
 /**
  * 内建核心插件——将现有功能注册到 PluginSystem
- * 日记/灵感的迁移在后续步骤完成
+ * 日记/灵感已拆分为独立插件（plugins/diary/、plugins/inspiration/）
  */
 import { pluginSystem } from './pluginSystem'
 import type { Plugin } from './pluginTypes'
@@ -45,22 +45,6 @@ const coreFiles: Plugin = {
   },
 }
 
-const coreDiary: Plugin = {
-  manifest: { id: 'diary', name: '日记', version: '1.0.0', description: '', icon: 'BookOpen', navOrder: 60, enabled: true },
-  register(ctx) {
-    ctx.registerNav({ id: 'diary', label: '日记', icon: 'BookOpen', order: 60 })
-    ctx.registerRoute('diary', () => import('@/components/diary/DiaryPage'))
-  },
-}
-
-const coreInspiration: Plugin = {
-  manifest: { id: 'inspiration', name: '灵感', version: '1.0.0', description: '', icon: 'Lightbulb', navOrder: 70, enabled: true },
-  register(ctx) {
-    ctx.registerNav({ id: 'inspiration', label: '灵感', icon: 'Lightbulb', order: 70 })
-    ctx.registerRoute('inspiration', () => import('@/components/inspiration/InspirationPage'))
-  },
-}
-
 const coreUsage: Plugin = {
   manifest: { id: 'usage', name: '用量统计', version: '1.0.0', description: '', icon: 'BarChart3', navOrder: 80, enabled: true },
   register(ctx) {
@@ -82,8 +66,6 @@ export function initCorePlugins() {
   pluginSystem.registerCore(coreSkills)
   pluginSystem.registerCore(coreAgents)
   pluginSystem.registerCore(coreFiles)
-  pluginSystem.registerCore(coreDiary)
-  pluginSystem.registerCore(coreInspiration)
   pluginSystem.registerCore(coreUsage)
 
   // 插件管理页面

@@ -4,12 +4,12 @@
  * 第三方插件自动包裹系统顶栏（名称、版本、描述、返回按钮）
  */
 import { useState, useEffect, useMemo } from 'react'
-import { Loader2, ArrowLeft } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { pluginSystem } from '@/lib/pluginSystem'
 import { ErrorBoundary } from '@/components/plugins/ErrorBoundary'
 import type { ComponentType } from 'react'
 
-const CORE_IDS = new Set(['chat', 'ai', 'skills', 'agents', 'files', 'diary', 'inspiration', 'usage', 'plugins'])
+const CORE_IDS = new Set(['chat', 'ai', 'skills', 'agents', 'files', 'usage', 'plugins'])
 
 interface Props {
   nav: string
@@ -30,6 +30,7 @@ export function DynamicRoute({ nav, onNavChange }: Props) {
       name: item?.label || nav,
       version: p?.manifest.version || '',
       description: p?.manifest.description || '',
+      systemHeader: p?.manifest?.systemHeader !== false,  // 默认 true
     }
   }, [nav])
 
@@ -67,18 +68,11 @@ export function DynamicRoute({ nav, onNavChange }: Props) {
 
   return (
     <ErrorBoundary pluginName={pluginInfo.name}>
-      {isCore ? (
+      {isCore || !pluginInfo.systemHeader ? (
         inner
       ) : (
         <div className="flex h-full flex-col">
           <div className="flex items-center gap-2 border-b border-border px-3 h-10 shrink-0">
-            <button
-              className="h-7 w-7 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
-              onClick={() => onNavChange?.('chat')}
-              title="返回聊天"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </button>
             <span className="text-xs font-semibold text-foreground truncate">{pluginInfo.name}</span>
             {pluginInfo.version && (
               <span className="rounded bg-muted px-1.5 py-px text-[10px] text-muted-foreground shrink-0">v{pluginInfo.version}</span>

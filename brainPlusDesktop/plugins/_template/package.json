@@ -1,0 +1,7 @@
+{
+  "name": "my-plugin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "插件依赖声明（可选，需要 npm 包时填写）",
+  "dependencies": {}
+}

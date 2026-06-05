@@ -6,6 +6,7 @@
   "icon": "Package",
   "navOrder": 90,
   "enabled": true,
+  "systemHeader": false,
   "permissions": ["ai", "supabase", "cloudinary", "sandbox", "files"],
   "tools": [
     {

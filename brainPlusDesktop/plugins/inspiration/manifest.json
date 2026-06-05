@@ -1,0 +1,11 @@
+{
+  "id": "inspiration",
+  "name": "灵感",
+  "version": "1.0.0",
+  "description": "灵感收集与管理，随机漫步",
+  "icon": "Lightbulb",
+  "navOrder": 70,
+  "enabled": true,
+  "systemHeader": false,
+  "permissions": ["ai", "files", "cloudinary"]
+}

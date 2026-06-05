@@ -672,9 +672,18 @@ ipcMain.handle('plugin:compile', async (_e, dirPath: string) => {
       jsxFactory: 'React.createElement',
       jsxFragment: 'React.Fragment',
       tsconfigRaw: JSON.stringify({ compilerOptions: { jsx: 'react' } }),
-      external: ['react', 'react-dom', 'lucide-react', '@/lib/utils', '@/components/ui/*'],
+      external: ['react', 'react-dom', 'lucide-react', '@/lib/utils', '@/components/ui/*', '@/components/diary/*', '@/components/inspiration/*'],
       target: 'es2020',
       banner: { js: "const React = require('react');" },
+      plugins: [{
+        name: 'resolve-at-alias',
+        setup(build) {
+          // 将动态 import 中的 @/ 替换为 /src/，浏览器才能解析
+          build.onResolve({ filter: /^@\/components\/(diary|inspiration)\// }, args => ({
+            path: args.path.replace('@/', '/src/'), external: true,
+          }))
+        },
+      }],
     })
     const code = result.outputFiles?.[0]?.text || ''
     return { success: true, code }

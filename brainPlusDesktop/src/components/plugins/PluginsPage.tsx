@@ -87,7 +87,7 @@ export function PluginsPage() {
                     <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${p.enabled ? 'translate-x-4' : 'translate-x-1'}`} />
                   </button>
                   <button className="text-muted-foreground/30 hover:text-destructive"
-                    onClick={() => { pluginSystem.uninstall(p.manifest.id); refresh() }}
+                    onClick={() => { if (confirm(`确定卸载「${p.manifest.name}」？`)) { pluginSystem.uninstall(p.manifest.id); refresh() } }}
                     title="卸载">
                     <Trash2 className="h-4 w-4" />
                   </button>
