@@ -35,6 +35,8 @@ export interface DelegateResult {
   taskId: string
   html: string
   plainText: string
+  toolCount: number
+  tokenUsage?: { input: number; output: number }
   error?: string
 }
 
@@ -52,7 +54,7 @@ export async function delegateToAgent(
 
   // 本地 Agent：streamText
   const model = getChatModel()
-  if (!model) return { agentName: agent.name, success: false, taskId: task.id, html: '', plainText: '', error: '没有可用模型' }
+  if (!model) return { agentName: agent.name, success: false, taskId: task.id, toolCount: 0, html: '', plainText: '', error: '没有可用模型' }
 
   TaskManager.start(task)
   streamHandler?.({ type: 'task-status', taskId: task.id, taskAgentName: agent.name, taskStatus: 'running' } as any)
@@ -111,25 +113,34 @@ export async function delegateToAgent(
       }
     }
 
+    // 获取 token 用量
+    let tokenUsage: { input: number; output: number } | undefined
+    try {
+      const usage = await Promise.resolve((result as any).usage).catch(() => undefined)
+      if (usage) tokenUsage = { input: usage.inputTokens ?? usage.promptTokens ?? 0, output: usage.outputTokens ?? usage.completionTokens ?? 0 }
+    } catch {}
+
     TaskManager.complete(task, plainText, artifacts.length > 0 ? artifacts : undefined)
     streamHandler?.({ type: 'task-status', taskId: task.id, taskAgentName: agent.name, taskStatus: 'completed', text: plainText.slice(0, 100) } as any)
-    // 通知 A2A HTTP Server（如果有外部客户端在等待）
     ;(window as any).electronAPI?.a2a?.completeTask(task.id, plainText).catch(() => {})
-    log(`Task ${task.id} 完成: 输出${fullText.length}字, 工具${toolCalls.length}次`)
+    log(`Task ${task.id} 完成: 输出${fullText.length}字, 工具${toolCalls.length}次, ${tokenUsage ? `${tokenUsage.input + tokenUsage.output} tok` : '?'}`)
 
+    const toolInfo = toolCalls.length > 0 ? ` (${toolCalls.length}工具${tokenUsage ? `, ${tokenUsage.input + tokenUsage.output} tok` : ''})` : ''
     return {
       agentName: agent.name,
       success: true,
       taskId: task.id,
       plainText,
-      html: `✅ Task ${task.id}: Agent ${agent.name}\n\n${plainText}`,
+      toolCount: toolCalls.length,
+      tokenUsage,
+      html: `✅ ${agent.name}${toolInfo}:\n\n${plainText}`,
     }
   } catch (e: any) {
     streamHandler?.({ type: 'agent-done', agentName: agent.name })
     TaskManager.fail(task, e.message)
     ;(window as any).electronAPI?.a2a?.completeTask(task.id, '', e.message).catch(() => {})
     log(`Task ${task.id} 失败: ${e.message}`)
-    return { agentName: agent.name, success: false, taskId: task.id, html: '', plainText: '', error: e.message }
+    return { agentName: agent.name, success: false, taskId: task.id, toolCount: 0, html: '', plainText: '', error: e.message }
   }
 }
 
@@ -188,7 +199,7 @@ async function delegateToRemoteAgent(
                   TaskManager.complete(task, output)
                   streamHandler?.({ type: 'agent-done', agentName: agent.name })
                   const html = `✅ Task ${task.id}: Agent ${agent.name}\n\n${output}`
-                  return { agentName: agent.name, success: true, taskId: task.id, plainText: output, html }
+                  return { agentName: agent.name, success: true, taskId: task.id, toolCount: 0, plainText: output, html }
                 }
                 if (data.status === 'failed') {
                   throw new Error(data.error || '远程执行失败')
@@ -227,13 +238,14 @@ async function delegateToRemoteAgent(
       agentName: agent.name,
       success: true,
       taskId: task.id,
+      toolCount: 0,
       plainText: output,
       html: `✅ Task ${task.id}: Agent ${agent.name}\n\n${output}`,
     }
   } catch (e: any) {
     streamHandler?.({ type: 'agent-done', agentName: agent.name })
     TaskManager.fail(task, e.message)
-    return { agentName: agent.name, success: false, taskId: task.id, html: '', plainText: '', error: e.message }
+    return { agentName: agent.name, success: false, taskId: task.id, toolCount: 0, html: '', plainText: '', error: e.message }
   }
 }
 

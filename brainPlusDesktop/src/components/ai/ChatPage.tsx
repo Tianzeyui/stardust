@@ -81,9 +81,10 @@ export function ChatPage() {
   const messagesRef = useRef<UIMessage[]>([])
   // enable_tool 代理映射：AI SDK 工具名 → 实际显示名
   const toolNameProxyRef = useRef<Map<string, string>>(new Map())
-  // Agent 流式输出跟踪：区分主对话输出和 Agent 输出
-  const agentActiveRef = useRef<string | null>(null)  // 当前活跃的 Agent 名称
+  // Agent 流式输出跟踪 + 累计消耗
+  const agentActiveRef = useRef<string | null>(null)
   const agentStreamedRef = useRef('')
+  const agentTotalTokensRef = useRef(0)  // 本轮所有子 Agent 累计 token
   // 记忆管理器（convId 变化时重建，绑定新会话）
   const memoryManagerRef = useRef<MemoryManager | null>(null)
   // 始终创建 MemoryManager 用于查看长期记忆（即使无 convId）
@@ -391,6 +392,7 @@ export function ChatPage() {
       let streamed = ''
       setConsoleLog([]); setTaskList([]); setActivatedToolNames(new Set())
       agentStreamedRef.current = ''
+      agentTotalTokensRef.current = 0
       pushLog('--', '开始处理', 'info')
 
       await chat(history, (event: ChatStreamEvent) => {
@@ -508,6 +510,11 @@ export function ChatPage() {
           const sdkName = event.toolName || 'unknown'
           const proxyName = toolNameProxyRef.current.get(sdkName)
           const matchName = proxyName || sdkName
+          // delegate_task/sub-agent 完成时累计 token 消耗
+          if (sdkName === 'delegate_task' || matchName === 'delegate_task') {
+            const tokMatch = String(event.toolOutput ?? '').match(/(\d+)\s*tok/)
+            if (tokMatch) agentTotalTokensRef.current += parseInt(tokMatch[1])
+          }
           setMessages(prev => prev.map(m => m.role === 'tool' && (m.toolCall?.name === matchName || m.toolCall?.name === sdkName) && m.toolCall?.status === 'running' ? { ...m, content: String(event.toolOutput ?? '').slice(0, 2000), toolCall: { ...m.toolCall, status: ok ? 'done' as const : 'error' as const, result: String(event.toolOutput ?? '').slice(0, 8000) } } : m))
           pushLog(ok ? 'OK' : 'ERR', `${matchName} ${ok ? 'done' : 'fail'}`, ok ? 'ok' : 'error')
           // cleanup proxy mapping
@@ -535,8 +542,10 @@ export function ChatPage() {
           pushLog('DONE', `回复 (${streamed.length}字)`, streamed ? 'ok' : 'info')
           if (event.trace) {
             const t = event.trace
+            const agentTok = agentTotalTokensRef.current
+            const totalTok = t.inputTokens + t.outputTokens + agentTok
             const parts = [
-              `${t.inputTokens + t.outputTokens} tok`,
+              `${totalTok} tok`,
               formatDuration(t.totalDuration),
               t.toolCalls.length > 0 ? `${t.toolCalls.length} tools` : '',
             ].filter(Boolean)
@@ -732,16 +741,6 @@ export function ChatPage() {
         </div>
       )}
 
-      {/* Token 用量条 */}
-      <TokenUsageBar
-        estimatedTokens={estimatedTokens}
-        limit={contextWindowLimit}
-        wasCompressed={compressionInfo?.wasCompressed || false}
-        originalTokens={compressionInfo?.originalTokens}
-        compressedTokens={compressionInfo?.compressedTokens}
-        compressing={compressing}
-        onForceCompress={compressNow}
-      />
 
       {/* 输入区 */}
       <div className="border-t border-border px-3 py-2">
@@ -817,6 +816,15 @@ export function ChatPage() {
               <Paperclip className="h-3 w-3" />
               <span>文件</span>
             </button>
+            <TokenUsageBar
+              estimatedTokens={estimatedTokens}
+              limit={contextWindowLimit}
+              wasCompressed={compressionInfo?.wasCompressed || false}
+              originalTokens={compressionInfo?.originalTokens}
+              compressedTokens={compressionInfo?.compressedTokens}
+              compressing={compressing}
+              onForceCompress={compressNow}
+            />
             <div className="flex-1" />
             {loading ? (
               <button className="p-0.5 rounded text-muted-foreground/50 hover:text-foreground transition-colors" onClick={() => abortRef.current?.abort()} title="停止生成">

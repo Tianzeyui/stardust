@@ -1,13 +1,9 @@
 /**
- * Token 用量条 — 极简克制风
- *
- * 状态层次（中性灰，仅透明度区分）：
- * - 隐藏：usage < 30% 且未压缩
- * - 常态：淡灰细线 + 数字
- * - 警告：线条稍深 + 压缩按钮
- * - 压缩中：进度条呼吸动画 + 文字闪烁
- * - 已压缩：压缩前后对比
+ * Token 用量——输入框下方紧凑按钮 + 弹出面板
  */
+import { useState } from 'react'
+import { BarChart3 } from 'lucide-react'
+// Using BarChart3 icon — consistent with "上下文" theme
 
 export interface TokenUsageBarProps {
   estimatedTokens: number
@@ -25,74 +21,58 @@ function fmt(n: number): string {
 }
 
 export function TokenUsageBar({
-  estimatedTokens,
-  limit,
-  wasCompressed,
-  originalTokens,
-  compressedTokens,
-  compressing,
-  onForceCompress,
+  estimatedTokens, limit, wasCompressed,
+  originalTokens, compressedTokens, compressing, onForceCompress,
 }: TokenUsageBarProps) {
+  const [show, setShow] = useState(false)
   const pct = Math.min((estimatedTokens / limit) * 100, 100)
 
-  if (!wasCompressed && !compressing && pct < 30) return null
-
-  const barAlpha =
-    compressing ? 'opacity-50'
-    : wasCompressed ? 'opacity-40'
-    : pct > 90 ? 'opacity-60'
-    : pct > 70 ? 'opacity-45'
-    : 'opacity-30'
-
-  const textAlpha =
-    compressing ? 'opacity-50'
-    : wasCompressed || pct > 70 ? 'opacity-60'
-    : 'opacity-40'
-
   return (
-    <div className="border-t border-border flex items-center gap-2 px-4 py-1 text-[10px] select-none">
-      <span className="shrink-0 text-muted-foreground/30 text-[10px]">上下文</span>
-      {/* 进度条 */}
-      <div className="flex-1 h-0.5 bg-muted-foreground/10 rounded-none overflow-hidden">
-        <div
-          className={`h-full bg-muted-foreground rounded-none transition-all duration-700 ${barAlpha} ${
-            compressing ? 'animate-pulse' : ''
-          }`}
-          style={{ width: `${Math.max(pct, 2)}%` }}
-        />
-      </div>
+    <div className="relative shrink-0">
+      <button
+        className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground/60 hover:bg-muted hover:text-muted-foreground transition-colors"
+        onClick={() => setShow(!show)}
+        title="上下文用量"
+      >
+        <BarChart3 className="h-3 w-3" />
+        <span>{Math.round(pct)}%</span>
+      </button>
 
-      {/* 文字 */}
-      {compressing ? (
-        <span className={`tabular-nums shrink-0 text-muted-foreground animate-pulse ${textAlpha}`}>
-          压缩中...
-        </span>
-      ) : (
-        <span className={`tabular-nums shrink-0 text-muted-foreground ${textAlpha}`}>
-          {wasCompressed && originalTokens && compressedTokens ? (
-            <>
-              <span className="opacity-50">{fmt(originalTokens)}</span>
-              <span className="opacity-30 mx-0.5">→</span>
-              {fmt(compressedTokens)}
-            </>
-          ) : (
-            <>
-              {fmt(estimatedTokens)}
-              <span className="opacity-40"> / {fmt(limit)}</span>
-            </>
-          )}
-        </span>
-      )}
-
-      {/* 手动压缩按钮 */}
-      {!wasCompressed && !compressing && pct > 70 && onForceCompress && (
-        <button
-          className="shrink-0 text-[10px] text-muted-foreground/35 hover:text-muted-foreground/60 transition-colors"
-          onClick={onForceCompress}
-          title="压缩对话历史"
-        >
-          压缩
-        </button>
+      {show && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setShow(false)} />
+          <div className="absolute left-0 bottom-full z-50 mb-1 w-56 rounded-lg border border-border bg-card shadow-lg p-3">
+            <p className="text-xs font-medium mb-2">上下文用量</p>
+            {/* 进度条 */}
+            <div className="h-1.5 bg-muted rounded-full overflow-hidden mb-2">
+              <div
+                className={`h-full rounded-full transition-all duration-700 ${
+                  compressing ? 'bg-primary/40 animate-pulse'
+                  : pct > 90 ? 'bg-destructive/60'
+                  : pct > 70 ? 'bg-primary/60'
+                  : 'bg-primary/30'
+                }`}
+                style={{ width: `${Math.max(pct, 2)}%` }}
+              />
+            </div>
+            <div className="flex justify-between text-[10px] text-muted-foreground mb-2">
+              <span>{fmt(estimatedTokens)} / {fmt(limit)}</span>
+              <span>{Math.round(pct)}%</span>
+            </div>
+            {wasCompressed && originalTokens && compressedTokens && (
+              <p className="text-[10px] text-muted-foreground/60 mb-2">
+                已压缩: {fmt(originalTokens)} → {fmt(compressedTokens)}
+              </p>
+            )}
+            {compressing && (
+              <p className="text-[10px] text-muted-foreground/60 animate-pulse mb-2">正在压缩对话历史...</p>
+            )}
+            {!compressing && onForceCompress && (
+              <button className="w-full text-[10px] text-primary/70 hover:text-primary text-center py-1"
+                onClick={() => { onForceCompress(); setShow(false) }}>{wasCompressed ? '重新压缩' : '压缩'}</button>
+            )}
+          </div>
+        </>
       )}
     </div>
   )

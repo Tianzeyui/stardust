@@ -99,6 +99,7 @@ async function handleRequest(req: IncomingMessage, res: http.ServerResponse) {
       version: a.version || '1.0.0',
       protocol: 'HTTP+JSON',
       protocolVersion: '0.2.0',
+      preferredTransport: a.type === 'local' ? undefined : 'HTTP+JSON',
       provider: {
         organization: a.provider_organization || 'BrainPlus',
         url: a.provider_url || '',
@@ -108,8 +109,8 @@ async function handleRequest(req: IncomingMessage, res: http.ServerResponse) {
         streaming: a.capabilities?.streaming ?? true,
         pushNotifications: a.capabilities?.pushNotifications ?? false,
       },
-      defaultInputModes: a.input_modes || ['text'],
-      defaultOutputModes: a.output_modes || ['text'],
+      defaultInputModes: a.inputModes || a.input_modes || ['text'],
+      defaultOutputModes: a.outputModes || a.output_modes || ['text'],
       skills: (a.agent_skills || a.skills || [{ id: 'default', name: a.name, description: a.description || '', input_modes: ['text'], output_modes: ['text'] }]).map((s: any) => ({
         id: s.id,
         name: s.name,

@@ -223,3 +223,33 @@ export function getA2AToken(): string {
 export function saveA2AToken(token: string): void {
   localStorage.setItem(A2A_TOKEN_KEY, token)
 }
+
+// ========== 上下文压缩阈值 ==========
+
+const COMPRESS_THRESHOLD_KEY = 'brainplus_compress_threshold'
+
+export function getCompressThreshold(): number {
+  try {
+    const v = localStorage.getItem(COMPRESS_THRESHOLD_KEY)
+    if (v) { const n = parseInt(v); if (n >= 30 && n <= 95) return n }
+  } catch {}
+  return 80  // 默认 80%
+}
+
+export function saveCompressThreshold(pct: number): void {
+  localStorage.setItem(COMPRESS_THRESHOLD_KEY, String(Math.max(30, Math.min(95, pct))))
+}
+
+const TOKEN_LIMIT_KEY = 'brainplus_token_limit'
+
+export function getTokenLimit(): number {
+  try {
+    const v = localStorage.getItem(TOKEN_LIMIT_KEY)
+    if (v) { const n = parseInt(v); if (n >= 1024) return n }
+  } catch {}
+  return 0  // 0 = 自动（用模型默认）
+}
+
+export function saveTokenLimit(limit: number): void {
+  localStorage.setItem(TOKEN_LIMIT_KEY, String(limit))
+}

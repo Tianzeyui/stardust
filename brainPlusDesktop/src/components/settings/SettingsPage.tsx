@@ -14,6 +14,7 @@ import {
   getDisclosureThreshold, saveDisclosureThreshold,
   getAgentMaxSteps, saveAgentMaxSteps,
   getMemoryEnabled, saveMemoryEnabled,
+  getCompressThreshold, saveCompressThreshold, getTokenLimit, saveTokenLimit,
   getA2AEnabled, saveA2AEnabled, getA2APort, saveA2APort, getA2AToken, saveA2AToken,
 } from '@/lib/config'
 import { listTools, listResources, listPrompts, callTool, readResource, getPrompt, connect, disconnect, addServer as addMcpServer, updateServer as updateMcpServer, removeServer as removeMcpServer } from '@/lib/mcpClient'
@@ -56,6 +57,8 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
   const [disclosureThreshold, setDisclosureThreshold] = useState(getDisclosureThreshold)
   const [maxSteps, setMaxSteps] = useState(getAgentMaxSteps)
   const [memoryEnabled, setMemoryEnabled] = useState(getMemoryEnabled)
+  const [compressThreshold, setCompressThreshold] = useState(getCompressThreshold)
+  const [tokenLimit, setTokenLimit] = useState(getTokenLimit)
   const [a2aEnabled, setA2AEnabled] = useState(getA2AEnabled)
   const [a2aPort, setA2APortState] = useState(getA2APort)
   const [a2aToken, setA2AToken] = useState(getA2AToken)
@@ -392,7 +395,33 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
               </div>
             </fieldset>
 
-            <MemoryPanel manager={memoryManagerRef.current} />
+            <fieldset className="rounded-lg border border-border p-4">
+            <legend className="px-2 text-sm font-semibold">上下文压缩</legend>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Token 上限</Label>
+                <p className="text-[10px] text-muted-foreground/50 mb-1">0=自动，用模型默认值</p>
+                <div className="flex items-center gap-1">
+                  <Input type="number" min={0} step={1024} value={tokenLimit}
+                    onChange={e => { const v = parseInt(e.target.value) || 0; setTokenLimit(v); saveTokenLimit(v) }}
+                    className="h-8 w-24 text-center text-sm" />
+                  <span className="text-xs text-muted-foreground">tok</span>
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">压缩阈值</Label>
+                <p className="text-[10px] text-muted-foreground/50 mb-1">达到上限的%时触发</p>
+                <div className="flex items-center gap-1">
+                  <Input type="number" min={30} max={95} value={compressThreshold}
+                    onChange={e => { const v = parseInt(e.target.value); if (v >= 30 && v <= 95) { setCompressThreshold(v); saveCompressThreshold(v) } }}
+                    className="h-8 w-20 text-center text-sm" />
+                  <span className="text-xs text-muted-foreground">%</span>
+                </div>
+              </div>
+            </div>
+          </fieldset>
+
+          <MemoryPanel manager={memoryManagerRef.current} />
           </div>
         )}
 
