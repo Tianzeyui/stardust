@@ -90,8 +90,10 @@
         "AppImage",
         "deb"
       ],
-      "category": "Office"
+      "category": "Office",
+      "maintainer": "tianzeyu@outlook.com"
     }
   },
-  "repository": "https://github.com/Tianzeyui/brainPlus.git"
+  "repository": "https://github.com/Tianzeyui/brainPlus.git",
+  "author": "\u6c89\u6d78\u4f4d\u5de5\u4f5c\u5ba4"
 }
