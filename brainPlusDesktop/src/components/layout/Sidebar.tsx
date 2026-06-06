@@ -70,13 +70,24 @@ export function Sidebar({ activeNav, onNavChange, collapsed, onToggleCollapse, o
         {navItems.map(item => {
           const IconComponent = iconMap[item.icon] || Bot
           const isActive = activeNav === item.id
+          const isPlugin = pluginSystem.isPlugin(item.id)
           return (
             <Button key={item.id} variant={isActive ? 'default' : 'ghost'}
               size={collapsed ? 'icon' : 'default'}
-              className={cn('transition-all', collapsed ? 'h-10 w-10' : 'justify-start gap-3', !isActive && 'text-muted-foreground hover:text-foreground')}
-              onClick={() => { onCloseSettings(); onNavChange(item.id) }} title={collapsed ? item.label : undefined}>
+              className={cn('transition-all relative', collapsed ? 'h-10 w-10' : 'justify-start gap-3', !isActive && 'text-muted-foreground hover:text-foreground')}
+              onClick={() => { onCloseSettings(); onNavChange(item.id) }} title={collapsed ? (isPlugin ? `${item.label}（插件）` : item.label) : undefined}>
               <IconComponent className="h-5 w-5 shrink-0" />
-              {!collapsed && <span>{item.label}</span>}
+              {!collapsed && (
+                <>
+                  <span className="truncate flex-1 min-w-0 text-left">{item.label}</span>
+                  {isPlugin && (
+                    <span className="text-[9px] leading-none text-muted-foreground/35 shrink-0 ml-1 select-none">插件</span>
+                  )}
+                </>
+              )}
+              {collapsed && isPlugin && (
+                <span className="absolute bottom-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-muted-foreground/25" title="插件" />
+              )}
             </Button>
           )
         })}

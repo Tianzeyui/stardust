@@ -19,6 +19,9 @@ export function AgentPicker() {
 
   useEffect(() => { if (show) load() }, [show, load])
 
+  // 打开聊天时自动获取 agents 数量
+  useEffect(() => { load() }, [load])
+
   const toggleStatus = async (agent: Agent) => {
     if (!user?.id) return
     setToggling(agent.id!)

@@ -1,8 +1,7 @@
 /**
  * AI 工作区管理
  * ~/BrainPlus/workspace/
- *   ├── output/    AI 生成的文件
- *   └── input/     用户分享给 AI 的文件（暂未实现拖拽上传）
+ *   └── output/    AI 生成的文件
  */
 import { app, shell } from 'electron'
 import fs from 'fs'
@@ -17,14 +16,12 @@ export function getWorkspacePaths() {
   return {
     root,
     output: path.join(root, 'output'),
-    input: path.join(root, 'input'),
   }
 }
 
 export function initWorkspace() {
-  const { output, input } = getWorkspacePaths()
+  const { output } = getWorkspacePaths()
   fs.mkdirSync(output, { recursive: true })
-  fs.mkdirSync(input, { recursive: true })
   console.log('[Workspace] Ready:', output)
 }
 

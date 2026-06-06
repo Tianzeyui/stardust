@@ -75,7 +75,7 @@ export async function registerWorkspaceTools(tools: ToolMap) {
     description:
       '读取工作区内的文件内容。自动识别文档格式并转换为文本。' +
       '支持 lines 参数分段读取（如 "1-100"/"100-end"）。' +
-      `可读目录: ${wsPaths.output}, ${wsPaths.input}` +
+      `可读目录: ${wsPaths.output}` +
       'PPT/Word/Excel/PDF 等文档会自动转换为 Markdown 后返回文本内容。',
     inputSchema: jsonSchema({
       type: 'object',

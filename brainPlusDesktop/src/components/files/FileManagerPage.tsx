@@ -80,9 +80,6 @@ export function FileManagerPage() {
         if (await api.exists(ws.output)) {
           dirs.push({ name: '工作区输出', path: ws.output })
         }
-        if (await api.exists(ws.input)) {
-          dirs.push({ name: '工作区输入', path: ws.input })
-        }
         if (await api.exists(ws.root)) {
           dirs.push({ name: '工作区', path: ws.root })
         }

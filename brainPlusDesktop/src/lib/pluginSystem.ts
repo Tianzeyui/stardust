@@ -218,7 +218,7 @@ class PluginSystemImpl {
       },
       workspace: {
         getPaths: async () => {
-          if (!ea?.workspace) return { root: '~/BrainPlus/workspace', output: '~/BrainPlus/workspace/output', input: '~/BrainPlus/workspace/input' }
+          if (!ea?.workspace) return { root: '~/BrainPlus/workspace', output: '~/BrainPlus/workspace/output' }
           return ea.workspace.getPaths()
         },
         openFile: async (filePath: string) => {
@@ -468,6 +468,12 @@ class PluginSystemImpl {
     const seen = new Set<string>()
     return this.navItems.filter(item => seen.has(item.id) ? false : (seen.add(item.id), true))
       .sort((a, b) => a.order - b.order)
+  }
+
+  /** 判断导航项是否为第三方插件（非核心内建功能） */
+  isPlugin(id: string): boolean {
+    const entry = this.plugins.get(id)
+    return !!entry && !entry.core
   }
 
   getRoute(id: string): (() => Promise<any>) | undefined {

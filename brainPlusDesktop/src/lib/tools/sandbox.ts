@@ -11,7 +11,7 @@ export async function registerSandboxTools(tools: ToolMap) {
 
   const wsPaths = window.electronAPI?.workspace
     ? await window.electronAPI.workspace.getPaths()
-    : { output: '~/BrainPlus/workspace/output', input: '~/BrainPlus/workspace/input' }
+    : { output: '~/BrainPlus/workspace/output' }
 
   if (getJSSandboxEnabled()) {
     tools['sandbox_execute_js'] = {

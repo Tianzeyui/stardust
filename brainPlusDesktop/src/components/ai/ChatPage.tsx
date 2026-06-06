@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import {
-  Send, Loader2, Bot, X, ListTodo, Circle, CheckCircle2, File,
-  Paperclip, FileText, Image,
+  ArrowRight, Loader2, Bot, X, ListTodo, Circle, CheckCircle2, File,
+  Paperclip, FileText, Image, FolderOpen, ExternalLink, ArrowLeft,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -15,7 +15,6 @@ import { ChatMessage } from './ChatMessage'
 import { AskUserBar } from './AskUserBar'
 import { ChatConsole } from './ChatConsole'
 import { ModelPicker } from './ModelPicker'
-import { OutputFiles } from './OutputFiles'
 import { ConversationBar, type ConvInfo } from './ConversationBar'
 import { SkillPicker } from './SkillPicker'
 import { MCPToolPicker } from './MCPToolPicker'
@@ -56,6 +55,11 @@ export function ChatPage() {
   const [progressMsg, setProgressMsg] = useState('')
   const [taskList, setTaskList] = useState<Array<{ id: string; title: string; status: string }>>([])
   const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [dragOver, setDragOver] = useState(false)
+  const [showWorkspace, setShowWorkspace] = useState(false)
+  const workspaceBtnRef = useRef<HTMLButtonElement>(null)
+  const [workspacePath, setWorkspacePath] = useState('')
+  const [workspaceEntries, setWorkspaceEntries] = useState<Array<{ name: string; path: string; isDir: boolean }>>([])
   const [skills, setSkills] = useState<InstalledSkill[]>([])
   // MCP 工具选择：null = 自动模式（全用），Set = 手动选择
   const [selectedMCPTools, setSelectedMCPTools] = useState<Set<string> | null>(null)
@@ -288,13 +292,10 @@ export function ChatPage() {
     } catch {}
   }, [])
 
-  // 上传文件
-  const handleUpload = useCallback(async () => {
-    if (!window.electronAPI?.dialog || !window.electronAPI?.file) return
-    const result = await window.electronAPI.dialog.openFile()
-    if (!result.success || !result.files) return
-
-    const newAttachments: Attachment[] = result.files.map((fp) => {
+  // 共用：处理文件路径列表，创建附件并转换文档
+  const processFiles = useCallback(async (filePaths: string[]) => {
+    if (!window.electronAPI?.file) return
+    const newAttachments: Attachment[] = filePaths.map((fp) => {
       const name = fp.split('/').pop() || fp
       const isImg = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'].includes(name.split('.').pop()?.toLowerCase() || '')
       return { id: 'att_' + Math.random().toString(36).slice(2, 8), name, path: fp, type: (isImg ? 'image' : 'document') as 'image' | 'document', status: (isImg ? 'done' : 'pending') as 'done' | 'pending' }
@@ -315,7 +316,55 @@ export function ChatPage() {
     }
   }, [])
 
+  // 点击按钮上传
+  const handleUpload = useCallback(async () => {
+    if (!window.electronAPI?.dialog) return
+    const result = await window.electronAPI.dialog.openFile()
+    if (!result.success || !result.files) return
+    processFiles(result.files)
+  }, [processFiles])
+
+  // 拖拽文件上传
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOver(false)
+    const files = Array.from(e.dataTransfer.files)
+    if (files.length === 0) return
+    // Electron 环境下 File 对象有 path 属性
+    const paths = files.map(f => (f as any).path || f.name).filter(Boolean)
+    if (paths.length > 0) processFiles(paths)
+  }, [processFiles])
+
   const removeAttachment = useCallback((id: string) => setAttachments(prev => prev.filter(a => a.id !== id)), [])
+
+  // 工作区目录浏览
+  const loadWorkspaceDir = useCallback(async (dirPath: string) => {
+    if (!window.electronAPI?.fs) return
+    setWorkspacePath(dirPath)
+    const result = await window.electronAPI.fs.listDir(dirPath)
+    if (!result.success || !result.files) { setWorkspaceEntries([]); return }
+    const entries: Array<{ name: string; path: string; isDir: boolean }> = []
+    for (const name of result.files) {
+      if (name.startsWith('.')) continue
+      const childPath = `${dirPath.replace(/\/+$/, '')}/${name}`
+      try {
+        const statResult = await window.electronAPI.fs.stat(childPath)
+        const isDir = statResult.success && statResult.stat?.isDirectory === true
+        entries.push({ name, path: childPath, isDir })
+      } catch {
+        entries.push({ name, path: childPath, isDir: false })
+      }
+    }
+    entries.sort((a, b) => (b.isDir ? 1 : 0) - (a.isDir ? 1 : 0) || a.name.localeCompare(b.name))
+    setWorkspaceEntries(entries)
+  }, [])
+
+  const openWorkspace = useCallback(async () => {
+    const ws = await window.electronAPI?.workspace?.getPaths()
+    const root = ws?.root || '~/BrainPlus/workspace'
+    await loadWorkspaceDir(root)
+    setShowWorkspace(true)
+  }, [loadWorkspaceDir])
 
   const sendingRef = useRef(false)
 
@@ -718,6 +767,176 @@ export function ChatPage() {
     setCompressionInfo(null)
   }, [activeModel?.selectedModel])
 
+  const inputArea = (
+    <div className="px-3 py-2">
+      {attachments.length > 0 && <AttachmentChips attachments={attachments} onRemove={removeAttachment} />}
+
+      {/* @ 文件选择器 */}
+      {showAtPicker && atFiles.length > 0 && (
+        <div className="mb-1.5 rounded-md border border-border bg-card shadow-lg max-h-36 overflow-auto">
+          {atFiles.map(f => (
+            <button
+              key={f.path}
+              className="flex items-center gap-2 w-full px-2 py-1.5 text-xs hover:bg-muted/50 transition-colors text-left"
+              onClick={() => selectAtFile(f)}
+            >
+              <File className="h-3 w-3 text-muted-foreground shrink-0" />
+              <span className="truncate">{f.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* 输入行 */}
+      <div
+        className={`rounded-lg border bg-background transition-all ${dragOver ? 'border-primary ring-1 ring-primary/30 bg-primary/5' : 'border-input focus-within:ring-1 focus-within:ring-ring'}`}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+        onDragLeave={(e) => { e.preventDefault(); setDragOver(false) }}
+        onDrop={handleDrop}
+      >
+        <textarea
+          className="w-full resize-none bg-transparent px-3 pt-2 pb-0 text-sm leading-relaxed placeholder:text-muted-foreground outline-none disabled:cursor-not-allowed disabled:opacity-50 custom-scrollbar"
+          rows={3}
+          placeholder={askUser ? '请在上方回答 AI 的问题...' : activeModel ? `向 ${activeModel.displayName} 提问...` : '请先配置模型'}
+          value={input}
+          onChange={e => handleInputChange(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
+            if (e.key === 'Enter' && e.shiftKey) return
+          }}
+          disabled={!activeModel || !!askUser}
+        />
+        <div className="flex items-center gap-1 px-2 pb-1.5">
+          <div className="relative shrink-0">
+            <button
+              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground/60 hover:bg-muted hover:text-muted-foreground transition-colors"
+              onClick={() => setShowModelPicker(!showModelPicker)}
+              title={activeModel ? `${activeModel.displayName} / ${activeModel.selectedModel}` : '选择模型'}
+            >
+              <Bot className="h-3 w-3" />
+              <span className="max-w-[60px] truncate">{activeModel?.displayName || '模型'}</span>
+            </button>
+            <ModelPicker
+              show={showModelPicker} autoMode={autoMode}
+              activeModel={activeModel}
+              configuredModels={configuredModels}
+              onToggleAuto={() => setAutoMode(!autoMode)}
+              onSelectCloud={(m) => { setActiveModel(m); setShowModelPicker(false) }}
+              onClose={() => setShowModelPicker(false)} pickerRef={pickerRef}
+            />
+          </div>
+          <MemoryPopup
+            manager={memoryManagerRef.current}
+            enabled={sessionMemoryEnabled}
+            onToggle={() => setSessionMemoryEnabled(v => !v)}
+            shortCount={shortMemoryCount}
+          />
+          <AgentPicker />
+          <SkillPicker skills={skills} onToggle={async (s) => { await toggleSkill(s.id, !s.enabled); setSkills(getInstalledSkills()) }} />
+          <MCPToolPicker
+            selectedTools={selectedMCPTools}
+            onSelectionChange={setSelectedMCPTools}
+            disclosureResult={disclosureResult}
+            threshold={disclosureThreshold}
+            onThresholdChange={(n) => { setDisclosureThreshold(n); saveDisclosureThreshold(n) }}
+            activatedToolNames={activatedToolNames}
+          />
+          <button className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground/60 hover:bg-muted hover:text-muted-foreground transition-colors" onClick={handleUpload} title="上传文件（支持拖拽）">
+            <Paperclip className="h-3 w-3" />
+            <span>文件{attachments.length > 0 ? ` ${attachments.length}` : ''}</span>
+          </button>
+          <div className="relative shrink-0">
+            <button
+              ref={workspaceBtnRef}
+              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground/60 hover:bg-muted hover:text-muted-foreground transition-colors"
+              onClick={() => showWorkspace ? setShowWorkspace(false) : openWorkspace()}
+              title="工作区"
+            >
+              <FolderOpen className="h-3 w-3" />
+              <span>工作区</span>
+            </button>
+            {showWorkspace && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowWorkspace(false)} />
+                <div className="absolute bottom-full right-0 mb-2 z-50 w-80 rounded-lg border border-border bg-card shadow-lg">
+                  <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border">
+                    <button
+                      className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
+                      onClick={async () => {
+                        const ws = await window.electronAPI?.workspace?.getPaths()
+                        const parent = workspacePath.split('/').slice(0, -1).join('/') || '/'
+                        if (parent && parent.length >= (ws?.root || '').length) loadWorkspaceDir(parent)
+                      }}
+                      title="返回上级"
+                    >
+                      <ArrowLeft className="h-3.5 w-3.5" />
+                    </button>
+                    <FolderOpen className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <span className="text-[10px] text-muted-foreground/50 truncate">{workspacePath.replace(/\/+$/, '')}/</span>
+                    <div className="flex-1" />
+                    <button
+                      className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
+                      onClick={() => window.electronAPI?.workspace?.openFile(workspacePath)}
+                      title="在文件管理器中打开"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                    </button>
+                  </div>
+                  <div className="max-h-64 overflow-auto p-1">
+                    {workspaceEntries.length === 0 ? (
+                      <p className="text-[11px] text-muted-foreground/50 text-center py-6">空目录</p>
+                    ) : (
+                      workspaceEntries.map((entry) => (
+                        <button
+                          key={entry.path}
+                          className="flex items-center gap-2 w-full rounded-md hover:bg-accent transition-colors px-2 py-1.5 text-left"
+                          onClick={() => {
+                            if (entry.isDir) {
+                              loadWorkspaceDir(entry.path)
+                            } else {
+                              window.electronAPI?.workspace?.openFile(entry.path)
+                            }
+                          }}
+                          title={entry.isDir ? `进入 ${entry.name}/` : `打开 ${entry.name}`}
+                        >
+                          {entry.isDir ? (
+                            <FolderOpen className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          ) : (
+                            <File className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          )}
+                          <span className="text-xs truncate">{entry.name}</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+          <TokenUsageBar
+            estimatedTokens={estimatedTokens}
+            limit={contextWindowLimit}
+            wasCompressed={compressionInfo?.wasCompressed || false}
+            originalTokens={compressionInfo?.originalTokens}
+            compressedTokens={compressionInfo?.compressedTokens}
+            compressing={compressing}
+            onForceCompress={compressNow}
+          />
+          <div className="flex-1" />
+          {loading ? (
+            <button className="p-0.5 rounded text-muted-foreground/50 hover:text-foreground transition-colors" onClick={() => abortRef.current?.abort()} title="停止生成">
+              <X className="h-4 w-4" />
+            </button>
+          ) : (
+            <button className="p-0.5 rounded text-muted-foreground/30 hover:text-muted-foreground transition-colors" onClick={handleSend} disabled={!input.trim() || !activeModel || !!askUser} title={askUser ? '请先在上方回答 AI 的问题' : '发送 (Enter)'}>
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+
   return (
     <div className="flex h-full flex-col">
       <ConversationBar
@@ -729,130 +948,43 @@ export function ChatPage() {
         onDelete={handleDeleteConv}
         onRename={handleRenameConv}
       />
-      <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar">
-        {messages.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
+
+      {messages.length === 0 ? (
+        /* 空状态：欢迎语 + 输入框居中 */
+        <div className="flex-1 flex flex-col items-center justify-center gap-8 px-3 pb-12">
+          <div className="flex flex-col items-center gap-3 text-muted-foreground">
             <Bot className="h-16 w-16 opacity-20" />
             <p className="text-lg font-medium">AI 助手</p>
             <p className="text-sm">{configuredModels.length === 0 ? '请先在设置中配置模型' : activeModel ? `当前模型: ${activeModel.displayName}` : '选择一个模型'}</p>
           </div>
-        ) : (
-          <div className="chat-messages w-full px-4 py-4 space-y-4">
-            {messages.map((msg, i) => <ChatMessage key={i} msg={msg} />)}
-            {taskList.length > 0 && <TaskListCard tasks={taskList} />}
-            <div ref={endRef} />
+          <div className="w-full max-w-2xl">
+            {inputArea}
           </div>
-        )}
-      </div>
-
-      {askUser && <AskUserBar askUser={askUser} answer={askUserAnswer} onAnswerChange={setAskUserAnswer} onAnswer={handleAskAnswer} />}
-      <OutputFiles files={outputFiles} onRefresh={refreshOutputs} />
-      {showConsole && <ChatConsole lines={consoleLog} onClose={() => setShowConsole(false)} />}
-
-      {(statusText || progressMsg) && (
-        <div className="border-t border-border bg-muted/30 px-4 py-1 text-center text-[10px] text-muted-foreground/50">
-          {progressMsg && <Loader2 className="inline h-3 w-3 animate-spin mr-1" />}
-          {progressMsg || statusText}
         </div>
-      )}
-
-
-      {/* 输入区 */}
-      <div className="border-t border-border px-3 py-2">
-        {attachments.length > 0 && <AttachmentChips attachments={attachments} onRemove={removeAttachment} />}
-
-        {/* @ 文件选择器 */}
-        {showAtPicker && atFiles.length > 0 && (
-          <div className="mb-1.5 rounded-md border border-border bg-card shadow-lg max-h-36 overflow-auto">
-            {atFiles.map(f => (
-              <button
-                key={f.path}
-                className="flex items-center gap-2 w-full px-2 py-1.5 text-xs hover:bg-muted/50 transition-colors text-left"
-                onClick={() => selectAtFile(f)}
-              >
-                <File className="h-3 w-3 text-muted-foreground shrink-0" />
-                <span className="truncate">{f.name}</span>
-              </button>
-            ))}
-          </div>
-        )}
-
-
-        {/* 输入行 */}
-        <div className="rounded-lg border border-input bg-background focus-within:ring-1 focus-within:ring-ring">
-          <textarea
-            className="w-full resize-none bg-transparent px-3 pt-2 pb-0 text-sm leading-relaxed placeholder:text-muted-foreground outline-none disabled:cursor-not-allowed disabled:opacity-50 custom-scrollbar"
-            rows={3}
-            placeholder={askUser ? '请在上方回答 AI 的问题...' : activeModel ? `向 ${activeModel.displayName} 提问...` : '请先配置模型'}
-            value={input}
-            onChange={e => handleInputChange(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
-              if (e.key === 'Enter' && e.shiftKey) return
-            }}
-            disabled={!activeModel || !!askUser}
-          />
-          <div className="flex items-center gap-1 px-2 pb-1.5">
-            <div className="relative shrink-0">
-              <button
-                className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground/60 hover:bg-muted hover:text-muted-foreground transition-colors"
-                onClick={() => setShowModelPicker(!showModelPicker)}
-                title={activeModel ? `${activeModel.displayName} / ${activeModel.selectedModel}` : '选择模型'}
-              >
-                <Bot className="h-3 w-3" />
-                <span className="max-w-[60px] truncate">{activeModel?.displayName || '模型'}</span>
-              </button>
-              <ModelPicker
-                show={showModelPicker} autoMode={autoMode}
-                activeModel={activeModel}
-                configuredModels={configuredModels}
-                onToggleAuto={() => setAutoMode(!autoMode)}
-                onSelectCloud={(m) => { setActiveModel(m); setShowModelPicker(false) }}
-                onClose={() => setShowModelPicker(false)} pickerRef={pickerRef}
-              />
+      ) : (
+        /* 有消息：消息区 + 底部输入框 */
+        <>
+          <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar">
+            <div className="chat-messages w-full px-4 py-4 space-y-4">
+              {messages.map((msg, i) => <ChatMessage key={i} msg={msg} />)}
+              {taskList.length > 0 && <TaskListCard tasks={taskList} />}
+              <div ref={endRef} />
             </div>
-            <MemoryPopup
-              manager={memoryManagerRef.current}
-              enabled={sessionMemoryEnabled}
-              onToggle={() => setSessionMemoryEnabled(v => !v)}
-              shortCount={shortMemoryCount}
-            />
-            <AgentPicker />
-            <SkillPicker skills={skills} onToggle={async (s) => { await toggleSkill(s.id, !s.enabled); setSkills(getInstalledSkills()) }} />
-            <MCPToolPicker
-              selectedTools={selectedMCPTools}
-              onSelectionChange={setSelectedMCPTools}
-              disclosureResult={disclosureResult}
-              threshold={disclosureThreshold}
-              onThresholdChange={(n) => { setDisclosureThreshold(n); saveDisclosureThreshold(n) }}
-              activatedToolNames={activatedToolNames}
-            />
-            <button className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground/60 hover:bg-muted hover:text-muted-foreground transition-colors" onClick={handleUpload} title="上传文件">
-              <Paperclip className="h-3 w-3" />
-              <span>文件</span>
-            </button>
-            <TokenUsageBar
-              estimatedTokens={estimatedTokens}
-              limit={contextWindowLimit}
-              wasCompressed={compressionInfo?.wasCompressed || false}
-              originalTokens={compressionInfo?.originalTokens}
-              compressedTokens={compressionInfo?.compressedTokens}
-              compressing={compressing}
-              onForceCompress={compressNow}
-            />
-            <div className="flex-1" />
-            {loading ? (
-              <button className="p-0.5 rounded text-muted-foreground/50 hover:text-foreground transition-colors" onClick={() => abortRef.current?.abort()} title="停止生成">
-                <X className="h-4 w-4" />
-              </button>
-            ) : (
-              <button className="p-0.5 rounded text-muted-foreground/30 hover:text-muted-foreground transition-colors" onClick={handleSend} disabled={!input.trim() || !activeModel || !!askUser} title={askUser ? '请先在上方回答 AI 的问题' : '发送 (Enter)'}>
-                <Send className="h-4 w-4" />
-              </button>
-            )}
           </div>
-        </div>
-      </div>
+
+          {askUser && <AskUserBar askUser={askUser} answer={askUserAnswer} onAnswerChange={setAskUserAnswer} onAnswer={handleAskAnswer} />}
+          {showConsole && <ChatConsole lines={consoleLog} onClose={() => setShowConsole(false)} />}
+
+          {(statusText || progressMsg) && (
+            <div className="border-t border-border bg-muted/30 px-4 py-1 text-center text-[10px] text-muted-foreground/50">
+              {progressMsg && <Loader2 className="inline h-3 w-3 animate-spin mr-1" />}
+              {progressMsg || statusText}
+            </div>
+          )}
+
+          {inputArea}
+        </>
+      )}
     </div>
   )
 }

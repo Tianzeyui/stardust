@@ -160,7 +160,7 @@ export function PluginPage({ manifest, htmlContent, pluginDir = '', permissions 
     api.workspace = {
       getPaths: async () => {
         const ea2 = (window as any).electronAPI
-        if (!ea2?.workspace) return { root: '~/BrainPlus/workspace', output: '~/BrainPlus/workspace/output', input: '~/BrainPlus/workspace/input' }
+        if (!ea2?.workspace) return { root: '~/BrainPlus/workspace', output: '~/BrainPlus/workspace/output' }
         return ea2.workspace.getPaths()
       },
       openFile: async (filePath: string) => { await (window as any).electronAPI?.workspace?.openFile(filePath) },
