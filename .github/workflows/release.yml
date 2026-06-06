@@ -60,11 +60,13 @@ jobs:
       - uses: actions/download-artifact@v4
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            BrainPlus-mac/*
-            BrainPlus-win/*
-            BrainPlus-linux/*
-          draft: true
-          generate_release_notes: true
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            BrainPlus-mac/* \
+            BrainPlus-win/* \
+            BrainPlus-linux/* \
+            --draft \
+            --generate-notes \
+            --title "${{ github.ref_name }}"
+        env:
+          GH_TOKEN: ${{ github.token }}
