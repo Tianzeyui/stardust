@@ -57,14 +57,18 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
+        with:
+          path: ./release-assets
 
       - name: Create Release
         run: |
           gh release create "${{ github.ref_name }}" \
-            BrainPlus-mac/* \
-            BrainPlus-win/* \
-            BrainPlus-linux/* \
+            ./release-assets/BrainPlus-mac/**/* \
+            ./release-assets/BrainPlus-win/**/* \
+            ./release-assets/BrainPlus-linux/**/* \
             --draft \
             --generate-notes \
             --title "${{ github.ref_name }}"
