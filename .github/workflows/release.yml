@@ -66,9 +66,11 @@ jobs:
       - name: Create Release
         run: |
           gh release create "${{ github.ref_name }}" \
-            ./release-assets/BrainPlus-mac/**/* \
-            ./release-assets/BrainPlus-win/**/* \
-            ./release-assets/BrainPlus-linux/**/* \
+            ./release-assets/BrainPlus-mac/*.dmg \
+            ./release-assets/BrainPlus-mac/*.zip \
+            ./release-assets/BrainPlus-win/*.exe \
+            ./release-assets/BrainPlus-win/*.zip \
+            ./release-assets/BrainPlus-linux/*.AppImage \
             --draft \
             --generate-notes \
             --title "${{ github.ref_name }}"
