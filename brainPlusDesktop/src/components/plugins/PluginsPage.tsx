@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Trash2, FolderOpen } from 'lucide-react'
+import { Plus, Trash2, FolderOpen, Package } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { pluginSystem } from '@/lib/pluginSystem'
@@ -39,8 +39,9 @@ export function PluginsPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center border-b border-border px-4 h-11">
-        <span className="text-sm font-medium">插件</span>
+      <div className="flex h-11 items-center gap-2 border-b border-border px-4">
+        <Package className="h-4 w-4 text-muted-foreground shrink-0" />
+        <h2 className="text-sm font-semibold">插件</h2>
       </div>
       <div className="flex-1 overflow-auto p-4 space-y-4">
         {/* 安装区域 */}

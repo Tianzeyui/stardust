@@ -198,7 +198,7 @@ export interface ChatStreamEvent {
 export async function chat(
   messages: ModelMessage[],
   onEvent?: (event: ChatStreamEvent) => void,
-  opts?: { abortSignal?: AbortSignal; autoMode?: boolean; localModelId?: string; forceCompression?: boolean; selectedTools?: Set<string> | null; memoryInjection?: string; userId?: string },
+  opts?: { abortSignal?: AbortSignal; autoMode?: boolean; localModelId?: string; forceCompression?: boolean; selectedTools?: Set<string> | null; memoryInjection?: string; projectPrompt?: string; userId?: string },
 ) {
   // 本地模型路径
   if (opts?.localModelId) {
@@ -390,8 +390,11 @@ export async function chat(
     })
   }
 
-  // 记忆 + 摘要注入 system prompt
+  // 项目 PROMPT.md + 记忆 注入 system prompt
   let finalSystem = systemPrompt || ''
+  if (opts?.projectPrompt?.trim()) {
+    finalSystem = `[项目上下文]\n${opts.projectPrompt.trim()}\n\n${finalSystem}`
+  }
   if (opts?.memoryInjection) {
     console.log('[memory] 本轮注入记忆:\n' + opts.memoryInjection)
     onEvent?.({ type: 'system-log', text: `🧠 记忆注入:\n${opts.memoryInjection}` })

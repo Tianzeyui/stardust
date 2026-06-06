@@ -3,15 +3,26 @@ export interface AIModel {
   name: string
   url: string
   icon: string
+  description?: string
 }
 
-export interface AIModelFavorite {
+export interface ToolboxCategory {
   id: string
   user_id: string
-  model_id: string
-  model_name: string
-  model_url: string
-  model_icon: string
+  name: string
+  icon: string
+  sort_order: number
+  created_at: string
+}
+
+export interface ToolboxItem {
+  id: string
+  user_id: string
+  category_id: string | null
+  name: string
+  url: string
+  icon: string
+  description: string
   sort_order: number
   created_at: string
 }

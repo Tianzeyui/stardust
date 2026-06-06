@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, Menu } from 'electron'
 import path from 'path'
 import fs from 'fs'
+import { exec } from 'child_process'
 import { fileURLToPath } from 'url'
 import { mcpService, type MCPServer } from './main/mcp/MCPService.js'
 import { startA2AServer, stopA2AServer, completeA2ATask, getA2ATask, syncAgents, setA2AToken } from './main/a2aServer.js'
@@ -299,12 +300,12 @@ ipcMain.handle('skills:deleteFiles', async (_event, skillId: string) => {
 
 // ==================== Sandbox IPC ====================
 
-ipcMain.handle('sandbox:executeJS', async (_event, code: string, packages?: string[]) => {
-  return executeJS(code, packages)
+ipcMain.handle('sandbox:executeJS', async (_event, code: string, packages?: string[], outputDir?: string) => {
+  return executeJS(code, packages, outputDir)
 })
 
-ipcMain.handle('sandbox:executePython', async (_event, code: string, packages?: string[]) => {
-  return executePython(code, packages)
+ipcMain.handle('sandbox:executePython', async (_event, code: string, packages?: string[], outputDir?: string) => {
+  return executePython(code, packages, outputDir)
 })
 
 // ==================== Workspace IPC ====================
@@ -314,6 +315,47 @@ ipcMain.handle('workspace:listOutputs', () => listOutputFiles())
 ipcMain.handle('workspace:openFile', (_event, filePath: string) => openFile(filePath))
 ipcMain.handle('workspace:deleteFile', (_event, filePath: string) => deleteFile(filePath))
 ipcMain.handle('workspace:clearOutputs', () => clearOutputFiles())
+
+// ==================== Shell IPC ====================
+
+ipcMain.handle('shell:openInExplorer', async (_event, targetPath: string) => {
+  try {
+    const stat = fs.statSync(targetPath)
+    if (stat.isFile()) {
+      shell.showItemInFolder(targetPath)
+    } else {
+      shell.openPath(targetPath)
+    }
+  } catch {
+    shell.openPath(path.dirname(targetPath))
+  }
+})
+
+ipcMain.handle('shell:openInTerminal', async (_event, targetPath: string) => {
+  let dirPath: string
+  try {
+    const stat = fs.statSync(targetPath)
+    dirPath = stat.isDirectory() ? targetPath : path.dirname(targetPath)
+  } catch {
+    dirPath = path.dirname(targetPath)
+  }
+
+  const platform = process.platform
+  if (platform === 'darwin') {
+    exec(`open -a Terminal "${dirPath}"`)
+  } else if (platform === 'win32') {
+    exec(`start cmd /K "cd /d ${dirPath}"`)
+  } else {
+    // Linux: try common terminals
+    const terminals = ['gnome-terminal', 'konsole', 'xfce4-terminal', 'x-terminal-emulator']
+    for (const term of terminals) {
+      try {
+        exec(`cd "${dirPath}" && ${term}`)
+        break
+      } catch { continue }
+    }
+  }
+})
 
 // ==================== Config IPC ====================
 
@@ -412,11 +454,11 @@ ipcMain.on('model:subscribe', (event) => {
 
 // ==================== Conversation IPC ====================
 
-ipcMain.handle('conv:list', () => listConversations())
+ipcMain.handle('conv:list', (_e, projectId?: string | null) => listConversations(projectId))
 ipcMain.handle('conv:get', (_e, id: string) => getConversation(id))
 ipcMain.handle('conv:save', (_e, conv: any) => { saveConversation(conv); return true })
 ipcMain.handle('conv:delete', (_e, id: string) => deleteConversation(id))
-ipcMain.handle('conv:create', (_e, title?: string, modelName?: string) => createConversation(title, modelName))
+ipcMain.handle('conv:create', (_e, title?: string, modelName?: string, projectId?: string | null, projectName?: string) => createConversation(title, modelName, projectId, projectName))
 
 // ==================== AI 模型独立窗口 ====================
 

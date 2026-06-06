@@ -190,7 +190,7 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
 
   // ===== MCP =====
   const addServer = async () => {
-    const s: MCPServerConfig = { id: `srv_${Date.now()}`, name: '新服务器', url: '', type: 'sse', command: '', args: [], enabled: false }
+    const s: MCPServerConfig = { id: `srv_${Date.now()}`, name: '新服务器', description: '', url: '', type: 'sse', command: '', args: [], enabled: false }
     await addMcpServer(s)
     setServers(await window.electronAPI!.mcp.getServers() as MCPServerConfig[])
   }
@@ -747,6 +747,7 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
                   <div className={`flex items-center justify-between px-4 py-3 ${srv.enabled ? 'cursor-pointer' : ''}`} onClick={() => loadServerDetail(srv.id)}>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate">{srv.name}</p>
+                      {srv.description && <p className="text-[10px] text-muted-foreground/60 truncate">{srv.description}</p>}
                       <p className="text-xs text-muted-foreground truncate">{srv.url || srv.command || '未配置'}</p>
                     </div>
                     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
@@ -784,9 +785,36 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
                       </div>
                     </div>
                     <div>
+                      <Label className="text-[11px]">描述</Label>
+                      <Input className="h-8 text-xs" placeholder="服务器用途说明（可选）" value={srv.description || ''} onChange={(e) => updateServer(srv.id, { description: e.target.value })} />
+                    </div>
+                    <div>
                       <Label className="text-[11px]">URL</Label>
                       <Input className="h-8 text-xs" placeholder="http://localhost:3000" value={srv.url} onChange={(e) => updateServer(srv.id, { url: e.target.value })} />
                     </div>
+                    {(srv.type === 'sse' || srv.type === 'streamableHttp') && (
+                      <div>
+                        <Label className="text-[11px]">请求头 (Headers)</Label>
+                        <textarea
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono leading-relaxed outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                          rows={3}
+                          placeholder='{"Authorization": "Bearer xxx", "X-API-Key": "yyy"}'
+                          value={srv.headers ? JSON.stringify(srv.headers, null, 2) : ''}
+                          onChange={(e) => {
+                            const raw = e.target.value.trim()
+                            if (!raw) { updateServer(srv.id, { headers: undefined }); return }
+                            try {
+                              const parsed = JSON.parse(raw)
+                              if (typeof parsed === 'object' && !Array.isArray(parsed)) {
+                                updateServer(srv.id, { headers: parsed as Record<string, string> })
+                              }
+                            } catch { /* 输入中的 JSON 不合法，不更新 */ }
+                          }}
+                          spellCheck={false}
+                        />
+                        <p className="text-[9px] text-muted-foreground/50 mt-1">JSON 格式，如鉴权 Token。仅对 SSE / HTTP 模式生效。</p>
+                      </div>
+                    )}
                     {srv.type === 'stdio' && (
                       <div className="grid grid-cols-2 gap-2">
                         <div>

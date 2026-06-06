@@ -1,6 +1,7 @@
 export interface MCPServerConfig {
   id: string
   name: string
+  description: string
   url: string
   type: 'sse' | 'stdio' | 'streamableHttp'
   command: string
@@ -54,11 +55,15 @@ export interface ElectronAPI {
     onConvertProgress: (cb: (data: { filePath: string; message: string }) => void) => () => void
   }
   workspace: {
-    getPaths: () => Promise<{ root: string; output: string; input: string }>
+    getPaths: () => Promise<{ root: string; output: string }>
     listOutputs: () => Promise<Array<{ name: string; path: string; size: number }>>
     openFile: (filePath: string) => Promise<void>
     deleteFile: (filePath: string) => Promise<boolean>
     clearOutputs: () => Promise<number>
+  }
+  shell: {
+    openInExplorer: (targetPath: string) => Promise<void>
+    openInTerminal: (targetPath: string) => Promise<void>
   }
   sandbox: {
     executeJS: (code: string, packages?: string[]) => Promise<{ success: boolean; result?: string; error?: string }>

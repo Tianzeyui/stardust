@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   FolderOpen,
-  FolderSearch,
   RefreshCw,
   ExternalLink,
   ArrowLeft,
@@ -13,11 +12,14 @@ import {
   FolderPlus,
   FilePlus,
   Upload,
+  Download,
   Copy,
   Scissors,
   ClipboardPaste,
   Trash2,
   Pencil,
+  Terminal,
+  ChevronRight,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -66,6 +68,9 @@ export function FileManagerPage() {
   const [clipboard, setClipboard] = useState<{ path: string; name: string; op: 'copy' | 'cut' } | null>(null)
   // 右键菜单
   const [contextMenu, setContextMenu] = useState<{ entry: FileEntry; x: number; y: number } | null>(null)
+  // 空白区右键菜单
+  const [blankMenu, setBlankMenu] = useState<{ x: number; y: number } | null>(null)
+  const [blankNewSub, setBlankNewSub] = useState(false)
 
   // 初始化：获取工作区路径作为根目录
   useEffect(() => {
@@ -76,12 +81,12 @@ export function FileManagerPage() {
         const api = window.electronAPI!.fs
 
         const dirs: Array<{ name: string; path: string }> = []
-        // 检查 workspace 各子目录是否存在
-        if (await api.exists(ws.output)) {
-          dirs.push({ name: '工作区输出', path: ws.output })
-        }
+        // 工作区根目录优先
         if (await api.exists(ws.root)) {
           dirs.push({ name: '工作区', path: ws.root })
+        }
+        if (await api.exists(ws.output)) {
+          dirs.push({ name: '工作区输出', path: ws.output })
         }
 
         // 默认打开第一个存在的目录
@@ -97,16 +102,10 @@ export function FileManagerPage() {
     init()
   }, [])
 
-  // 浏览目录
-  const handleBrowse = useCallback(async () => {
-    if (!window.electronAPI?.dialog) return
-    const result = await window.electronAPI.dialog.openDirectory()
-    if (result.success && result.path) {
-      setCurrentPath(result.path)
-      setSelectedFile(null)
-      setFileContent(null)
-    }
-  }, [])
+  // 检查路径是否在工作区内
+  const isInWorkspace = useCallback((p: string) => {
+    return rootDirs.some(d => p.replace(/\\/g, '/').startsWith(d.path))
+  }, [rootDirs])
 
   // 刷新当前目录
   const [refreshKey, setRefreshKey] = useState(0)
@@ -114,13 +113,17 @@ export function FileManagerPage() {
     setSelectedFile(null); setFileContent(null)
     setRefreshKey(n => n + 1)
   }, [])
-
-  // 前进栈
+  // 前进栈 + 路径输入
   const fwdRef = useRef<string[]>([])
+  const [pathInput, setPathInput] = useState('')
   const [, forceUpdate] = useState(0)
+
+  // currentPath 变化时同步到输入框
+  useEffect(() => { setPathInput(currentPath) }, [currentPath])
 
   const goDir = (p: string) => {
     const clean = p.replace(/\/+/g, '/')
+    if (!isInWorkspace(clean)) return
     fwdRef.current = []
     setCurrentPath(clean); setSelectedFile(null); setFileContent(null)
     forceUpdate(n => n + 1)
@@ -229,7 +232,55 @@ export function FileManagerPage() {
   }, [handleRefresh])
 
   const handleContextMenu = useCallback((entry: FileEntry, x: number, y: number) => {
-    setContextMenu({ entry, x, y })
+    setBlankMenu(null); setContextMenu({ entry, x, y })
+  }, [])
+
+  const handleBlankContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    setContextMenu(null)
+    setBlankMenu({ x: e.clientX, y: e.clientY })
+    setBlankNewSub(false)
+  }, [])
+
+  const openInExplorer = useCallback((targetPath: string) => {
+    window.electronAPI?.shell?.openInExplorer(targetPath)
+    setContextMenu(null); setBlankMenu(null)
+  }, [])
+
+  const openInTerminal = useCallback((targetPath: string) => {
+    window.electronAPI?.shell?.openInTerminal(targetPath)
+    setContextMenu(null); setBlankMenu(null)
+  }, [])
+
+  const handleBlankCreate = useCallback((type: 'folder' | 'file', ext: string) => {
+    setNewItemPrompt({ type, ext }); setNewItemName('')
+    setBlankMenu(null)
+  }, [])
+
+  const handleCopyPath = useCallback((path: string) => {
+    navigator.clipboard.writeText(path)
+    toast({ title: '已复制路径', description: path })
+    setContextMenu(null); setBlankMenu(null)
+  }, [])
+
+  const handleCopyTo = useCallback(async (srcPath: string) => {
+    if (!window.electronAPI?.dialog) return
+    const result = await window.electronAPI.dialog.openDirectory()
+    if (!result.success || !result.path) return
+    const name = srcPath.split(/[\\/]/).pop() || 'file'
+    const dest = `${result.path}/${name}`
+    try {
+      const content = await window.electronAPI!.fs!.readFile(srcPath)
+      if (content.success && content.content != null) {
+        await window.electronAPI!.fs!.writeFile(dest, content.content)
+        toast({ title: '已复制', description: dest })
+      } else {
+        toast({ title: '复制失败', description: content.error || '读取失败', variant: 'destructive' })
+      }
+    } catch (e: any) {
+      toast({ title: '复制失败', description: e.message, variant: 'destructive' })
+    }
+    setContextMenu(null); setBlankMenu(null)
   }, [])
 
   const handlePaste = useCallback(async () => {
@@ -350,10 +401,6 @@ export function FileManagerPage() {
         <Button size="sm" variant="ghost" className="h-7 px-2" onClick={handleRefresh} title="刷新">
           <RefreshCw className="h-3.5 w-3.5" />
         </Button>
-        <Button size="sm" variant="outline" className="h-7 gap-1" onClick={handleBrowse}>
-          <FolderSearch className="h-3.5 w-3.5" />
-          <span className="text-[11px]">浏览</span>
-        </Button>
       </div>
 
       {/* 路径栏 + 新建（统一 border-b 区域） */}
@@ -366,10 +413,16 @@ export function FileManagerPage() {
         </Button>
         <Input
           className="h-7 text-xs font-mono flex-1"
-          value={currentPath}
-          onChange={e => setCurrentPath(e.target.value)}
+          value={pathInput}
+          onChange={e => setPathInput(e.target.value)}
           onKeyDown={e => {
-            if (e.key === 'Enter') { setSelectedFile(null); setFileContent(null) }
+            if (e.key === 'Enter') {
+              const clean = pathInput.replace(/\/+/g, '/')
+              if (!isInWorkspace(clean)) { toast({ title: '仅限在工作区内浏览', variant: 'destructive' }); setPathInput(currentPath); return }
+              fwdRef.current = []
+              setCurrentPath(clean); setSelectedFile(null); setFileContent(null)
+            }
+            if (e.key === 'Escape') { setPathInput(currentPath) }
           }}
           placeholder="输入目录路径后回车..."
         />
@@ -400,7 +453,14 @@ export function FileManagerPage() {
       {/* 主内容：左文件树 + 右预览 */}
       <div className="flex-1 flex min-h-0">
         {/* 左侧文件树 */}
-        <div className="w-64 shrink-0 border-r border-border overflow-auto">
+        <div className="w-64 shrink-0 border-r border-border overflow-auto"
+          onContextMenu={(e) => {
+            // 仅在容器空白区触发（非 FileTree 条目）
+            const target = e.target as HTMLElement
+            if (target.closest('button')) return
+            handleBlankContextMenu(e)
+          }}
+        >
           {currentPath ? (
             <div className="py-1">
               <FileTree
@@ -421,11 +481,12 @@ export function FileManagerPage() {
         </div>
 
         {/* 右侧预览 */}
-        <div className="flex-1 overflow-auto min-w-0">
+        <div className="flex-1 overflow-auto min-w-0" onContextMenu={handleBlankContextMenu}>
           {!selectedFile ? (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground">
               <File className="h-12 w-12 opacity-20" />
               <p className="text-sm">选择文件以预览</p>
+              <p className="text-[10px] text-muted-foreground/50">右键可新建文件或打开工作区</p>
             </div>
           ) : loadingContent ? (
             <div className="flex items-center justify-center h-full">
@@ -521,12 +582,12 @@ export function FileManagerPage() {
           )}
         </div>
       </div>
-      {/* 右键菜单 */}
+      {/* 文件/目录右键菜单 */}
       {contextMenu && (
         <>
           <div className="fixed inset-0 z-50" onClick={() => setContextMenu(null)} />
           <div
-            className="fixed z-50 rounded-lg border border-border bg-card shadow-lg py-1 w-36"
+            className="fixed z-50 rounded-lg border border-border bg-card shadow-lg py-1 w-44"
             style={{ left: contextMenu.x, top: contextMenu.y }}
           >
             <button className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors"
@@ -541,6 +602,87 @@ export function FileManagerPage() {
             <button className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors"
               onClick={() => handleDelete(contextMenu.entry)}>
               <Trash2 className="h-3.5 w-3.5" /> 删除
+            </button>
+            <div className="border-t border-border my-0.5" />
+            <button className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors"
+              onClick={() => handleCopyPath(contextMenu.entry.path)}>
+              <Copy className="h-3.5 w-3.5" /> 复制路径
+            </button>
+            <button className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors"
+              onClick={() => handleCopyTo(contextMenu.entry.path)}>
+              <Download className="h-3.5 w-3.5" /> 导出到...
+            </button>
+            <div className="border-t border-border my-0.5" />
+            <button className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors"
+              onClick={() => openInExplorer(contextMenu.entry.path)}>
+              <ExternalLink className="h-3.5 w-3.5" /> 打开于文件系统
+            </button>
+            <button className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors"
+              onClick={() => openInTerminal(contextMenu.entry.path)}>
+              <Terminal className="h-3.5 w-3.5" /> 打开于终端
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* 空白区右键菜单 */}
+      {blankMenu && currentPath && (
+        <>
+          <div className="fixed inset-0 z-50" onClick={() => { setBlankMenu(null); setBlankNewSub(false) }} />
+          <div
+            className="fixed z-50 rounded-lg border border-border bg-card shadow-lg py-1 w-44"
+            style={{ left: blankMenu.x, top: blankMenu.y }}
+          >
+            {/* 新建子菜单 */}
+            <div className="relative">
+              <button className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors"
+                onMouseEnter={() => setBlankNewSub(true)}
+                onClick={() => setBlankNewSub(!blankNewSub)}
+              >
+                <FolderPlus className="h-3.5 w-3.5" /> 新建
+                <ChevronRight className="h-3 w-3 ml-auto" />
+              </button>
+              {blankNewSub && (
+                <div
+                  className="absolute left-full top-0 ml-0.5 rounded-lg border border-border bg-card shadow-lg py-1 w-32"
+                  onMouseLeave={() => setBlankNewSub(false)}
+                >
+                  <button className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors"
+                    onClick={() => handleBlankCreate('folder', '')}>
+                    <FolderPlus className="h-3.5 w-3.5" /> 文件夹
+                  </button>
+                  <button className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors"
+                    onClick={() => handleBlankCreate('file', 'md')}>
+                    <FilePlus className="h-3.5 w-3.5" /> .md 文件
+                  </button>
+                  <button className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors"
+                    onClick={() => handleBlankCreate('file', 'json')}>
+                    <FilePlus className="h-3.5 w-3.5" /> .json 文件
+                  </button>
+                  <button className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors"
+                    onClick={() => handleBlankCreate('file', 'yml')}>
+                    <FilePlus className="h-3.5 w-3.5" /> .yml 文件
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="border-t border-border my-0.5" />
+            <button className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors"
+              onClick={() => { handleUploadFile(); setBlankMenu(null) }}>
+              <Upload className="h-3.5 w-3.5" /> 复制到此处
+            </button>
+            <button className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors"
+              onClick={() => handleCopyPath(currentPath)}>
+              <Copy className="h-3.5 w-3.5" /> 复制路径
+            </button>
+            <div className="border-t border-border my-0.5" />
+            <button className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors"
+              onClick={() => openInExplorer(currentPath)}>
+              <ExternalLink className="h-3.5 w-3.5" /> 打开于文件系统
+            </button>
+            <button className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors"
+              onClick={() => openInTerminal(currentPath)}>
+              <Terminal className="h-3.5 w-3.5" /> 打开于终端
             </button>
           </div>
         </>

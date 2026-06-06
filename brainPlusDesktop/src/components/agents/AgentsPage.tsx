@@ -264,7 +264,10 @@ export function AgentsPage() {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b border-border px-4 h-11">
-        <span className="text-sm font-medium">Agents</span>
+        <div className="flex items-center gap-2">
+          <Bot className="h-4 w-4 text-muted-foreground shrink-0" />
+          <h2 className="text-sm font-semibold">Agents</h2>
+        </div>
         <Button size="sm" className="h-7 text-xs" onClick={() => setEditing(emptyAgent())}>
           <Plus className="mr-1 h-3 w-3" />新建 Agent
         </Button>

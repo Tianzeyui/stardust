@@ -6,6 +6,7 @@ export interface Memory {
   category: 'preference' | 'fact' | 'project' | 'general'
   importance: number      // 0-10，越高越重要
   source: 'extracted' | 'manual'
+  projectId?: string      // 项目 ID（项目级记忆隔离）
   createdAt: number       // timestamp
   updatedAt: number
 }

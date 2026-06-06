@@ -3,11 +3,15 @@ import { cn } from '@/lib/utils'
 import { Sidebar, type NavItem } from './Sidebar'
 import { SettingsPage } from '@/components/settings/SettingsPage'
 import { DynamicRoute } from './DynamicRoute'
+import { projectStore } from '@/lib/projectStore'
 
 export function AppLayout() {
   const [activeNav, setActiveNav] = useState<NavItem>('chat')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+
+  // 启动时初始化项目存储
+  useEffect(() => { projectStore.init() }, [])
   const [settingsTab, setSettingsTab] = useState<'about' | undefined>(undefined)
 
   // A2A 远程任务监听（始终挂载，不在 ChatPage 依赖）

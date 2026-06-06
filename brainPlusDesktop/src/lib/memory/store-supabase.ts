@@ -9,12 +9,23 @@ function warn(msg: string, ...args: any[]) {
   console.warn(`[memory:supabase] ${msg}`, ...args)
 }
 
-export function createSupabaseMemoryStore(getUserId: () => string | null): MemoryStore {
+export function createSupabaseMemoryStore(getUserId: () => string | null, getProjectId?: () => string | null): MemoryStore {
+  function encodeCategory(cat: string, pid?: string): string {
+    return pid ? `${cat}|${pid}` : cat
+  }
+  function decodeCategory(raw: string): { category: string; projectId?: string } {
+    const parts = raw.split('|')
+    return parts.length === 2
+      ? { category: parts[0], projectId: parts[1] }
+      : { category: parts[0] }
+  }
+
   return {
     async getAll() {
       const sb = getSupabaseClient()
       const uid = getUserId()
       if (!sb || !uid) return []
+      const currentProjectId = getProjectId?.()
       try {
         const { data } = await sb
           .from('user_memories')
@@ -23,15 +34,25 @@ export function createSupabaseMemoryStore(getUserId: () => string | null): Memor
           .order('importance', { ascending: false })
           .order('updated_at', { ascending: false })
           .limit(50)
-        return (data || []).map((r: any) => ({
-          id: r.id,
-          content: r.content,
-          category: r.category ?? 'general',
-          importance: r.importance ?? 0,
-          source: r.source ?? 'extracted',
-          createdAt: new Date(r.created_at).getTime(),
-          updatedAt: new Date(r.updated_at).getTime(),
-        }))
+        return (data || [])
+          .map((r: any) => {
+            const decoded = decodeCategory(r.category || 'general')
+            return {
+              id: r.id,
+              content: r.content,
+              category: decoded.category,
+              importance: r.importance ?? 0,
+              source: r.source ?? 'extracted',
+              projectId: decoded.projectId,
+              createdAt: new Date(r.created_at).getTime(),
+              updatedAt: new Date(r.updated_at).getTime(),
+            } satisfies Memory
+          })
+          // 项目隔离：只返回当前项目或无项目的记忆
+          .filter(m => {
+            if (currentProjectId) return m.projectId === currentProjectId
+            return !m.projectId
+          })
       } catch (e) { warn('getAll failed', e); return [] }
     },
 
@@ -45,10 +66,11 @@ export function createSupabaseMemoryStore(getUserId: () => string | null): Memor
       try {
         const session = await sb.auth.getSession()
         if (!session.data.session) { warn('add skipped: no session'); return }
+        const encodedCategory = encodeCategory(m.category, m.projectId)
         const { error } = await sb.from('user_memories').insert({
           user_id: uid,
           content: m.content,
-          category: m.category,
+          category: encodedCategory,
           importance: m.importance,
           source: m.source,
         })

@@ -83,6 +83,7 @@ export function FileTree({ dirPath, selectedPath, onSelect, onNavigate, onContex
           onClick={() => entry.isDir ? onNavigate(entry.path) : onSelect(entry)}
           onContextMenu={(e) => {
             e.preventDefault()
+            e.stopPropagation()
             onContextMenu?.(entry, e.clientX, e.clientY)
           }}
         >

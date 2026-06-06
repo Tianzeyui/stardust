@@ -6,7 +6,6 @@ import {
   getInstalledSkills,
   installSkill,
   uninstallSkill,
-  toggleSkill,
   validateInstallPath,
 } from '@/lib/skillService'
 import { toast } from '@/hooks/useToast'
@@ -93,24 +92,6 @@ export function SkillsPage() {
     }
   }, [skills])
 
-  // 切换启用状态
-  const handleToggle = useCallback(async (skill: InstalledSkill) => {
-    const enabled = !skill.enabled
-    try {
-      await toggleSkill(skill.id, enabled)
-      setSkills(prev => prev.map(s => s.id === skill.id ? { ...s, enabled } : s))
-      toast({
-        title: enabled ? `「${skill.name}」已启用` : `「${skill.name}」已禁用`,
-      })
-    } catch (e: any) {
-      toast({
-        title: '操作失败',
-        description: e.message || '未知错误',
-        variant: 'destructive',
-      })
-    }
-  }, [])
-
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-11 items-center gap-2 border-b border-border px-4">
@@ -158,7 +139,6 @@ export function SkillsPage() {
               <SkillCard
                 key={skill.id}
                 skill={skill}
-                onToggle={handleToggle}
                 onUninstall={handleUninstall}
                 onDetail={setDetailSkill}
               />

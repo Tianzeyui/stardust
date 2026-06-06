@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import {
-  Bot, MessageSquare, Package, FolderOpen, BookOpen, Lightbulb, BarChart3,
+  Bot, MessageSquare, Package, FolderOpen, FolderKanban, BookOpen, Lightbulb, BarChart3,
   Settings, LogOut, Brain, PanelLeftClose, PanelLeftOpen, User, ChevronDown,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -23,7 +23,7 @@ interface SidebarProps {
 }
 
 const iconMap: Record<string, any> = {
-  Bot, MessageSquare, Package, FolderOpen, BookOpen, Lightbulb, BarChart3,
+  Bot, MessageSquare, Package, FolderOpen, FolderKanban, BookOpen, Lightbulb, BarChart3,
 }
 
 export function Sidebar({ activeNav, onNavChange, collapsed, onToggleCollapse, onOpenSettings, onCloseSettings }: SidebarProps) {
@@ -126,7 +126,7 @@ export function Sidebar({ activeNav, onNavChange, collapsed, onToggleCollapse, o
               onClick={() => { setShowUserMenu(false); onOpenSettings() }}>
               <Settings className="h-3.5 w-3.5" /> 设置
             </button>
-            <button className="flex w-full items-center gap-2 px-3 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+            <button className="flex w-full items-center gap-2 px-3 py-2 text-xs text-destructive/70 hover:bg-destructive/10 hover:text-destructive transition-colors"
               onClick={() => { setShowUserMenu(false); signOut() }}>
               <LogOut className="h-3.5 w-3.5" /> 退出登录
             </button>

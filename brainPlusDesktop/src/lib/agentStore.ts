@@ -96,7 +96,6 @@ export async function listAgents(userId?: string): Promise<Agent[]> {
   if (!uid && sb) {
     try { uid = (await sb.auth.getSession()).data.session?.user?.id || '' } catch {}
   }
-  console.log(`[agentStore] listAgents userId=${userId} resolved=${uid} hasClient=${!!sb}`)
   if (!sb || !uid) return []
 
   const { data, error } = await sb

@@ -1,32 +1,48 @@
-import { useState, useRef, useEffect } from 'react'
-import { Plus, MessageSquare, Trash2, ChevronDown } from 'lucide-react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { Plus, MessageSquare, Trash2, ChevronDown, FolderKanban } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { projectStore } from '@/lib/projectStore'
+import type { Project } from '@/types/project'
 
 export interface ConvInfo {
   id: string
   title: string
   messageCount: number
   updatedAt: string
+  projectId?: string | null
 }
 
 interface ConversationBarProps {
   convId: string | null
   convTitle: string
   conversations: ConvInfo[]
+  currentProjectId?: string | null   // null = 全局, undefined = 不筛选
   onNew: () => void
   onSwitch: (id: string) => void
   onDelete: (id: string) => void
   onRename: (id: string, title: string) => void
+  onProjectChange: (projectId: string | null) => void
 }
 
 export function ConversationBar({
-  convId, convTitle, conversations,
-  onNew, onSwitch, onDelete, onRename,
+  convId, convTitle, conversations, currentProjectId,
+  onNew, onSwitch, onDelete, onRename, onProjectChange,
 }: ConversationBarProps) {
   const [showList, setShowList] = useState(false)
+  const [showProjectPicker, setShowProjectPicker] = useState(false)
   const [editing, setEditing] = useState(false)
   const [editTitle, setEditTitle] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+  const [projects, setProjects] = useState<Project[]>([])
+
+  const refreshProjects = useCallback(() => {
+    setProjects(projectStore.getAll())
+  }, [])
+
+  useEffect(() => {
+    refreshProjects()
+    return projectStore.onChange(refreshProjects)
+  }, [refreshProjects])
 
   useEffect(() => {
     if (editing) {
@@ -41,11 +57,56 @@ export function ConversationBar({
     setEditing(false)
   }
 
+  const currentProject = projects.find(p => p.id === currentProjectId)
+
   return (
     <div className="relative">
       <div className="flex h-11 items-center gap-2 px-4">
+        {/* 项目选择器 */}
+        <div className="relative shrink-0">
+          <button
+            className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-muted-foreground/60 hover:bg-muted hover:text-muted-foreground transition-colors"
+            onClick={() => setShowProjectPicker(!showProjectPicker)}
+            title="选择项目"
+          >
+            <FolderKanban className="h-3 w-3" />
+            <span className="max-w-[80px] truncate">{currentProject?.name || '全局'}</span>
+            <ChevronDown className="h-2.5 w-2.5 opacity-50" />
+          </button>
+          {showProjectPicker && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowProjectPicker(false)} />
+              <div className="absolute left-0 top-full z-50 mt-1 w-48 rounded-lg border border-border bg-card shadow-lg py-1">
+                <button
+                  className={`flex items-center gap-2 w-full px-3 py-1.5 text-xs transition-colors ${!currentProjectId ? 'bg-accent' : 'hover:bg-muted/50'}`}
+                  onClick={() => { onProjectChange(null); setShowProjectPicker(false) }}
+                >
+                  <span className="h-2 w-2 rounded-full border border-muted-foreground/30" />
+                  全局工作区
+                </button>
+                <div className="border-t border-border my-0.5" />
+                {projects.length === 0 ? (
+                  <p className="px-3 py-2 text-[10px] text-muted-foreground/50">暂无项目</p>
+                ) : (
+                  projects.map(p => (
+                    <button
+                      key={p.id}
+                      className={`flex items-center gap-2 w-full px-3 py-1.5 text-xs transition-colors ${currentProjectId === p.id ? 'bg-accent' : 'hover:bg-muted/50'}`}
+                      onClick={() => { onProjectChange(p.id); setShowProjectPicker(false) }}
+                    >
+                      <span className={`h-2 w-2 rounded-full ${currentProjectId === p.id ? 'bg-primary' : 'border border-muted-foreground/30'}`} />
+                      <span className="truncate">{p.name}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* 对话标题 + 下拉 */}
         <button
-          className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors min-w-0"
           onClick={() => setShowList(!showList)}
         >
           <MessageSquare className="h-3.5 w-3.5 shrink-0" />
@@ -61,7 +122,7 @@ export function ConversationBar({
             />
           ) : (
             <span
-              className="max-w-[300px] truncate cursor-pointer hover:underline decoration-dotted underline-offset-2"
+              className="max-w-[200px] truncate cursor-pointer hover:underline decoration-dotted underline-offset-2"
               onClick={(e) => { e.stopPropagation(); if (convId) setEditing(true) }}
               title="点击重命名"
             >
@@ -79,6 +140,7 @@ export function ConversationBar({
         </button>
       </div>
 
+      {/* 对话列表 */}
       {showList && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setShowList(false)} />

@@ -1,5 +1,5 @@
 import { getSupabaseClient, isSupabaseConfigured } from './supabase'
-import type { AIModelFavorite } from '@/types/ai'
+import type { ToolboxCategory, ToolboxItem } from '@/types/ai'
 
 function requireClient() {
   if (!isSupabaseConfigured()) throw new Error('请先配置 Supabase')
@@ -8,69 +8,88 @@ function requireClient() {
   return client
 }
 
-/** 获取当前用户的收藏列表 */
-export async function fetchFavorites(): Promise<AIModelFavorite[]> {
-  const supabase = requireClient()
-  const { data, error } = await supabase
-    .from('ai_model_favorites')
+// ====== 分类 ======
+
+export async function fetchCategories(): Promise<ToolboxCategory[]> {
+  const sb = requireClient()
+  const { data, error } = await sb
+    .from('toolbox_categories')
     .select('*')
     .order('sort_order', { ascending: true })
-
   if (error) throw error
-  return data as AIModelFavorite[]
+  return data as ToolboxCategory[]
 }
 
-/** 添加收藏 */
-export async function addFavorite(model: {
-  model_id: string
-  model_name: string
-  model_url: string
-  model_icon: string
-}): Promise<void> {
-  const supabase = requireClient()
-  const { data: { user } } = await supabase.auth.getUser()
+export async function createCategory(name: string, icon = ''): Promise<ToolboxCategory> {
+  const sb = requireClient()
+  const { data: { user } } = await sb.auth.getUser()
   if (!user) throw new Error('未登录')
+  const { data, error } = await sb
+    .from('toolbox_categories')
+    .insert({ user_id: user.id, name, icon })
+    .select()
+    .single()
+  if (error) throw error
+  return data as ToolboxCategory
+}
 
-  const { data: existing } = await supabase
-    .from('ai_model_favorites')
-    .select('sort_order')
-    .order('sort_order', { ascending: false })
-    .limit(1)
+export async function updateCategory(id: string, patch: Partial<Pick<ToolboxCategory, 'name' | 'icon'>>): Promise<void> {
+  const sb = requireClient()
+  const { error } = await sb.from('toolbox_categories').update(patch).eq('id', id)
+  if (error) throw error
+}
 
-  const nextOrder = (existing?.[0]?.sort_order ?? -1) + 1
+export async function deleteCategory(id: string): Promise<void> {
+  const sb = requireClient()
+  const { error } = await sb.from('toolbox_categories').delete().eq('id', id)
+  if (error) throw error
+}
 
-  const { error } = await supabase
-    .from('ai_model_favorites')
+// ====== 工具项 ======
+
+export async function fetchItems(categoryId?: string): Promise<ToolboxItem[]> {
+  const sb = requireClient()
+  let query = sb.from('toolbox_items').select('*').order('sort_order', { ascending: true })
+  if (categoryId) query = query.eq('category_id', categoryId)
+  const { data, error } = await query
+  if (error) throw error
+  return data as ToolboxItem[]
+}
+
+export async function createItem(item: {
+  category_id: string | null
+  name: string
+  url?: string
+  icon?: string
+  description?: string
+}): Promise<ToolboxItem> {
+  const sb = requireClient()
+  const { data: { user } } = await sb.auth.getUser()
+  if (!user) throw new Error('未登录')
+  const { data, error } = await sb
+    .from('toolbox_items')
     .insert({
       user_id: user.id,
-      model_id: model.model_id,
-      model_name: model.model_name,
-      model_url: model.model_url,
-      model_icon: model.model_icon,
-      sort_order: nextOrder,
+      category_id: item.category_id,
+      name: item.name,
+      url: item.url || '',
+      icon: item.icon || '',
+      description: item.description || '',
     })
+    .select()
+    .single()
+  if (error) throw error
+  return data as ToolboxItem
+}
 
+export async function updateItem(id: string, patch: Partial<Pick<ToolboxItem, 'name' | 'url' | 'icon' | 'description' | 'category_id'>>): Promise<void> {
+  const sb = requireClient()
+  const { error } = await sb.from('toolbox_items').update(patch).eq('id', id)
   if (error) throw error
 }
 
-/** 删除收藏 */
-export async function removeFavorite(modelId: string): Promise<void> {
-  const supabase = requireClient()
-  const { error } = await supabase
-    .from('ai_model_favorites')
-    .delete()
-    .eq('model_id', modelId)
-
+export async function deleteItem(id: string): Promise<void> {
+  const sb = requireClient()
+  const { error } = await sb.from('toolbox_items').delete().eq('id', id)
   if (error) throw error
-}
-
-/** 更新收藏排序 */
-export async function updateFavoriteOrder(items: { id: string; sort_order: number }[]): Promise<void> {
-  const supabase = requireClient()
-  for (const item of items) {
-    await supabase
-      .from('ai_model_favorites')
-      .update({ sort_order: item.sort_order })
-      .eq('id', item.id)
-  }
 }

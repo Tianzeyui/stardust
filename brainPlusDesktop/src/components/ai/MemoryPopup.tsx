@@ -25,7 +25,12 @@ export function MemoryPopup({ manager, enabled, onToggle, shortCount }: Props) {
     setLoading(false)
   }, [manager])
 
+  // manager 变化时（切项目）重新加载
+  useEffect(() => { load() }, [load])
   useEffect(() => { if (show) load() }, [show, load])
+
+  // 按钮显示数量，优先用实际加载的数据
+  const displayCount = shortTerm.length > 0 ? shortTerm.length : shortCount
 
   return (
     <div className="relative shrink-0">
@@ -35,7 +40,7 @@ export function MemoryPopup({ manager, enabled, onToggle, shortCount }: Props) {
         title="记忆管理"
       >
         <Brain className="h-3 w-3" />
-        <span>记忆{shortCount > 0 ? ` ${shortCount}` : ''}</span>
+        <span>记忆{displayCount > 0 ? ` ${displayCount}` : ''}</span>
       </button>
 
       {show && (

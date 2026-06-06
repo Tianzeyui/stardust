@@ -348,6 +348,7 @@ class PluginSystemImpl {
       const compileResult = await api.compile?.(dirPath)
       if (compileResult && !compileResult.success) {
         console.warn(`[PluginSystem] "${m.id}" TSX 编译失败: ${compileResult.error} (路径: ${dirPath})`)
+        import('@/hooks/useToast').then(m => m.toast({ title: `插件「${m.name}」编译失败`, description: compileResult.error, variant: 'destructive' }))
       }
       if (compileResult?.success && compileResult.code) {
         const exports = evaluatePluginModule(compileResult.code)
@@ -460,6 +461,12 @@ class PluginSystemImpl {
     const tools: Record<string, any> = {}
     for (const registration of this.toolRegistrations) {
       try { registration(tools) } catch (e: any) { console.error('[PluginSystem] 工具注册回调失败:', e.message) }
+    }
+    // 自动包装 inputSchema（插件使用普通 JSON schema，需转换为 AI SDK 格式）
+    for (const key of Object.keys(tools)) {
+      if (tools[key].inputSchema && tools[key].inputSchema.type === 'object') {
+        tools[key].inputSchema = jsonSchema(tools[key].inputSchema)
+      }
     }
     return tools
   }

@@ -14,6 +14,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 export interface MCPServer {
   id: string
   name: string
+  description?: string
   url?: string
   command?: string
   args?: string[]

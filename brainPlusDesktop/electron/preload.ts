@@ -52,9 +52,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     clearOutputs: () => ipcRenderer.invoke('workspace:clearOutputs'),
   },
 
+  shell: {
+    openInExplorer: (targetPath: string) => ipcRenderer.invoke('shell:openInExplorer', targetPath),
+    openInTerminal: (targetPath: string) => ipcRenderer.invoke('shell:openInTerminal', targetPath),
+  },
+
   sandbox: {
-    executeJS: (code: string, packages?: string[]) => ipcRenderer.invoke('sandbox:executeJS', code, packages),
-    executePython: (code: string, packages?: string[]) => ipcRenderer.invoke('sandbox:executePython', code, packages),
+    executeJS: (code: string, packages?: string[], outputDir?: string) => ipcRenderer.invoke('sandbox:executeJS', code, packages, outputDir),
+    executePython: (code: string, packages?: string[], outputDir?: string) => ipcRenderer.invoke('sandbox:executePython', code, packages, outputDir),
   },
 
   fs: {
@@ -120,11 +125,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   conv: {
-    list: () => ipcRenderer.invoke('conv:list'),
+    list: (projectId?: string | null) => ipcRenderer.invoke('conv:list', projectId),
     get: (id: string) => ipcRenderer.invoke('conv:get', id),
     save: (conv: any) => ipcRenderer.invoke('conv:save', conv),
     delete: (id: string) => ipcRenderer.invoke('conv:delete', id),
-    create: (title?: string, modelName?: string) => ipcRenderer.invoke('conv:create', title, modelName),
+    create: (title?: string, modelName?: string, projectId?: string | null, projectName?: string) => ipcRenderer.invoke('conv:create', title, modelName, projectId, projectName),
   },
 
   skills: {

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Cable, Loader2, ChevronRight, ChevronDown, AlertCircle, Check, Minus, Plus, BarChart3, X, Zap } from 'lucide-react'
 import type { MCPServerConfig, MCPTool } from '@/types/electron'
 import type { DisclosureResult, ToolScore } from '@/lib/toolDisclosure'
-import { getServers, getAllTools, listTools, updateServer } from '@/lib/mcpClient'
+import { getServers, getAllTools } from '@/lib/mcpClient'
 
 interface MCPToolPickerProps {
   selectedTools: Set<string> | null  // null = 自动模式（全部工具）
@@ -11,6 +11,10 @@ interface MCPToolPickerProps {
   threshold: number
   onThresholdChange: (n: number) => void
   activatedToolNames: Set<string>  // 本轮实际激活的工具名
+  projectMCPServerIds?: string[]    // 项目配置的 MCP 服务器 ID
+  projectMCPTools?: string[]        // 项目配置的具体 MCP 工具（空=全部）
+  projectPluginTools?: string[]     // 项目配置的具体插件工具（空=全部）
+  pluginTools?: Array<{ name: string; description: string }>  // 插件注册的工具
 }
 
 /** 组合工具全名，与 getMCPSdkTools 中格式一致: {serverName}__{toolName} */
@@ -21,6 +25,10 @@ function toolFullName(serverName: string, toolName: string) {
 export function MCPToolPicker({
   selectedTools, onSelectionChange,
   disclosureResult, threshold, onThresholdChange, activatedToolNames,
+  projectMCPServerIds,
+  projectMCPTools,
+  projectPluginTools,
+  pluginTools,
 }: MCPToolPickerProps) {
   const [show, setShow] = useState(false)
   const [servers, setServers] = useState<MCPServerConfig[]>([])
@@ -29,8 +37,6 @@ export function MCPToolPicker({
   const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set())
   const [errors, setErrors] = useState<Array<{ serverName: string; error: string }>>([])
   const [showIndex, setShowIndex] = useState(false)
-  // 单个服务器正在切换启用状态
-  const [togglingServer, setTogglingServer] = useState<string | null>(null)
 
   // 打开面板时加载全部数据
   const loadData = useCallback(async () => {
@@ -64,57 +70,6 @@ export function MCPToolPicker({
     if (show) { loadData(); setShowIndex(false) }
   }, [show, loadData])
 
-  // ====== 服务器启用/停用（与设置同步）======
-
-  const handleToggleServerEnabled = async (srv: MCPServerConfig) => {
-    setTogglingServer(srv.id)
-    const newEnabled = !srv.enabled
-    try {
-      // 持久化到后端
-      await updateServer(srv.id, { enabled: newEnabled })
-      // 更新本地状态
-      setServers(prev => prev.map(s => s.id === srv.id ? { ...s, enabled: newEnabled } : s))
-
-      if (newEnabled) {
-        // 启用：拉取工具列表 + 手动模式下自动加入选择
-        try {
-          const tools = await listTools(srv.id)
-          setToolsByServer(prev => ({ ...prev, [srv.id]: tools }))
-          // 手动模式下自动将新启用的服务器工具加入选择
-          if (selectedTools !== null && tools.length > 0) {
-            const newNames = tools.map(t => toolFullName(t.serverName, t.name))
-            onSelectionChange(new Set([...selectedTools, ...newNames]))
-          }
-        } catch {
-          setErrors(prev => [...prev.filter(e => e.serverName !== srv.name), { serverName: srv.name, error: '获取工具失败' }])
-        }
-      } else {
-        // 停用：移除工具 + 收起展开 + 从手动选择的 Set 中移除
-        setToolsByServer(prev => {
-          const next = { ...prev }
-          delete next[srv.id]
-          return next
-        })
-        setExpandedServers(prev => {
-          const next = new Set(prev)
-          next.delete(srv.id)
-          return next
-        })
-        // 从手动选择中移除该服务器的所有工具
-        if (selectedTools !== null) {
-          const removed = (toolsByServer[srv.id] || []).map(t => toolFullName(t.serverName, t.name))
-          const next = new Set([...selectedTools].filter(n => !removed.includes(n)))
-          onSelectionChange(next.size > 0 ? next : null)
-        }
-        setErrors(prev => prev.filter(e => e.serverName !== srv.name))
-      }
-    } catch {
-      // 失败时状态不变（没有乐观更新）
-    } finally {
-      setTogglingServer(null)
-    }
-  }
-
   // ====== 工具选择逻辑（仅针对已启用服务器）======
 
   const getEnabledServers = () => servers.filter(s => s.enabled)
@@ -125,9 +80,19 @@ export function MCPToolPicker({
       const tools = toolsByServer[srv.id] || []
       for (const t of tools) names.push(toolFullName(t.serverName, t.name))
     }
+    // 包含插件工具
+    for (const t of (pluginTools || [])) names.push(t.name)
     return names
   }
 
+  const isToolAvailable = (fullName: string, isPlugin = false) => {
+    if (isPlugin) {
+      if (projectPluginTools && projectPluginTools.length > 0) return projectPluginTools.includes(fullName)
+      return true
+    }
+    if (projectMCPTools && projectMCPTools.length > 0) return projectMCPTools.includes(fullName)
+    return true
+  }
   const isToolSelected = (fullName: string) => selectedTools === null || selectedTools.has(fullName)
 
   const handleToggleTool = (fullName: string) => {
@@ -148,6 +113,8 @@ export function MCPToolPicker({
 
   const allNames = allToolFullNames()
   const enabledServers = getEnabledServers()
+  // 项目限定模式下过滤服务器
+  const displayServers = projectMCPServerIds ? servers.filter(s => projectMCPServerIds.includes(s.id)) : servers
   const selectedCount = selectedTools === null ? allNames.length : selectedTools.size
   const isAllSelected = selectedTools === null || (allNames.length > 0 && allNames.every(n => selectedTools.has(n)))
 
@@ -168,12 +135,64 @@ export function MCPToolPicker({
           <div className="absolute left-0 bottom-full z-50 mb-1 w-72 rounded-lg border border-border bg-card shadow-lg">
             {/* 标题栏 */}
             <div className="flex items-center justify-between border-b border-border px-3 py-2">
-              <span className="text-xs font-medium">MCP 服务器</span>
+              <span className="text-xs font-medium">工具</span>
               {selectedTools !== null ? (
                 <span className="text-[10px] text-primary">手动选择 {selectedCount}</span>
               ) : (
                 <span className="text-[10px] text-muted-foreground/50">自动模式</span>
               )}
+            </div>
+
+            {/* 插件工具副标题 */}
+            <div className="px-3 py-1 text-[10px] text-muted-foreground/50 border-b border-border/30">
+              插件工具
+            </div>
+
+            {/* 插件工具 —— 单栏平铺，与 MCP 服务器平级 */}
+            <div className={`flex items-center justify-between px-2 py-1.5 rounded text-xs cursor-pointer hover:bg-muted/50 transition-colors`}
+              onClick={() => {
+                setExpandedServers(prev => {
+                  const next = new Set(prev)
+                  if (next.has('__plugins__')) next.delete('__plugins__')
+                  else next.add('__plugins__')
+                  return next
+                })
+              }}
+            >
+              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                <ChevronRight className={`h-3 w-3 transition-transform shrink-0 ${expandedServers.has('__plugins__') ? 'rotate-90' : ''}`} />
+                <span className="truncate">插件工具</span>
+              </div>
+              <span className="text-[10px] text-muted-foreground/50 shrink-0 ml-2">{(pluginTools || []).length} 工具</span>
+            </div>
+
+            {expandedServers.has('__plugins__') && (
+              <div className="ml-5 border-l border-border pl-2">
+                {pluginTools && pluginTools.length > 0 ? (
+                  pluginTools.map(t => {
+                    const selected = isToolSelected(t.name)
+                    return (
+                      <div key={t.name}
+                        className="flex items-center gap-2 px-2 py-1 rounded text-xs hover:bg-muted/30 cursor-pointer"
+                        onClick={() => handleToggleTool(t.name)}
+                      >
+                        <span className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition-colors ${selected ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/30'}`}>
+                          {selected && <Check className="h-2.5 w-2.5" />}
+                        </span>
+                        <span className="font-mono text-[10px]">{t.name.replace(/^plugin__[^_]+_/, '')}</span>
+                        <span className="text-[10px] text-muted-foreground/50 truncate">{t.description}</span>
+                      </div>
+                    )
+                  })
+                ) : (
+                  <p className="px-2 py-2 text-[10px] text-muted-foreground/50">暂无注册工具的插件</p>
+                )}
+              </div>
+            )}
+
+            {/* 分隔 + MCP 服务器 */}
+            <div className="px-3 py-1.5 text-[10px] text-muted-foreground/70 font-medium border-b border-border">
+              MCP 服务器
             </div>
 
             {/* 服务器/工具列表 */}
@@ -183,18 +202,16 @@ export function MCPToolPicker({
                   <Loader2 className="h-4 w-4 animate-spin" />
                   加载中...
                 </p>
-              ) : servers.length === 0 ? (
+              ) : displayServers.length === 0 ? (
                 <p className="px-3 py-8 text-xs text-muted-foreground text-center">
                   暂无已配置的 MCP 服务器<br />
                   <span className="text-[10px]">去设置页面添加</span>
                 </p>
               ) : (
-                servers.map(srv => {
+                displayServers.map(srv => {
                   const tools = toolsByServer[srv.id] || []
                   const expanded = expandedServers.has(srv.id)
                   const srvError = errors.find(e => e.serverName === srv.name)
-                  const isToggling = togglingServer === srv.id
-
                   return (
                     <div key={srv.id}>
                       {/* 服务器行 */}
@@ -245,18 +262,7 @@ export function MCPToolPicker({
                           {srv.enabled && (toolsByServer[srv.id] || []).length > 0 && (
                             <span className="text-[10px] text-muted-foreground/50">{(toolsByServer[srv.id] || []).length} 工具</span>
                           )}
-                          {/* 启用/停用开关（与设置同步） */}
-                          {isToggling ? (
-                            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                          ) : (
-                            <button
-                              className={`relative inline-flex h-4 w-7 items-center rounded-full shrink-0 transition-colors ${srv.enabled ? 'bg-primary' : 'bg-muted'}`}
-                              onClick={(e) => { e.stopPropagation(); handleToggleServerEnabled(srv) }}
-                              title={srv.enabled ? '停用此服务器' : '启用此服务器（与设置同步）'}
-                            >
-                              <span className={`inline-block h-3 w-3 rounded-full bg-white transition-transform ${srv.enabled ? 'translate-x-3' : 'translate-x-0.5'}`} />
-                            </button>
-                          )}
+                          {!srv.enabled && <span className="text-[10px] text-muted-foreground/50">未启用</span>}
                         </div>
                       </div>
 

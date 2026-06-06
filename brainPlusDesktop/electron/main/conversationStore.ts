@@ -1,5 +1,6 @@
 /**
  * 对话持久化存储 — userData/conversations/
+ * 支持 projectId 绑定
  */
 import { app } from 'electron'
 import fs from 'fs'
@@ -15,6 +16,8 @@ export interface ConversationItem {
   id: string
   title: string
   modelName?: string
+  projectId?: string | null   // null = 全局对话，string = 绑定项目
+  projectName?: string
   messageCount: number
   createdAt: string
   updatedAt: string
@@ -25,7 +28,6 @@ export interface CompressionSnapshot {
   compressedTokens: number
   limit: number
   summary?: string
-  /** 压缩时的消息数量，用于检测压缩状态是否过期 */
   messageCount: number
 }
 
@@ -34,6 +36,8 @@ export interface Conversation {
   title: string
   messages: any[]
   modelName?: string
+  projectId?: string | null
+  projectName?: string
   createdAt: string
   updatedAt: string
   compression?: CompressionSnapshot
@@ -43,10 +47,10 @@ function filePath(id: string): string {
   return path.join(dir, `${id}.json`)
 }
 
-export function listConversations(): ConversationItem[] {
+export function listConversations(projectId?: string | null): ConversationItem[] {
   ensureDir()
   try {
-    return fs.readdirSync(dir)
+    let items = fs.readdirSync(dir)
       .filter(f => f.endsWith('.json'))
       .map(f => {
         const raw = fs.readFileSync(path.join(dir, f), 'utf-8')
@@ -55,12 +59,22 @@ export function listConversations(): ConversationItem[] {
           id: c.id,
           title: c.title || '新对话',
           modelName: c.modelName,
+          projectId: c.projectId ?? null,
+          projectName: c.projectName,
           messageCount: c.messages?.length || 0,
           createdAt: c.createdAt,
           updatedAt: c.updatedAt,
         }
       })
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+
+    // projectId 筛选：undefined=全部, null=全局, string=指定项目
+    if (projectId === null) {
+      items = items.filter(c => !c.projectId)
+    } else if (projectId) {
+      items = items.filter(c => c.projectId === projectId)
+    }
+    return items
   } catch { return [] }
 }
 
@@ -82,12 +96,14 @@ export function deleteConversation(id: string): boolean {
   try { fs.unlinkSync(p); return true } catch { return false }
 }
 
-export function createConversation(title?: string, modelName?: string): Conversation {
+export function createConversation(title?: string, modelName?: string, projectId?: string | null, projectName?: string): Conversation {
   return {
     id: 'conv_' + Date.now(),
     title: title || '新对话',
     messages: [],
     modelName,
+    projectId: projectId ?? null,
+    projectName,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   }

@@ -20,12 +20,14 @@ import { SkillPicker } from './SkillPicker'
 import { MCPToolPicker } from './MCPToolPicker'
 import type { DisclosureResult } from '@/lib/toolDisclosure'
 import { getDisclosureThreshold, saveDisclosureThreshold } from '@/lib/config'
-import { getInstalledSkills, toggleSkill } from '@/lib/skillService'
-import type { InstalledSkill } from '@/types/skill'
 import { MemoryManager } from '@/lib/memory/manager'
 import { createLocalMemoryStore } from '@/lib/memory/store-local'
 import { createSupabaseMemoryStore } from '@/lib/memory/store-supabase'
 import { useAuth } from '@/contexts/AuthContext'
+import { useWorkspace } from '@/hooks/useWorkspace'
+import { projectStore } from '@/lib/projectStore'
+import { pluginSystem } from '@/lib/pluginSystem'
+import { setSandboxOutputDir } from '@/lib/tools/sandbox'
 import { MemoryPopup } from './MemoryPopup'
 import { AgentPicker } from './AgentPicker'
 import { agentDisplayNames } from '@/lib/tools/agentRegistry'
@@ -43,7 +45,18 @@ export function ChatPage() {
   const [messages, setMessages] = useState<UIMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null)
   const { configuredModels, activeModel, setActiveModel, refreshModels } = useModelLoader()
+  const workspace = useWorkspace(currentProjectId)
+  const projectSettings = currentProjectId ? projectStore.getById(currentProjectId)?.settings : null
+  // 插件工具列表
+  const pluginToolEntries = (() => {
+    const tools = pluginSystem.getPluginTools()
+    return Object.entries(tools).map(([name, t]: [string, any]) => ({
+      name,
+      description: t.description || '',
+    }))
+  })()
   const [showModelPicker, setShowModelPicker] = useState(false)
   const [autoMode, setAutoMode] = useState(true)
   const [outputFiles, setOutputFiles] = useState<Array<{ name: string; path: string; size: number }>>([])
@@ -60,7 +73,6 @@ export function ChatPage() {
   const workspaceBtnRef = useRef<HTMLButtonElement>(null)
   const [workspacePath, setWorkspacePath] = useState('')
   const [workspaceEntries, setWorkspaceEntries] = useState<Array<{ name: string; path: string; isDir: boolean }>>([])
-  const [skills, setSkills] = useState<InstalledSkill[]>([])
   // MCP 工具选择：null = 自动模式（全用），Set = 手动选择
   const [selectedMCPTools, setSelectedMCPTools] = useState<Set<string> | null>(null)
   const [disclosureResult, setDisclosureResult] = useState<DisclosureResult | null>(null)
@@ -90,15 +102,15 @@ export function ChatPage() {
   const agentActiveRef = useRef<string | null>(null)
   const agentStreamedRef = useRef('')
   const agentTotalTokensRef = useRef(0)  // 本轮所有子 Agent 累计 token
-  // 记忆管理器（convId 变化时重建，绑定新会话）
-  const memoryManagerRef = useRef<MemoryManager | null>(null)
-  // 始终创建 MemoryManager 用于查看长期记忆（即使无 convId）
+  // 记忆管理器（根据项目+对话隔离）
+  const [memoryManager, setMemoryManager] = useState<MemoryManager | null>(null)
   useEffect(() => {
-    memoryManagerRef.current = new MemoryManager(
-      createLocalMemoryStore(convId || 'pending'),
-      createSupabaseMemoryStore(() => user?.id ?? null),
-    )
-  }, [convId, user?.id])
+    const storeKey = currentProjectId ? `project_${currentProjectId}` : (convId || 'global')
+    setMemoryManager(new MemoryManager(
+      createLocalMemoryStore(storeKey),
+      createSupabaseMemoryStore(() => user?.id ?? null, () => currentProjectId),
+    ))
+  }, [convId, user?.id, currentProjectId])
   const logId = useRef(0)
   const endRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -140,10 +152,10 @@ export function ChatPage() {
   // 加载对话列表
   const loadConvList = useCallback(async () => {
     if (!window.electronAPI?.conv) return
-    const list = await window.electronAPI.conv.list()
+    const list = await window.electronAPI.conv.list(currentProjectId)
     setConvList(list)
-  }, [])
-  useEffect(() => { setSkills(getInstalledSkills()) }, [])
+  }, [currentProjectId])
+  useEffect(() => { projectStore.init() }, [])
   // A2A Server 初始同步
   useEffect(() => {
     if (!user?.id) return
@@ -162,7 +174,7 @@ export function ChatPage() {
   // 切换对话时重置 MCP 工具选择
   useEffect(() => {
     setSelectedMCPTools(null); setDisclosureResult(null); setShortMemoryCount(0)
-  }, [convId])
+  }, [convId, currentProjectId])
   useEffect(() => { loadConvList() }, [loadConvList])
 
   // 保存当前对话（消息变化时，含压缩快照）
@@ -186,11 +198,28 @@ export function ChatPage() {
   }, [messages, convId, convTitle, activeModel, compressionInfo])
 
   const refreshOutputs = useCallback(async () => {
-    if (window.electronAPI?.workspace) {
-      try { setOutputFiles(await window.electronAPI.workspace.listOutputs()) } catch {}
-    }
+    if (!workspace.output) return
+    try {
+      const api = window.electronAPI?.fs
+      if (!api) return
+      const result = await api.listDir(workspace.output)
+      if (result.success && result.files) {
+        const files: Array<{ name: string; path: string; size: number }> = []
+        for (const name of result.files) {
+          const p = `${workspace.output}/${name}`
+          try {
+            const stat = await api.stat(p)
+            files.push({ name, path: p, size: stat.success ? stat.stat?.size ?? 0 : 0 })
+          } catch { files.push({ name, path: p, size: 0 }) }
+        }
+        setOutputFiles(files.sort((a, b) => b.name.localeCompare(a.name)))
+      }
+    } catch {}
   }, [])
   useEffect(() => { refreshOutputs() }, [messages, refreshOutputs])
+
+  // 同步当前工作区到沙箱
+  useEffect(() => { setSandboxOutputDir(workspace.output || undefined) }, [workspace.output])
 
   // 展开选择器时刷新 + 外部点击关闭
   useEffect(() => {
@@ -233,10 +262,11 @@ export function ChatPage() {
   const handleNewConv = useCallback(async () => {
     const api = window.electronAPI?.conv
     if (!api) return
-    const c = await api.create('新对话')
+    const project = currentProjectId ? projectStore.getById(currentProjectId) : null
+    const c = await api.create('新对话', undefined, currentProjectId, project?.name)
     setConvId(c.id); setConvTitle('新对话'); setMessages([]); setCompressionInfo(null)
-    setConvList(prev => [{ id: c.id, title: '新对话', messageCount: 0, updatedAt: c.updatedAt }, ...prev])
-  }, [])
+    setConvList(prev => [{ id: c.id, title: '新对话', messageCount: 0, updatedAt: c.updatedAt, projectId: currentProjectId }, ...prev])
+  }, [currentProjectId])
 
   // 切换对话
   const handleSwitchConv = useCallback(async (id: string) => {
@@ -360,11 +390,9 @@ export function ChatPage() {
   }, [])
 
   const openWorkspace = useCallback(async () => {
-    const ws = await window.electronAPI?.workspace?.getPaths()
-    const root = ws?.root || '~/BrainPlus/workspace'
-    await loadWorkspaceDir(root)
+    await loadWorkspaceDir(workspace.root)
     setShowWorkspace(true)
-  }, [loadWorkspaceDir])
+  }, [loadWorkspaceDir, workspace.root])
 
   const sendingRef = useRef(false)
 
@@ -380,10 +408,10 @@ export function ChatPage() {
       cid = c.id; setConvId(c.id)
       setConvList(prev => [{ id: c.id, title: '新对话', messageCount: 0, updatedAt: c.updatedAt }, ...prev])
       // 立即创建 MemoryManager（不等 useEffect），确保首条消息也能注入记忆
-      memoryManagerRef.current = new MemoryManager(
+      setMemoryManager(new MemoryManager(
         createLocalMemoryStore(cid),
-        createSupabaseMemoryStore(() => user?.id ?? null),
-      )
+        createSupabaseMemoryStore(() => user?.id ?? null, () => currentProjectId),
+      ))
     }
     const isFirstMsg = messages.length === 0
 
@@ -630,8 +658,9 @@ export function ChatPage() {
         forceCompression: forceCompressRef.current ? true : undefined,
         selectedTools: selectedMCPTools,
         memoryInjection: sessionMemoryEnabled
-          ? await memoryManagerRef.current?.getInjectionText(input.trim()) ?? undefined
+          ? await memoryManager?.getInjectionText(input.trim()) ?? undefined
           : undefined,
+        projectPrompt: projectSettings?.prompt || undefined,
         userId: user?.id,
       })
       forceCompressRef.current = false
@@ -657,7 +686,7 @@ export function ChatPage() {
     } finally { sendingRef.current = false; abortRef.current = null; setLoading(false); setTimeout(() => setStatusText(''), 8000) }
 
     // 后台异步提取记忆（fire-and-forget，不阻塞用户）
-    const memMgr = memoryManagerRef.current
+    const memMgr = memoryManager
     if (sessionMemoryEnabled && memMgr && messagesRef.current.length >= 2) {
       const toExtract: ModelMessage[] = messagesRef.current
         .filter(m => m.role === 'user' || m.role === 'assistant')
@@ -666,6 +695,8 @@ export function ChatPage() {
       memMgr.extract(toExtract).then(async facts => {
         console.log(`[memory] 提取完成: ${facts.length} 条`, facts.map(f => f.content))
         if (facts.length > 0) {
+          // 标注项目 ID
+          if (currentProjectId) facts.forEach(f => f.projectId = currentProjectId)
           await memMgr.saveToShortTerm(facts)
           setShortMemoryCount((await memMgr.getShortTermList()).length)
         }
@@ -826,13 +857,13 @@ export function ChatPage() {
             />
           </div>
           <MemoryPopup
-            manager={memoryManagerRef.current}
+            manager={memoryManager}
             enabled={sessionMemoryEnabled}
             onToggle={() => setSessionMemoryEnabled(v => !v)}
             shortCount={shortMemoryCount}
           />
-          <AgentPicker />
-          <SkillPicker skills={skills} onToggle={async (s) => { await toggleSkill(s.id, !s.enabled); setSkills(getInstalledSkills()) }} />
+          <AgentPicker projectAgentIds={projectSettings?.agents} />
+          <SkillPicker projectSkillIds={projectSettings?.skills} />
           <MCPToolPicker
             selectedTools={selectedMCPTools}
             onSelectionChange={setSelectedMCPTools}
@@ -840,6 +871,10 @@ export function ChatPage() {
             threshold={disclosureThreshold}
             onThresholdChange={(n) => { setDisclosureThreshold(n); saveDisclosureThreshold(n) }}
             activatedToolNames={activatedToolNames}
+            projectMCPServerIds={projectSettings?.mcpServers}
+            projectMCPTools={projectSettings?.mcpTools}
+            projectPluginTools={projectSettings?.pluginTools}
+            pluginTools={pluginToolEntries}
           />
           <button className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground/60 hover:bg-muted hover:text-muted-foreground transition-colors" onClick={handleUpload} title="上传文件（支持拖拽）">
             <Paperclip className="h-3 w-3" />
@@ -865,7 +900,7 @@ export function ChatPage() {
                       onClick={async () => {
                         const ws = await window.electronAPI?.workspace?.getPaths()
                         const parent = workspacePath.split('/').slice(0, -1).join('/') || '/'
-                        if (parent && parent.length >= (ws?.root || '').length) loadWorkspaceDir(parent)
+                        if (parent && parent.length >= workspace.root.length) loadWorkspaceDir(parent)
                       }}
                       title="返回上级"
                     >
@@ -943,7 +978,12 @@ export function ChatPage() {
         convId={convId}
         convTitle={convTitle}
         conversations={convList}
+        currentProjectId={currentProjectId}
         onNew={handleNewConv}
+        onProjectChange={(pid) => {
+          setCurrentProjectId(pid)
+          setConvId(null); setMessages([]); setCompressionInfo(null)
+        }}
         onSwitch={handleSwitchConv}
         onDelete={handleDeleteConv}
         onRename={handleRenameConv}

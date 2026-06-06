@@ -3,12 +3,11 @@ import type { InstalledSkill } from '@/types/skill'
 
 interface SkillCardProps {
   skill: InstalledSkill
-  onToggle: (skill: InstalledSkill) => void
   onUninstall: (id: string) => void
   onDetail: (skill: InstalledSkill) => void
 }
 
-export function SkillCard({ skill, onToggle, onUninstall, onDetail }: SkillCardProps) {
+export function SkillCard({ skill, onUninstall, onDetail }: SkillCardProps) {
   return (
     <div className="rounded-lg border border-border transition-colors">
       <div className="flex items-center justify-between px-4 py-3">
@@ -25,19 +24,6 @@ export function SkillCard({ skill, onToggle, onUninstall, onDetail }: SkillCardP
           </p>
         </div>
         <div className="flex items-center gap-2 ml-2">
-          <button
-            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-              skill.enabled ? 'bg-primary' : 'bg-muted'
-            }`}
-            onClick={() => onToggle(skill)}
-            title={skill.enabled ? '禁用' : '启用'}
-          >
-            <span
-              className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
-                skill.enabled ? 'translate-x-4' : 'translate-x-1'
-              }`}
-            />
-          </button>
           <button
             className="rounded p-1 text-muted-foreground hover:text-foreground transition-colors"
             onClick={() => onDetail(skill)}

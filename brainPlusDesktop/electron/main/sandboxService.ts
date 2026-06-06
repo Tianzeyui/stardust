@@ -193,10 +193,10 @@ function snapshotBeforeExec(cwd: string): void {
   } catch { preExecFiles = new Set() }
 }
 
-function collectOutputFiles(cwd: string): string[] {
+function collectOutputFiles(cwd: string, outputDirOverride?: string): string[] {
   try {
     if (!preExecFiles) return []
-    const outputDir = getWorkspacePaths().output
+    const outputDir = outputDirOverride || getWorkspacePaths().output
     const exts = ['.pptx', '.docx', '.xlsx', '.pdf', '.png', '.jpg', '.jpeg', '.svg', '.csv', '.json', '.txt', '.md']
     const files = fs.readdirSync(cwd)
     const collected: string[] = []
@@ -215,7 +215,7 @@ function collectOutputFiles(cwd: string): string[] {
 
 // ====== JS 执行（核心） ======
 
-export async function executeJS(code: string, packages?: string[]): Promise<SandboxResult> {
+export async function executeJS(code: string, packages?: string[], outputDir?: string): Promise<SandboxResult> {
   // 有 npm 包需求 → 持久化 npm 项目 + node 执行（包缓存，避免每次下载）
   if (packages && packages.length > 0) {
     // 1. 确保依赖已安装
@@ -248,7 +248,7 @@ export async function executeJS(code: string, packages?: string[]): Promise<Sand
           // 成功：返回 stdout，如果有 stderr 也附上（可能是 console.warn）
           let result = stdout.trim() || stderr.trim() || '(无输出)'
           // 扫描并复制生成的文件到工作区 output
-          const outFiles = collectOutputFiles(getNpmProjectDir())
+          const outFiles = collectOutputFiles(getNpmProjectDir(), outputDir)
           if (outFiles.length > 0) {
             result += '\n\n📁 输出文件:\n' + outFiles.map(f => `- ${f}`).join('\n')
           }
@@ -279,7 +279,7 @@ async function getPythonCmd(): Promise<string> {
   throw new Error('未检测到 uv / Python 3。安装 uv: curl -LsSf https://astral.sh/uv/install.sh | sh')
 }
 
-export async function executePython(code: string, packages?: string[]): Promise<SandboxResult> {
+export async function executePython(code: string, packages?: string[], outputDir?: string): Promise<SandboxResult> {
   return new Promise(resolve => {
     snapshotBeforeExec(process.cwd())
     getPythonCmd().then(cmd => {
@@ -302,7 +302,7 @@ export async function executePython(code: string, packages?: string[]): Promise<
           return
         }
         let result = stdout.trim() || stderr.trim() || '(无输出)'
-        const outFiles = collectOutputFiles(process.cwd())
+        const outFiles = collectOutputFiles(process.cwd(), outputDir)
         if (outFiles.length > 0) {
           result += '\n\n📁 输出文件:\n' + outFiles.map(f => `- ${f}`).join('\n')
         }
