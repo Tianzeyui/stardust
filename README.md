@@ -27,6 +27,7 @@ BrainPlus is a desktop AI agent platform that combines a powerful chat interface
 - **AI tool injection** — plugins can register custom Function Calling tools for the AI to use
 - **Permission model** — declarative permissions in `manifest.json`, sandboxed file system access
 - **Crash isolation** — each plugin wrapped in ErrorBoundary, single plugin failure won't crash the app
+- **Community Plugins** — browse and install community plugins at [brainPlus-community-plugins](https://github.com/Tianzeyui/brainPlus-community-plugins)
 
 ### 🛠 Built-in Tools
 - **MCP Gateway** — connect to any MCP-compatible server (SSE, stdio, Streamable HTTP)
@@ -96,10 +97,11 @@ Build outputs are placed in the `release/` directory.
 
 ## Plugin Development
 
-Plugins use React/TSX. Start by copying the template:
+Plugins use React/TSX. Start by copying the template from [brainPlus-community-plugins](https://github.com/Tianzeyui/brainPlus-community-plugins):
 
 ```bash
-cp -r plugins/_template plugins/my-feature
+git clone https://github.com/Tianzeyui/brainPlus-community-plugins.git
+cp -r brainPlus-community-plugins/_template plugins/my-feature
 ```
 
 ### Directory Structure
@@ -195,11 +197,11 @@ Or declaratively in `manifest.json`:
 
 Contributions are welcome! Here's how you can help:
 
-1. **Create plugins** — build plugins using the template at `plugins/_template/`
+1. **Create plugins** — build plugins using the [community plugins template](https://github.com/Tianzeyui/brainPlus-community-plugins)
 2. **Add APIs** — extend `src/lib/pluginTypes.ts` and `src/lib/pluginSystem.ts` to add new host capabilities
 3. **Improve the core** — fix bugs, improve performance, enhance the UI
 
-See the plugin documentation in `plugins/_template/docs/` for detailed development guides.
+See the plugin documentation in the [community plugins repo](https://github.com/Tianzeyui/brainPlus-community-plugins) under `_template/docs/` for detailed development guides.
 
 ## License
 
