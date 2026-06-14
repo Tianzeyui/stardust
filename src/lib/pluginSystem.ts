@@ -290,12 +290,12 @@ class PluginSystemImpl {
     return this.loadAndRegister(result.pluginDir!)
   }
 
-  /** 从 GitHub 社区仓库安装插件 */
-  async installFromGithub(pluginId: string): Promise<{ success: boolean; error?: string }> {
+  /** 从社区仓库安装插件（通过 jsDelivr CDN） */
+  async installFromGithub(pluginId: string, fileList: string[]): Promise<{ success: boolean; error?: string }> {
     const api = (window as any).electronAPI?.plugin
     if (!api) return { success: false, error: '仅 Electron 环境支持插件安装' }
     if (this.plugins.has(pluginId)) return { success: false, error: `插件 "${pluginId}" 已安装` }
-    const result = await api.installFromGithub(pluginId)
+    const result = await api.installFromGithub(pluginId, fileList, pluginId)
     if (!result.success) return result
     return this.loadAndRegister(result.pluginDir!)
   }

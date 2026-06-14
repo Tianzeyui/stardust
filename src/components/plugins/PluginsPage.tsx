@@ -99,10 +99,11 @@ export function PluginsPage() {
     }
   }
 
-  const handleCommunityInstall = async (pluginId: string) => {
-    setInstallingId(pluginId)
+  const handleCommunityInstall = async (plugin: CommunityPlugin) => {
+    setInstallingId(plugin.id)
     setInstallProgress(null)
-    const result = await pluginSystem.installFromGithub(pluginId)
+    const files = plugin.files || ['manifest.json', 'index.tsx', 'package.json']
+    const result = await pluginSystem.installFromGithub(plugin.id, files)
     if (!result.success) {
       setMsg(`社区安装失败: ${result.error}`)
     } else {
@@ -273,7 +274,7 @@ export function PluginsPage() {
                     installed={isInstalled(p.id)}
                     installing={installingId === p.id}
                     progress={installingId === p.id ? installProgress : null}
-                    onInstall={() => handleCommunityInstall(p.id)}
+                    onInstall={() => handleCommunityInstall(p)}
                   />
                 ))}
               </div>

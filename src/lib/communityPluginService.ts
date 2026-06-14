@@ -11,6 +11,7 @@ export interface CommunityPlugin {
   description: string
   icon: string
   permissions?: string[]
+  files?: string[]
 }
 
 const REPO = 'Tianzeyui/brainPlus-community-plugins'

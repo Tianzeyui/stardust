@@ -147,7 +147,8 @@ export interface ElectronAPI {
     installDeps: (dirPath: string) => Promise<{ success: boolean; error?: string }>
     compile: (dirPath: string) => Promise<{ success: boolean; error?: string; code?: string }>
     uninstall: (pluginId: string) => Promise<{ success: boolean; error?: string }>
-    installFromGithub: (pluginId: string) => Promise<{ success: boolean; error?: string; manifest?: any; pluginDir?: string }>
+    installFromGithub: (pluginId: string, fileList: string[], manifestId?: string) =>
+      Promise<{ success: boolean; error?: string; manifest?: any; pluginDir?: string }>
     onGithubProgress: (cb: (data: { pluginId: string; file: string; current: number; total: number }) => void) => () => void
   }
   search: {

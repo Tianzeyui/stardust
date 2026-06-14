@@ -8,7 +8,7 @@ import { startA2AServer, stopA2AServer, completeA2ATask, getA2ATask, syncAgents,
 import { executeJS, executePython, preInit } from './main/sandboxService.js'
 import { initWorkspace, getWorkspacePaths, listOutputFiles, openFile, deleteFile, clearOutputFiles } from './main/workspace.js'
 import { writeSkillFiles, readSkillFile, deleteSkillFiles } from './main/skillDiskStore.js'
-import { downloadPluginFiles, fetchManifestFromGithub } from './main/pluginDownloader.js'
+import { downloadPluginFiles } from './main/pluginDownloader.js'
 import { convertWithMarkitdown, isImageFile, isConvertible } from './main/fileConvert.js'
 import {
   getModelStatus,
@@ -744,24 +744,27 @@ ipcMain.handle('plugin:uninstall', async (_e, pluginId: string) => {
   }
 })
 
-// 从 GitHub 社区仓库安装插件
-ipcMain.handle('plugin:installFromGithub', async (event, pluginId: string) => {
+// 从社区仓库安装插件（通过 jsDelivr CDN 下载）
+ipcMain.handle('plugin:installFromGithub', async (event, pluginId: string, fileList: string[], manifestId?: string) => {
   try {
     const pluginsDir = path.join(app.getPath('userData'), 'plugins')
-
-    // 先获取 manifest 确认 id
-    const manifest = await fetchManifestFromGithub(pluginId)
-    const actualId = manifest.id || pluginId
+    const actualId = manifestId || pluginId
     const destDir = path.join(pluginsDir, actualId)
 
     // 如果已存在，先删除
     if (fs.existsSync(destDir)) fs.rmSync(destDir, { recursive: true, force: true })
     fs.mkdirSync(destDir, { recursive: true })
 
-    // 下载所有文件
-    await downloadPluginFiles(pluginId, destDir, (file, current, total) => {
+    // 通过 jsDelivr CDN 下载所有文件
+    await downloadPluginFiles(pluginId, fileList, destDir, (file, current, total) => {
       event.sender.send('plugin:githubProgress', { pluginId, file, current, total })
     })
+
+    // 读取 manifest 用于返回
+    const manifestPath = path.join(destDir, 'manifest.json')
+    const manifest = fs.existsSync(manifestPath)
+      ? JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
+      : { id: actualId }
 
     // 安装 npm 依赖（复用现有逻辑）
     const pkgPath = path.join(destDir, 'package.json')

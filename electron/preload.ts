@@ -184,7 +184,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     installDeps: (dirPath: string) => ipcRenderer.invoke('plugin:installDeps', dirPath),
     compile: (dirPath: string) => ipcRenderer.invoke('plugin:compile', dirPath),
     uninstall: (pluginId: string) => ipcRenderer.invoke('plugin:uninstall', pluginId),
-    installFromGithub: (pluginId: string) => ipcRenderer.invoke('plugin:installFromGithub', pluginId),
+    installFromGithub: (pluginId: string, fileList: string[], manifestId?: string) =>
+      ipcRenderer.invoke('plugin:installFromGithub', pluginId, fileList, manifestId),
     onGithubProgress: (cb: (data: { pluginId: string; file: string; current: number; total: number }) => void) => {
       const handler = (_event: any, data: any) => cb(data)
       ipcRenderer.on('plugin:githubProgress', handler)
