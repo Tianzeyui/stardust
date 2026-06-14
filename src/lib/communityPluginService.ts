@@ -14,7 +14,8 @@ export interface CommunityPlugin {
 }
 
 const REPO = 'Tianzeyui/brainPlus-community-plugins'
-const RAW_BASE = `https://raw.githubusercontent.com/${REPO}/main`
+// jsDelivr CDN 代理 GitHub 文件，国内可访问
+const INDEX_URL = `https://cdn.jsdelivr.net/gh/${REPO}@main/plugins.json`
 const CACHE_KEY = 'brainplus_community_plugins'
 const CACHE_TIME_KEY = 'brainplus_community_plugins_time'
 const CACHE_TTL_MS = 5 * 60 * 1000 // 5 分钟
@@ -47,8 +48,7 @@ async function fetchJSON(url: string): Promise<any> {
  * 从 raw.githubusercontent.com 读取 plugins.json 索引文件，无需 GitHub API 认证
  */
 export async function fetchCommunityPlugins(): Promise<CommunityPlugin[]> {
-  const url = `${RAW_BASE}/plugins.json`
-  const plugins: CommunityPlugin[] = await fetchJSON(url)
+  const plugins: CommunityPlugin[] = await fetchJSON(INDEX_URL)
   return plugins.filter(p => !p.id.startsWith('_'))
 }
 
