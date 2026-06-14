@@ -24,11 +24,9 @@ export async function initConfig() {
 async function loadAIModelsFromDiskInternal(): Promise<void> {
   if (!api()) return
   const saved = await api()!.getAIModels()
-  const defaults = defaultModels()
-  aiModelsCache = defaults.map((d) => {
-    const existing = Array.isArray(saved) ? saved.find((s: any) => s.id === d.id) : undefined
-    return existing ? { ...d, ...existing, availableModels: existing.availableModels || [], defaultBaseUrl: d.defaultBaseUrl } : d
-  })
+  if (Array.isArray(saved) && saved.length > 0) {
+    aiModelsCache = saved
+  }
 }
 
 export async function loadAIModelsFromDisk(): Promise<void> {
@@ -75,42 +73,47 @@ export interface AIModelConfig {
   selectedModel: string; modelsFetched: boolean
 }
 
-function defaultModels(): AIModelConfig[] {
-  return [
-    { id: 'openai', name: 'OpenAI', displayName: 'OpenAI', defaultBaseUrl: '', apiKey: '', baseUrl: '', enabled: false, availableModels: [], selectedModel: '', modelsFetched: false },
-    { id: 'anthropic', name: 'Claude', displayName: 'Claude', defaultBaseUrl: 'https://api.anthropic.com', apiKey: '', baseUrl: 'https://api.anthropic.com', enabled: false, availableModels: [], selectedModel: '', modelsFetched: false },
-    { id: 'deepseek', name: 'DeepSeek', displayName: '深度求索', defaultBaseUrl: 'https://api.deepseek.com', apiKey: '', baseUrl: 'https://api.deepseek.com', enabled: false, availableModels: [], selectedModel: '', modelsFetched: false },
-    { id: 'qwen', name: '通义千问', displayName: '通义千问', defaultBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', apiKey: '', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', enabled: false, availableModels: [], selectedModel: '', modelsFetched: false },
-    { id: 'gemini', name: 'Gemini', displayName: 'Gemini', defaultBaseUrl: 'https://generativelanguage.googleapis.com', apiKey: '', baseUrl: 'https://generativelanguage.googleapis.com', enabled: false, availableModels: [], selectedModel: '', modelsFetched: false },
-    { id: 'azure', name: 'Azure', displayName: 'Azure OpenAI', defaultBaseUrl: '', apiKey: '', baseUrl: '', enabled: false, availableModels: [], selectedModel: '', modelsFetched: false },
-    { id: 'openrouter', name: 'OpenRouter', displayName: 'OpenRouter', defaultBaseUrl: 'https://openrouter.ai/api/v1', apiKey: '', baseUrl: 'https://openrouter.ai/api/v1', enabled: false, availableModels: [], selectedModel: '', modelsFetched: false },
-    { id: 'ollama', name: 'Ollama', displayName: 'Ollama', defaultBaseUrl: 'http://localhost:11434', apiKey: '', baseUrl: 'http://localhost:11434', enabled: false, availableModels: [], selectedModel: '', modelsFetched: false },
-    { id: 'lmstudio', name: 'LM Studio', displayName: 'LM Studio', defaultBaseUrl: 'http://localhost:1234', apiKey: '', baseUrl: 'http://localhost:1234', enabled: false, availableModels: [], selectedModel: '', modelsFetched: false },
-    { id: 'groq', name: 'Groq', displayName: 'Groq', defaultBaseUrl: 'https://api.groq.com/openai/v1', apiKey: '', baseUrl: 'https://api.groq.com/openai/v1', enabled: false, availableModels: [], selectedModel: '', modelsFetched: false },
-    { id: 'together', name: 'Together AI', displayName: 'Together AI', defaultBaseUrl: 'https://api.together.xyz/v1', apiKey: '', baseUrl: 'https://api.together.xyz/v1', enabled: false, availableModels: [], selectedModel: '', modelsFetched: false },
-    { id: 'perplexity', name: 'Perplexity', displayName: 'Perplexity', defaultBaseUrl: 'https://api.perplexity.ai', apiKey: '', baseUrl: 'https://api.perplexity.ai', enabled: false, availableModels: [], selectedModel: '', modelsFetched: false },
-    { id: 'mistral', name: 'Mistral', displayName: 'Mistral', defaultBaseUrl: 'https://api.mistral.ai/v1', apiKey: '', baseUrl: 'https://api.mistral.ai/v1', enabled: false, availableModels: [], selectedModel: '', modelsFetched: false },
-    { id: 'fireworks', name: 'Fireworks AI', displayName: 'Fireworks AI', defaultBaseUrl: 'https://api.fireworks.ai/inference/v1', apiKey: '', baseUrl: 'https://api.fireworks.ai/inference/v1', enabled: false, availableModels: [], selectedModel: '', modelsFetched: false },
-  ]
+/** 可用的 Provider 模板（添加连接时选择） */
+export const PROVIDER_TEMPLATES: Array<{ id: string; name: string; displayName: string; defaultBaseUrl: string }> = [
+  { id: 'openai', name: 'OpenAI', displayName: 'OpenAI', defaultBaseUrl: 'https://api.openai.com/v1' },
+  { id: 'anthropic', name: 'Claude', displayName: 'Claude', defaultBaseUrl: 'https://api.anthropic.com' },
+  { id: 'deepseek', name: 'DeepSeek', displayName: '深度求索', defaultBaseUrl: 'https://api.deepseek.com' },
+  { id: 'qwen', name: '通义千问', displayName: '通义千问', defaultBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
+  { id: 'gemini', name: 'Gemini', displayName: 'Gemini', defaultBaseUrl: 'https://generativelanguage.googleapis.com' },
+  { id: 'azure', name: 'Azure', displayName: 'Azure OpenAI', defaultBaseUrl: '' },
+  { id: 'openrouter', name: 'OpenRouter', displayName: 'OpenRouter', defaultBaseUrl: 'https://openrouter.ai/api/v1' },
+  { id: 'ollama', name: 'Ollama', displayName: 'Ollama', defaultBaseUrl: 'http://localhost:11434' },
+  { id: 'lmstudio', name: 'LM Studio', displayName: 'LM Studio', defaultBaseUrl: 'http://localhost:1234' },
+  { id: 'groq', name: 'Groq', displayName: 'Groq', defaultBaseUrl: 'https://api.groq.com/openai/v1' },
+  { id: 'together', name: 'Together AI', displayName: 'Together AI', defaultBaseUrl: 'https://api.together.xyz/v1' },
+  { id: 'perplexity', name: 'Perplexity', displayName: 'Perplexity', defaultBaseUrl: 'https://api.perplexity.ai' },
+  { id: 'mistral', name: 'Mistral', displayName: 'Mistral', defaultBaseUrl: 'https://api.mistral.ai/v1' },
+  { id: 'fireworks', name: 'Fireworks AI', displayName: 'Fireworks AI', defaultBaseUrl: 'https://api.fireworks.ai/inference/v1' },
+]
+
+/** 生成唯一模型 ID */
+export function generateModelId(): string {
+  return 'model_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
 }
 
 let aiModelsCache: AIModelConfig[] | null = null
 
 function loadAIModels(): AIModelConfig[] {
-  const defaults = defaultModels()
-  if (!api()) return defaults
-  // 同步加载回退（首次渲染时可能还没从 IPC 加载完）
-  return defaults
+  return aiModelsCache || []
 }
 
 export function getAIModels(): AIModelConfig[] {
-  if (aiModelsCache) return aiModelsCache
   return loadAIModels()
 }
 
 export async function saveAIModels(models: AIModelConfig[]): Promise<void> {
   aiModelsCache = models
   await api()?.saveAIModels(models)
+}
+
+export async function deleteAIModel(id: string): Promise<void> {
+  const models = (aiModelsCache || []).filter(m => m.id !== id)
+  await saveAIModels(models)
 }
 
 export function getEnabledModel(): AIModelConfig | null {

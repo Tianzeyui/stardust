@@ -9,7 +9,7 @@ import {
 } from '@/lib/supabase'
 import {
   getCloudinaryConfig, saveCloudinaryConfig, clearCloudinaryConfig,
-  getAIModels, saveAIModels,
+  getAIModels, saveAIModels, deleteAIModel, generateModelId, PROVIDER_TEMPLATES,
   type AIModelConfig, type MCPServerConfig,
   getDisclosureThreshold, saveDisclosureThreshold,
   getAgentMaxSteps, saveAgentMaxSteps,
@@ -69,6 +69,8 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
   // AI 模型
   const [models, setModels] = useState<AIModelConfig[]>([])
   const [expandedModel, setExpandedModel] = useState<string | null>(null)
+  const [showAddModel, setShowAddModel] = useState(false)
+  const [newModel, setNewModel] = useState({ providerId: 'openai', apiKey: '', baseUrl: '' })
 
   // MCP
   const [servers, setServers] = useState<MCPServerConfig[]>([])
@@ -198,6 +200,33 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
     })
   }
 
+  const handleDeleteModel = async (id: string) => {
+    setModels(prev => prev.filter(m => m.id !== id))
+    await deleteAIModel(id)
+  }
+
+  const handleAddModel = async () => {
+    const tpl = PROVIDER_TEMPLATES.find(t => t.id === newModel.providerId)
+    if (!tpl || !newModel.apiKey.trim()) return
+    const id = generateModelId()
+    const model: AIModelConfig = {
+      id,
+      name: tpl.name,
+      displayName: tpl.displayName,
+      defaultBaseUrl: tpl.defaultBaseUrl || newModel.baseUrl,
+      apiKey: newModel.apiKey.trim(),
+      baseUrl: newModel.baseUrl || tpl.defaultBaseUrl,
+      enabled: false,
+      availableModels: [],
+      selectedModel: '',
+      modelsFetched: false,
+    }
+    setModels(prev => [...prev, model])
+    await saveAIModels([...models, model])
+    setShowAddModel(false)
+    setNewModel({ providerId: 'openai', apiKey: '', baseUrl: '' })
+  }
+
   const fetchModels = async (modelId: string) => {
     const model = models.find((m) => m.id === modelId)
     if (!model || !model.apiKey) return
@@ -205,13 +234,23 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
     try {
       let url = ''
       const id = model.id
-      if (id === 'openai') url = `${model.baseUrl || 'https://api.openai.com/v1'}/models`
-      else if (id === 'anthropic') url = `${model.baseUrl || 'https://api.anthropic.com/v1'}/models`
-      else url = `${model.baseUrl}/models`
+      const tpl = PROVIDER_TEMPLATES.find(t => model.name === t.name || model.id.includes(t.id))
+      if (id.startsWith('model_')) {
+        url = `${model.baseUrl}/models`
+      } else if (id === 'openai') {
+        url = `${model.baseUrl || 'https://api.openai.com/v1'}/models`
+      } else if (id === 'anthropic') {
+        url = `${model.baseUrl || 'https://api.anthropic.com/v1'}/models`
+      } else {
+        url = `${model.baseUrl}/models`
+      }
 
       const headers: Record<string, string> = {}
-      if (id === 'anthropic') headers['x-api-key'] = model.apiKey
-      else headers['Authorization'] = `Bearer ${model.apiKey}`
+      if (model.name === 'Claude' || id === 'anthropic') {
+        headers['x-api-key'] = model.apiKey
+      } else {
+        headers['Authorization'] = `Bearer ${model.apiKey}`
+      }
 
       const res = await fetch(url, { headers })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -666,72 +705,125 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
         {tab === 'ai' && (
           <div className="w-full space-y-3">
             <p className="text-xs text-muted-foreground rounded-lg bg-blue-50 dark:bg-blue-950/30 p-3 border border-blue-200 dark:border-blue-900">
-              可启用多个云模型，在聊天中自由切换。API Key 存储在本地磁盘。
+              添加模型连接，API Key 存储在本地磁盘。
             </p>
-            {models.map((model) => (
-              <div key={model.id} className={`rounded-lg border transition-colors ${model.enabled ? 'border-primary bg-primary/5' : 'border-border'}`}>
-                <div className="flex items-center justify-between px-4 py-3 cursor-pointer" onClick={() => setExpandedModel(expandedModel === model.id ? null : model.id)}>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-medium">{model.displayName}</span>
-                    {model.enabled && <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">已启用</span>}
-                    {!model.enabled && model.apiKey && <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] text-secondary-foreground">已配置</span>}
-                  </div>
-                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${model.enabled ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600'} ${!model.apiKey ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      onClick={() => model.apiKey && toggleModel(model.id)}
-                      disabled={!model.apiKey}
-                    >
-                      <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${model.enabled ? 'translate-x-4' : 'translate-x-1'}`} />
-                    </button>
-                    <svg className={`h-4 w-4 text-muted-foreground transition-transform ${expandedModel === model.id ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 9l-7 7-7-7" /></svg>
-                  </div>
-                </div>
 
-                {expandedModel === model.id && (
-                  <div className="border-t border-border px-4 py-4 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="password"
-                        className="flex-1"
-                        placeholder="API Key"
-                        value={model.apiKey}
-                        onChange={(e) => updateModel(model.id, { apiKey: e.target.value })}
-                      />
-                      <Input
-                        className="flex-1"
-                        placeholder="Base URL（可选）"
-                        value={model.baseUrl}
-                        onChange={(e) => updateModel(model.id, { baseUrl: e.target.value })}
-                      />
+            {/* 添加连接按钮 */}
+            <Button variant="outline" size="sm" className="w-full h-8 text-xs" onClick={() => setShowAddModel(true)}>
+              <Plus className="mr-1 h-3.5 w-3.5" />添加连接
+            </Button>
+
+            {/* 添加连接弹窗 */}
+            {showAddModel && (
+              <div className="rounded-lg border border-primary/30 p-4 space-y-3">
+                <div>
+                  <label className="text-[10px] text-muted-foreground mb-1 block">Provider</label>
+                  <select
+                    className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs"
+                    value={newModel.providerId}
+                    onChange={e => setNewModel(p => ({ ...p, providerId: e.target.value, baseUrl: PROVIDER_TEMPLATES.find(t => t.id === e.target.value)?.defaultBaseUrl || '' }))}
+                  >
+                    {PROVIDER_TEMPLATES.map(t => (
+                      <option key={t.id} value={t.id}>{t.displayName}</option>
+                    ))}
+                  </select>
+                </div>
+                <Input
+                  type="password"
+                  className="h-8 text-xs"
+                  placeholder="API Key"
+                  value={newModel.apiKey}
+                  onChange={e => setNewModel(p => ({ ...p, apiKey: e.target.value }))}
+                />
+                <Input
+                  className="h-8 text-xs"
+                  placeholder="Base URL（可选）"
+                  value={newModel.baseUrl}
+                  onChange={e => setNewModel(p => ({ ...p, baseUrl: e.target.value }))}
+                />
+                <div className="flex gap-2">
+                  <Button size="sm" className="h-7 text-xs" onClick={handleAddModel} disabled={!newModel.apiKey.trim()}>
+                    <Check className="mr-1 h-3 w-3" />保存
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setShowAddModel(false)}>
+                    <X className="mr-1 h-3 w-3" />取消
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* 已添加的连接 */}
+            {models.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-8">暂无模型连接，点击上方添加</p>
+            ) : (
+              models.map((model) => (
+                <div key={model.id} className={`rounded-lg border transition-colors ${model.enabled ? 'border-primary bg-primary/5' : 'border-border'}`}>
+                  <div className="flex items-center justify-between px-4 py-3 cursor-pointer" onClick={() => setExpandedModel(expandedModel === model.id ? null : model.id)}>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-medium">{model.displayName}</span>
+                      {model.enabled && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary">已启用</span>}
+                      {!model.enabled && model.apiKey && <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] text-secondary-foreground">已配置</span>}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={() => fetchModels(model.id)} disabled={!model.apiKey}>
-                        <RefreshCw className={`mr-1 h-3.5 w-3.5 ${!model.modelsFetched && model.apiKey ? 'animate-spin' : ''}`} />
-                        {model.modelsFetched ? '刷新模型' : '获取模型'}
-                      </Button>
-                      {model.modelsFetched && model.availableModels.length > 0 && (
-                        <span className="text-xs text-muted-foreground">{model.availableModels.length} 个模型可用</span>
+                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${model.enabled ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600'}`}
+                        onClick={() => toggleModel(model.id)}
+                      >
+                        <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${model.enabled ? 'translate-x-4' : 'translate-x-1'}`} />
+                      </button>
+                      <button className="p-1 text-muted-foreground/30 hover:text-destructive transition-colors"
+                        onClick={() => { if (confirm(`确定删除「${model.displayName}」连接？`)) handleDeleteModel(model.id) }}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                      <svg className={`h-4 w-4 text-muted-foreground transition-transform ${expandedModel === model.id ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 9l-7 7-7-7" /></svg>
+                    </div>
+                  </div>
+
+                  {expandedModel === model.id && (
+                    <div className="border-t border-border px-4 py-4 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="password"
+                          className="flex-1 h-7 text-xs"
+                          placeholder="API Key"
+                          value={model.apiKey}
+                          onChange={(e) => updateModel(model.id, { apiKey: e.target.value })}
+                        />
+                        <Input
+                          className="flex-1 h-7 text-xs"
+                          placeholder="Base URL（可选）"
+                          value={model.baseUrl}
+                          onChange={(e) => updateModel(model.id, { baseUrl: e.target.value })}
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => fetchModels(model.id)} disabled={!model.apiKey}>
+                          <RefreshCw className={`mr-1 h-3 w-3 ${!model.modelsFetched && model.apiKey ? 'animate-spin' : ''}`} />
+                          {model.modelsFetched ? '刷新模型' : '获取模型'}
+                        </Button>
+                        {model.modelsFetched && model.availableModels.length > 0 && (
+                          <span className="text-[10px] text-muted-foreground">{model.availableModels.length} 个模型可用</span>
+                        )}
+                      </div>
+                      {model.availableModels.length > 0 && (
+                        <div className="max-h-48 overflow-auto space-y-1 rounded border border-border p-2">
+                          {model.availableModels.map((sm) => (
+                            <div
+                              key={sm.id}
+                              className={`flex cursor-pointer items-center justify-between rounded px-2 py-1.5 text-xs transition-colors ${model.selectedModel === sm.id ? 'bg-accent font-medium' : 'hover:bg-muted'}`}
+                              onClick={() => updateModel(model.id, { selectedModel: sm.id })}
+                            >
+                              <span className="font-mono">{sm.id}</span>
+                              {model.selectedModel === sm.id && <Check className="h-3.5 w-3.5 text-primary" />}
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </div>
-                    {model.availableModels.length > 0 && (
-                      <div className="max-h-48 overflow-auto space-y-1 rounded border border-border p-2">
-                        {model.availableModels.map((sm) => (
-                          <div
-                            key={sm.id}
-                            className={`flex cursor-pointer items-center justify-between rounded px-2 py-1.5 text-xs transition-colors ${model.selectedModel === sm.id ? 'bg-accent font-medium' : 'hover:bg-muted'}`}
-                            onClick={() => updateModel(model.id, { selectedModel: sm.id })}
-                          >
-                            <span className="font-mono">{sm.id}</span>
-                            {model.selectedModel === sm.id && <Check className="h-3.5 w-3.5 text-primary" />}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
+                  )}
+                </div>
+              ))
+            )}
           </div>
         )}
 
