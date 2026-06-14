@@ -978,30 +978,45 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
         {/* ===== 关于 ===== */}
         {tab === 'about' && (
           <div className="flex flex-col items-center text-center flex-1 overflow-auto">
-            {/* 头部信息 */}
-            <div className="flex flex-col items-center pt-8 pb-6">
-              <img src="/assets/icons/icon.png" alt="BrainPlus" className="w-20 h-20 rounded-2xl mb-4 shadow-sm" />
-              <h2 className="text-xl font-bold text-foreground mb-1">BrainPlus</h2>
-              <p className="text-xs text-muted-foreground/60 mb-4">Version {APP_VERSION}</p>
-              <p className="text-sm text-muted-foreground">
-                开源自由的 AI Agent 平台。
+            {/* 头部 */}
+            <div className="flex flex-col items-center pt-10 pb-8">
+              <img src="/assets/icons/icon2.png" alt="BrainPlus" className="w-16 h-16 rounded-2xl mb-4 shadow-sm" />
+              <h2 className="text-lg font-bold text-foreground">BrainPlus</h2>
+              <span className="inline-block mt-1.5 px-2 py-0.5 rounded-full bg-primary/10 text-[10px] font-medium text-primary">
+                v{APP_VERSION}
+              </span>
+              <p className="text-xs text-muted-foreground/50 mt-3">
+                开源自由的 AI Agent 平台
               </p>
             </div>
 
-            {/* 更新日志 */}
+            {/* 更新日志 — 时间线样式 */}
             {changelog.length > 0 && (
-              <div className="w-full max-w-xs text-left mb-6">
-                <h3 className="text-xs font-semibold text-muted-foreground mb-2 text-center">更新日志</h3>
-                <div className="space-y-1.5 max-h-52 overflow-auto">
-                  {changelog.map(entry => (
-                    <div key={entry.version} className="rounded border border-border px-3 py-2">
+              <div className="w-full max-w-[260px] text-left mb-8">
+                <p className="text-[10px] font-semibold text-muted-foreground/40 uppercase tracking-wider mb-3 text-center">
+                  更新日志
+                </p>
+                <div className="relative pl-5 space-y-4 max-h-56 overflow-auto">
+                  {/* 时间线竖线 */}
+                  <div className="absolute left-[7px] top-1 bottom-1 w-px bg-border" />
+                  {changelog.map((entry, i) => (
+                    <div key={entry.version} className="relative">
+                      {/* 圆点 */}
+                      <div className={`absolute -left-5 top-1.5 w-[15px] h-[15px] rounded-full border-2 flex items-center justify-center
+                        ${i === 0 ? 'border-primary bg-primary/10' : 'border-muted-foreground/20 bg-card'}`}>
+                        <div className={`w-[5px] h-[5px] rounded-full ${i === 0 ? 'bg-primary' : 'bg-muted-foreground/30'}`} />
+                      </div>
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-medium">{entry.version}</span>
-                        {entry.date && <span className="text-[10px] text-muted-foreground/50">{entry.date}</span>}
+                        <span className="text-xs font-semibold">{entry.version}</span>
+                        {entry.date && (
+                          <span className="text-[9px] text-muted-foreground/40">{entry.date}</span>
+                        )}
                       </div>
                       <ul className="space-y-0.5">
-                        {entry.items.map((item, i) => (
-                          <li key={i} className="text-[10px] text-muted-foreground/60 pl-2">{item}</li>
+                        {entry.items.map((item, j) => (
+                          <li key={j} className="text-[10px] text-muted-foreground/50 leading-relaxed">
+                            {item}
+                          </li>
                         ))}
                       </ul>
                     </div>
@@ -1010,15 +1025,14 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
               </div>
             )}
 
-            {/* 底部：工作室 */}
+            {/* 底部 */}
             <div className="mt-auto pb-8">
               <a href="https://immersionvoid.cc/" target="_blank"
-                className="relative inline-block mb-3 hover:opacity-80 transition-opacity"
+                className="inline-block hover:opacity-75 transition-opacity"
                 title="沉浸位工作室官网">
-                <img src="/assets/logo/immersionBitLogo.svg" alt="沉浸位工作室" className="w-28" />
-                <sup className="absolute -top-0.5 -right-1 text-[10px] font-bold text-muted-foreground/70">™</sup>
+                <img src="/assets/logo/immersionBitLogo.svg" alt="沉浸位工作室" className="w-24" />
               </a>
-              <p className="text-[10px] text-muted-foreground/40">
+              <p className="text-[10px] text-muted-foreground/30 mt-2">
                 © {__BUILD_YEAR__} 沉浸位工作室 · Apache 2.0
               </p>
             </div>

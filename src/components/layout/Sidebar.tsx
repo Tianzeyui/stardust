@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import {
   Bot, MessageSquare, Package, FolderOpen, FolderKanban, BookOpen, Lightbulb, BarChart3,
-  Settings, LogOut, Brain, PanelLeftClose, PanelLeftOpen, User, ChevronDown,
+  Settings, LogOut, PanelLeftClose, PanelLeftOpen, User, ChevronDown,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -54,8 +54,8 @@ export function Sidebar({ activeNav, onNavChange, collapsed, onToggleCollapse, o
       {/* 顶部：Logo + 折叠按钮 */}
       <div className={cn('mb-6 flex items-center', collapsed ? 'flex-col gap-2' : 'justify-between')}>
         <div className={cn('flex items-center gap-2', collapsed && 'flex-col')}>
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary">
-            <Brain className="h-5 w-5 text-primary-foreground" />
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary">
+            <img src="/assets/icons/iconWhite.svg" alt="BrainPlus" className="h-7 w-7" />
           </div>
           {!collapsed && <span className="text-lg font-bold tracking-tight">BrainPlus</span>}
         </div>

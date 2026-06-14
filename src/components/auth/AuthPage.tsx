@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Brain, Settings, Github } from 'lucide-react'
+import { Settings, Github } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -25,7 +25,9 @@ export function AuthPage() {
     <div className="relative flex min-h-screen flex-col items-center justify-center gap-6 bg-gradient-to-br from-slate-50 to-slate-100 px-4 dark:from-slate-950 dark:to-slate-900">
       {/* 头部 */}
       <div className="flex items-center gap-3">
-        <Brain className="h-8 w-8 text-primary" />
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary">
+          <img src="/assets/icons/iconWhite.svg" alt="BrainPlus" className="h-10 w-10" />
+        </div>
         <h1 className="text-3xl font-bold tracking-tight">BrainPlus</h1>
       </div>
 
