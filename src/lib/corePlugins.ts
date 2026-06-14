@@ -59,6 +59,13 @@ const coreUsage: Plugin = {
   },
 }
 
+const coreNotifications: Plugin = {
+  manifest: { id: 'notifications', name: '通知', version: '1.0.0', description: '', icon: 'Bell', navOrder: 999, enabled: true },
+  register(ctx) {
+    ctx.registerRoute('notifications', () => import('@/components/notifications/NotificationsPage'))
+  },
+}
+
 let initialized = false
 
 export function initCorePlugins() {
@@ -72,6 +79,7 @@ export function initCorePlugins() {
   pluginSystem.registerCore(coreFiles)
   pluginSystem.registerCore(coreAI)
   pluginSystem.registerCore(coreUsage)
+  pluginSystem.registerCore(coreNotifications)
 
   const corePluginsPage: Plugin = {
     manifest: { id: 'plugins', name: '插件', version: '1.0.0', description: '', icon: 'Package', navOrder: 50, enabled: true },
