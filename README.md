@@ -5,7 +5,7 @@
 **Open-source AI Agent Platform — Build, Extend, Automate.**
 
 [![Version](https://img.shields.io/badge/version-0.21.0-blue)](package.json)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache%202.0-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)]()
 
 </div>
@@ -203,7 +203,7 @@ See the plugin documentation in `plugins/_template/docs/` for detailed developme
 
 ## License
 
-MIT © 沉浸位工作室
+Apache 2.0 © 沉浸位工作室
 
 ---
 
