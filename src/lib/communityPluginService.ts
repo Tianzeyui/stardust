@@ -59,9 +59,12 @@ export async function fetchCommunityPlugins(): Promise<CommunityPlugin[]> {
       const manifest = await fetchViaIPC(
         `${API_BASE}/contents/${encodeURIComponent(dir.name)}/manifest.json`,
       )
-      // GitHub API 返回的 content 是 base64 编码
+      // GitHub API 返回的 content 是 base64 编码（UTF-8）
       if (manifest.content && manifest.encoding === 'base64') {
-        const decoded = JSON.parse(atob(manifest.content))
+        // atob 不处理 UTF-8，需要用 TextDecoder 正确解码中文
+        const bytes = Uint8Array.from(atob(manifest.content), c => c.charCodeAt(0))
+        const text = new TextDecoder().decode(bytes)
+        const decoded = JSON.parse(text)
         return {
           id: decoded.id || dir.name,
           name: decoded.name || dir.name,
