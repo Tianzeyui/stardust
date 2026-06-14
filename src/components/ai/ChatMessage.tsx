@@ -88,7 +88,7 @@ export function ChatMessage({ msg }: ChatMessageProps) {
               )}
               {(!msg.streaming || msg.content) && (
                 <MarkdownPreview
-                  source={stripHtml(msg.content || '')}
+                  source={msg.content || ''}
                   style={{ fontSize: 14, backgroundColor: 'transparent', overflowWrap: 'break-word', wordBreak: 'break-word' }}
                 />
               )}
