@@ -8,6 +8,7 @@ import { startA2AServer, stopA2AServer, completeA2ATask, getA2ATask, syncAgents,
 import { executeJS, executePython, preInit } from './main/sandboxService.js'
 import { initWorkspace, getWorkspacePaths, listOutputFiles, openFile, deleteFile, clearOutputFiles } from './main/workspace.js'
 import { writeSkillFiles, readSkillFile, deleteSkillFiles } from './main/skillDiskStore.js'
+import { downloadPluginFiles, fetchManifestFromGithub } from './main/pluginDownloader.js'
 import { convertWithMarkitdown, isImageFile, isConvertible } from './main/fileConvert.js'
 import {
   getModelStatus,
@@ -738,6 +739,48 @@ ipcMain.handle('plugin:uninstall', async (_e, pluginId: string) => {
     const destDir = path.join(app.getPath('userData'), 'plugins', pluginId)
     if (fs.existsSync(destDir)) fs.rmSync(destDir, { recursive: true, force: true })
     return { success: true }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+// 从 GitHub 社区仓库安装插件
+ipcMain.handle('plugin:installFromGithub', async (event, pluginId: string) => {
+  try {
+    const pluginsDir = path.join(app.getPath('userData'), 'plugins')
+
+    // 先获取 manifest 确认 id
+    const manifest = await fetchManifestFromGithub(pluginId)
+    const actualId = manifest.id || pluginId
+    const destDir = path.join(pluginsDir, actualId)
+
+    // 如果已存在，先删除
+    if (fs.existsSync(destDir)) fs.rmSync(destDir, { recursive: true, force: true })
+    fs.mkdirSync(destDir, { recursive: true })
+
+    // 下载所有文件
+    await downloadPluginFiles(pluginId, destDir, (file, current, total) => {
+      event.sender.send('plugin:githubProgress', { pluginId, file, current, total })
+    })
+
+    // 安装 npm 依赖（复用现有逻辑）
+    const pkgPath = path.join(destDir, 'package.json')
+    if (fs.existsSync(pkgPath)) {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'))
+      if (pkg.dependencies && Object.keys(pkg.dependencies).length > 0) {
+        if (!pkg.name) { pkg.name = actualId; pkg.private = true; fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2), 'utf-8') }
+        if (!fs.existsSync(path.join(destDir, 'node_modules'))) {
+          const { execFile } = await import('child_process')
+          await new Promise<void>((resolve, reject) => {
+            execFile('npm', ['install', '--no-audit', '--no-fund', '--ignore-scripts'], { cwd: destDir, timeout: 120000 }, (err) => {
+              if (err) reject(err); else resolve()
+            })
+          })
+        }
+      }
+    }
+
+    return { success: true, manifest, pluginDir: destDir }
   } catch (e: any) {
     return { success: false, error: e.message }
   }

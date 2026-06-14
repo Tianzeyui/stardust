@@ -1,14 +1,31 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Trash2, FolderOpen, Package } from 'lucide-react'
+import { Plus, Trash2, FolderOpen, Package, Globe, RefreshCw, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { pluginSystem } from '@/lib/pluginSystem'
+import { CommunityPluginCard } from './CommunityPluginCard'
+import {
+  fetchCommunityPlugins,
+  getCachedPlugins,
+  cachePlugins,
+  getCacheAgeMinutes,
+  type CommunityPlugin,
+} from '@/lib/communityPluginService'
 
 export function PluginsPage() {
   const [plugins, setPlugins] = useState(pluginSystem.getAllPlugins())
   const [path, setPath] = useState('')
   const [installing, setInstalling] = useState(false)
   const [msg, setMsg] = useState('')
+  const [tab, setTab] = useState<'local' | 'community'>('local')
+
+  // 社区插件状态
+  const [communityPlugins, setCommunityPlugins] = useState<CommunityPlugin[]>([])
+  const [communityLoading, setCommunityLoading] = useState(true)
+  const [communityError, setCommunityError] = useState('')
+  const [cacheAge, setCacheAge] = useState<number | null>(null)
+  const [installingId, setInstallingId] = useState<string | null>(null)
+  const [installProgress, setInstallProgress] = useState<{ current: number; total: number; file: string } | null>(null)
 
   const refresh = useCallback(() => {
     setPlugins(pluginSystem.getAllPlugins())
@@ -16,10 +33,54 @@ export function PluginsPage() {
 
   useEffect(() => {
     refresh()
-    // 启动后异步安装的插件可能延迟到达，2 秒后再刷一次
     const t = setTimeout(refresh, 2000)
     return () => clearTimeout(t)
   }, [refresh])
+
+  // 加载社区插件列表
+  const loadCommunity = useCallback(async (forceRefresh = false) => {
+    // 先读缓存
+    if (!forceRefresh) {
+      const cached = getCachedPlugins()
+      if (cached && cached.length > 0) {
+        setCommunityPlugins(cached)
+        setCacheAge(getCacheAgeMinutes())
+        setCommunityLoading(false)
+      }
+    }
+
+    try {
+      const plugins = await fetchCommunityPlugins()
+      setCommunityPlugins(plugins)
+      cachePlugins(plugins)
+      setCacheAge(0)
+      setCommunityError('')
+    } catch (err: any) {
+      if (communityPlugins.length === 0) {
+        setCommunityError(err.message || '无法加载社区插件')
+      }
+      setCacheAge(getCacheAgeMinutes())
+    } finally {
+      setCommunityLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (tab === 'community') {
+      setCommunityLoading(true)
+      loadCommunity()
+    }
+  }, [tab, loadCommunity])
+
+  // 监听安装进度
+  useEffect(() => {
+    const api = (window as any).electronAPI?.plugin
+    if (!api) return
+    const unsub = api.onGithubProgress?.((data: { pluginId: string; file: string; current: number; total: number }) => {
+      setInstallProgress({ current: data.current, total: data.total, file: data.file })
+    })
+    return () => { unsub?.() }
+  }, [])
 
   const handleInstall = async () => {
     if (!path.trim()) return
@@ -37,65 +98,191 @@ export function PluginsPage() {
     }
   }
 
+  const handleCommunityInstall = async (pluginId: string) => {
+    setInstallingId(pluginId)
+    setInstallProgress(null)
+    const result = await pluginSystem.installFromGithub(pluginId)
+    if (!result.success) {
+      setMsg(`社区安装失败: ${result.error}`)
+    } else {
+      setMsg('社区插件安装成功！')
+      refresh()
+    }
+    setInstallingId(null)
+    setInstallProgress(null)
+  }
+
+  const isInstalled = (pluginId: string) => plugins.some(p => p.manifest.id === pluginId)
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-11 items-center gap-2 border-b border-border px-4">
         <Package className="h-4 w-4 text-muted-foreground shrink-0" />
         <h2 className="text-sm font-semibold">插件</h2>
-      </div>
-      <div className="flex-1 overflow-auto p-4 space-y-4">
-        {/* 安装区域 */}
-        <div className="rounded-lg border border-border p-4">
-          <p className="text-xs font-medium mb-2">安装插件</p>
-          <div className="flex items-center gap-2">
-            <Input className="h-8 text-sm flex-1" value={path}
-              onChange={e => setPath(e.target.value)}
-              placeholder="插件目录路径，如 /Users/xxx/my-plugin" />
-            <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={handlePickFolder} title="选择文件夹">
-              <FolderOpen className="h-4 w-4" />
-            </Button>
-            <Button size="sm" className="h-8 text-xs" onClick={handleInstall} disabled={installing || !path.trim()}>
-              <Plus className="mr-1 h-3 w-3" />{installing ? '安装中...' : '安装'}
-            </Button>
-          </div>
-          {msg && <p className={`text-xs mt-2 ${msg.startsWith('失败') ? 'text-destructive' : 'text-green-500'}`}>{msg}</p>}
-          <p className="text-[10px] text-muted-foreground/50 mt-2">
-            插件目录需包含 manifest.json 和 index.js（导出 Plugin 对象）
-          </p>
-        </div>
 
-        {/* 已安装列表 */}
-        {plugins.length === 0 ? (
-          <div className="py-12 text-center">
-            <p className="text-xs text-muted-foreground">暂无已安装插件</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {plugins.map(p => (
-              <div key={p.manifest.id} className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">{p.manifest.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {p.manifest.id} · v{p.manifest.version}
-                    {p.manifest.description ? ` · ${p.manifest.description}` : ''}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0 ml-3">
-                  <button
-                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${p.enabled ? 'bg-primary' : 'bg-muted'}`}
-                    onClick={() => { pluginSystem.setEnabled(p.manifest.id, !p.enabled); refresh() }}
-                    title={p.enabled ? '停用' : '启用'}>
-                    <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${p.enabled ? 'translate-x-4' : 'translate-x-1'}`} />
-                  </button>
-                  <button className="text-muted-foreground/30 hover:text-destructive"
-                    onClick={() => { if (confirm(`确定卸载「${p.manifest.name}」？`)) { pluginSystem.uninstall(p.manifest.id); refresh() } }}
-                    title="卸载">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
+        {/* Tab 切换 */}
+        <div className="flex items-center gap-0.5 ml-4 bg-muted rounded-md p-0.5">
+          <button
+            className={`px-2.5 py-1 rounded text-xs transition-colors ${tab === 'local' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            onClick={() => setTab('local')}
+          >
+            本地安装
+          </button>
+          <button
+            className={`px-2.5 py-1 rounded text-xs transition-colors ${tab === 'community' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            onClick={() => setTab('community')}
+          >
+            社区
+          </button>
+        </div>
+      </div>
+
+      {msg && (
+        <div className={`mx-4 mt-2 px-3 py-1.5 rounded text-xs ${msg.includes('失败') ? 'bg-destructive/10 text-destructive' : 'bg-green-500/10 text-green-600'}`}>
+          {msg}
+        </div>
+      )}
+
+      <div className="flex-1 overflow-auto p-4 space-y-4">
+        {/* === 本地安装 Tab === */}
+        {tab === 'local' && (
+          <>
+            <div className="rounded-lg border border-border p-4">
+              <p className="text-xs font-medium mb-2">安装插件</p>
+              <div className="flex items-center gap-2">
+                <Input className="h-8 text-sm flex-1" value={path}
+                  onChange={e => setPath(e.target.value)}
+                  placeholder="插件目录路径，如 /Users/xxx/my-plugin" />
+                <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={handlePickFolder} title="选择文件夹">
+                  <FolderOpen className="h-4 w-4" />
+                </Button>
+                <Button size="sm" className="h-8 text-xs" onClick={handleInstall} disabled={installing || !path.trim()}>
+                  <Plus className="mr-1 h-3 w-3" />{installing ? '安装中...' : '安装'}
+                </Button>
               </div>
-            ))}
-          </div>
+              <p className="text-[10px] text-muted-foreground/50 mt-2">
+                插件目录需包含 manifest.json 和 index.tsx
+              </p>
+            </div>
+
+            {plugins.length === 0 ? (
+              <div className="py-12 text-center">
+                <p className="text-xs text-muted-foreground">暂无已安装插件</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {plugins.map(p => (
+                  <div key={p.manifest.id} className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">{p.manifest.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {p.manifest.id} · v{p.manifest.version}
+                        {p.manifest.description ? ` · ${p.manifest.description}` : ''}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 ml-3">
+                      <button
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${p.enabled ? 'bg-primary' : 'bg-muted'}`}
+                        onClick={() => { pluginSystem.setEnabled(p.manifest.id, !p.enabled); refresh() }}
+                        title={p.enabled ? '停用' : '启用'}>
+                        <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${p.enabled ? 'translate-x-4' : 'translate-x-1'}`} />
+                      </button>
+                      <button className="text-muted-foreground/30 hover:text-destructive"
+                        onClick={() => { if (confirm(`确定卸载「${p.manifest.name}」？`)) { pluginSystem.uninstall(p.manifest.id); refresh() } }}
+                        title="卸载">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* === 社区 Tab === */}
+        {tab === 'community' && (
+          <>
+            {/* 工具栏 */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Globe className="h-4 w-4 text-muted-foreground" />
+                <span className="text-xs font-medium">社区插件</span>
+                {cacheAge !== null && (
+                  <span className="text-[10px] text-muted-foreground/50">
+                    {cacheAge === 0 ? '刚刚更新' : `${cacheAge} 分钟前更新`}
+                  </span>
+                )}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => { setCommunityLoading(true); loadCommunity(true) }}
+                disabled={communityLoading}
+              >
+                <RefreshCw className={`mr-1 h-3 w-3 ${communityLoading ? 'animate-spin' : ''}`} />
+                刷新
+              </Button>
+            </div>
+
+            {/* 加载中 */}
+            {communityLoading && communityPlugins.length === 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="rounded-lg border border-border p-4 animate-pulse">
+                    <div className="flex items-start gap-3">
+                      <div className="h-10 w-10 rounded-lg bg-muted" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-3.5 bg-muted rounded w-24" />
+                        <div className="h-3 bg-muted rounded w-full" />
+                        <div className="h-3 bg-muted rounded w-16" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* 错误 */}
+            {communityError && communityPlugins.length === 0 && (
+              <div className="py-12 text-center">
+                <AlertCircle className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-xs text-muted-foreground">{communityError}</p>
+                <Button variant="outline" size="sm" className="mt-3 h-7 text-xs" onClick={() => { setCommunityLoading(true); loadCommunity(true) }}>
+                  重试
+                </Button>
+              </div>
+            )}
+
+            {/* 空态 */}
+            {!communityLoading && !communityError && communityPlugins.length === 0 && (
+              <div className="py-12 text-center">
+                <p className="text-xs text-muted-foreground">暂无社区插件</p>
+              </div>
+            )}
+
+            {/* 插件列表 */}
+            {communityPlugins.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {communityPlugins.map(p => (
+                  <CommunityPluginCard
+                    key={p.id}
+                    plugin={p}
+                    installed={isInstalled(p.id)}
+                    installing={installingId === p.id}
+                    progress={installingId === p.id ? installProgress : null}
+                    onInstall={() => handleCommunityInstall(p.id)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* 底部提示 */}
+            <p className="text-[10px] text-muted-foreground/40 text-center pt-2">
+              插件来自 <a href="https://github.com/Tianzeyui/brainPlus-community-plugins" target="_blank" className="underline hover:text-muted-foreground">GitHub 社区仓库</a>
+            </p>
+          </>
         )}
       </div>
     </div>
