@@ -174,6 +174,7 @@ export interface ElectronAPI {
 
 declare global {
   /** Vite define — 构建时注入，不受用户系统时间影响 */
+  var __APP_VERSION__: string
   var __BUILD_YEAR__: number
   interface Window {
     electronAPI?: ElectronAPI

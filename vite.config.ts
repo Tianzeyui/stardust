@@ -3,14 +3,17 @@ import react from '@vitejs/plugin-react'
 import electron from 'vite-plugin-electron'
 import renderer from 'vite-plugin-electron-renderer'
 import path from 'path'
+import fs from 'fs'
 import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf-8'))
 
 const BUILD_YEAR = new Date().getFullYear()
 
 export default defineConfig({
   define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
     __BUILD_YEAR__: JSON.stringify(BUILD_YEAR),
   },
   plugins: [

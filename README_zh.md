@@ -9,7 +9,7 @@
 
 **开源 AI Agent 平台 — 构建、扩展、自动化。**
 
-[![Version](https://img.shields.io/badge/version-0.22.0-blue)](package.json)
+[![Version](https://img.shields.io/github/package-json/v/Tianzeyui/brainPlus)](package.json)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)]()
 
