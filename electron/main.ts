@@ -378,8 +378,8 @@ ipcMain.handle('config:getCloudinary', () => getCloudinary())
 ipcMain.handle('config:saveCloudinary', (_e, c: any) => saveCloudinaryCfg(c))
 ipcMain.handle('config:clearCloudinary', () => { clearCloudinaryCfg(); return true })
 
-ipcMain.handle('config:getAIModels', () => getAIModelsCfg())
-ipcMain.handle('config:saveAIModels', (_e, models: any[]) => saveAIModelsCfg(models))
+ipcMain.handle('config:getAIModels', (_e, email?: string) => getAIModelsCfg(email))
+ipcMain.handle('config:saveAIModels', (_e, models: any[], email?: string) => saveAIModelsCfg(models, email))
 
 // ==================== Local Model IPC ====================
 

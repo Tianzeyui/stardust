@@ -121,8 +121,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getCloudinary: () => ipcRenderer.invoke('config:getCloudinary'),
     saveCloudinary: (c: any) => ipcRenderer.invoke('config:saveCloudinary', c),
     clearCloudinary: () => ipcRenderer.invoke('config:clearCloudinary'),
-    getAIModels: () => ipcRenderer.invoke('config:getAIModels'),
-    saveAIModels: (models: any[]) => ipcRenderer.invoke('config:saveAIModels', models),
+    getAIModels: (email?: string) => ipcRenderer.invoke('config:getAIModels', email),
+    saveAIModels: (models: any[], email?: string) => ipcRenderer.invoke('config:saveAIModels', models, email),
   },
 
   conv: {

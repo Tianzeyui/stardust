@@ -66,10 +66,25 @@ export function clearCloudinary(): void {
 
 // ====== AI Models ======
 
-export function getAIModels(): any[] {
-  return readJSON<any[]>('ai-models.json', [])
+import { encryptApiKey, decryptApiKey } from './cryptoUtils.js'
+
+export function getAIModels(email?: string): any[] {
+  const models = readJSON<any[]>('ai-models.json', [])
+  if (!email) return models
+  return models.map(m => ({
+    ...m,
+    apiKey: m.apiKey ? decryptApiKey(m.apiKey, email) : m.apiKey,
+  }))
 }
 
-export function saveAIModels(models: any[]): void {
-  writeJSON('ai-models.json', models)
+export function saveAIModels(models: any[], email?: string): void {
+  if (!email) {
+    writeJSON('ai-models.json', models)
+    return
+  }
+  const encrypted = models.map(m => ({
+    ...m,
+    apiKey: m.apiKey ? encryptApiKey(m.apiKey, email) : m.apiKey,
+  }))
+  writeJSON('ai-models.json', encrypted)
 }

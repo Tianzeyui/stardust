@@ -86,8 +86,8 @@ export interface ElectronAPI {
     getCloudinary: () => Promise<{ cloudName: string; uploadPreset: string }>
     saveCloudinary: (c: { cloudName: string; uploadPreset: string }) => Promise<void>
     clearCloudinary: () => Promise<boolean>
-    getAIModels: () => Promise<any[]>
-    saveAIModels: (models: any[]) => Promise<void>
+    getAIModels: (email?: string) => Promise<any[]>
+    saveAIModels: (models: any[], email?: string) => Promise<void>
   }
   model: {
     getStatus: () => Promise<Array<{ id: string; name: string; size: string; installed: boolean; enabled: boolean; progress?: number }>>
