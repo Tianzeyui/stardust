@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Check, X, Shield, ShieldCheck, Cable, BookOpen, MessageSquare, FileText, Image, Zap, FolderOpen, Loader2, ChevronDown, Info, ExternalLink } from 'lucide-react'
+import { Check, X, Shield, ShieldCheck, Cable, BookOpen, MessageSquare, FileText, Image, Zap, FolderOpen, Loader2, ChevronDown, IdCard, ExternalLink } from 'lucide-react'
 import MarkdownPreview from '@uiw/react-markdown-preview'
 import type { UIMessage, ToolCallStatus, MessageAttachment, AgentToolCallEntry, AgentTimelineItem } from '@/types/chat'
 import { useAuth } from '@/contexts/AuthContext'
@@ -295,7 +295,7 @@ function AgentCardButton({ agentName }: { agentName: string }) {
         onClick={() => setShow(!show)}
         title="查看 Agent 详情"
       >
-        <Info className="h-3.5 w-3.5" />
+        <IdCard className="h-3.5 w-3.5" />
       </button>
       {show && (
         <>
