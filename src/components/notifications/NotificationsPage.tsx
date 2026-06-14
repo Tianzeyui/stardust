@@ -1,16 +1,21 @@
-import { Bell, Check, X, Info, AlertTriangle, AlertCircle } from 'lucide-react'
+import { Bell, X, Info, AlertTriangle, AlertCircle, ArrowLeft } from 'lucide-react'
 import { useNotifications } from '@/contexts/NotificationContext'
 
 const iconMap = { info: Info, warning: AlertTriangle, error: AlertCircle, confirm: AlertTriangle }
 const colorMap = { info: 'text-blue-500', warning: 'text-yellow-500', error: 'text-destructive', confirm: 'text-yellow-500' }
 const bgMap = { info: 'bg-blue-500/5', warning: 'bg-yellow-500/5', error: 'bg-destructive/5', confirm: 'bg-yellow-500/5' }
 
-export function NotificationsPage() {
+export function NotificationsPage({ onClose }: { onClose?: () => void }) {
   const { notifications, dismiss, resolveConfirm, markAllRead } = useNotifications()
 
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-11 items-center gap-2 border-b border-border px-4">
+        {onClose && (
+          <button className="p-1 -ml-1 text-muted-foreground hover:text-foreground transition-colors" onClick={onClose} title="返回">
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+        )}
         <Bell className="h-4 w-4 text-muted-foreground shrink-0" />
         <h2 className="text-sm font-semibold">通知</h2>
         <div className="flex-1" />
