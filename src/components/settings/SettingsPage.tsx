@@ -53,7 +53,7 @@ function NumberField({ label, value, setValue, min, max, unit }: {
   )
 }
 
-type Tab = 'general' | 'capabilities' | 'agent' | 'a2a' | 'ai' | 'mcp' | 'about'
+type Tab = 'general' | 'ai' | 'mcp' | 'capabilities' | 'agent' | 'a2a' | 'about'
 
 export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; initialTab?: Tab }) {
   const { user } = useAuth()
@@ -415,11 +415,11 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
           <div className="flex items-center gap-1 rounded-lg bg-muted p-0.5">
           {([
             { id: 'general' as const, label: '通用', icon: Settings },
+            { id: 'ai' as const, label: 'AI模型', icon: Cpu },
+            { id: 'mcp' as const, label: 'MCP 服务器', icon: Server },
             { id: 'capabilities' as const, label: '能力', icon: Zap },
             { id: 'agent' as const, label: 'Agent', icon: Bot },
             { id: 'a2a' as const, label: 'A2A', icon: Globe },
-            { id: 'ai' as const, label: 'AI模型', icon: Cpu },
-            { id: 'mcp' as const, label: 'MCP 服务器', icon: Server },
             { id: 'about' as const, label: '关于', icon: Info },
           ]).map((t) => (
             <button
