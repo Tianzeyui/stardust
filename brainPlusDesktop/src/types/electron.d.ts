@@ -142,8 +142,8 @@ export interface ElectronAPI {
   on: (channel: string, cb: (...args: any[]) => void) => () => void
   off: (channel: string, cb: (...args: any[]) => void) => void
   plugin: {
-    load: (dirPath: string) => Promise<{ success: boolean; error?: string; manifest?: any; page?: string | null; pluginDir?: string }>
-    install: (dirPath: string) => Promise<{ success: boolean; error?: string; manifest?: any; page?: string | null; pluginDir?: string }>
+    load: (dirPath: string) => Promise<{ success: boolean; error?: string; manifest?: any; pluginDir?: string }>
+    install: (dirPath: string) => Promise<{ success: boolean; error?: string; manifest?: any; pluginDir?: string }>
     installDeps: (dirPath: string) => Promise<{ success: boolean; error?: string }>
     compile: (dirPath: string) => Promise<{ success: boolean; error?: string; code?: string }>
     uninstall: (pluginId: string) => Promise<{ success: boolean; error?: string }>

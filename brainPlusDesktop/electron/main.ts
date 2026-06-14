@@ -612,9 +612,7 @@ ipcMain.handle('plugin:load', async (_e, dirPath: string) => {
     const manifestPath = path.join(dirPath, 'manifest.json')
     if (!fs.existsSync(manifestPath)) return { success: false, error: '未找到 manifest.json' }
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
-    const htmlPath = path.join(dirPath, 'index.html')
-    const page = fs.existsSync(htmlPath) ? fs.readFileSync(htmlPath, 'utf-8') : null
-    return { success: true, manifest, page, pluginDir: dirPath }
+    return { success: true, manifest, pluginDir: dirPath }
   } catch (e: any) {
     return { success: false, error: e.message }
   }
@@ -658,10 +656,8 @@ ipcMain.handle('plugin:install', async (_e, dirPath: string) => {
       }
     }
 
-    // 加载 manifest + HTML
-    const htmlPath = path.join(destDir, 'index.html')
-    const page = fs.existsSync(htmlPath) ? fs.readFileSync(htmlPath, 'utf-8') : null
-    return { success: true, manifest, page, pluginDir: destDir }
+    // 加载 manifest
+    return { success: true, manifest, pluginDir: destDir }
   } catch (e: any) {
     return { success: false, error: e.message }
   }

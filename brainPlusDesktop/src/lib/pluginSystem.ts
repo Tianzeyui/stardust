@@ -2,9 +2,7 @@
  * PluginSystem — 插件管理中心
  * 统一管理插件的注册/导航/路由/启用停用/工具注入
  *
- * 支持两种插件模式：
- * 1. React/TSX 模式（优先） — index.tsx / index.jsx 导出 register 函数
- * 2. HTML 模式（回退）   — index.html 纯静态页面
+ * 插件使用 React/TSX 模式：index.tsx / index.jsx 导出 register 函数
  */
 import { jsonSchema } from 'ai'
 import type { Plugin, PluginContext, PluginAPI, PluginManifest, NavItemDef } from './pluginTypes'
@@ -311,7 +309,6 @@ class PluginSystemImpl {
     if (!result.success) return result
 
     const m = result.manifest
-    const pageHtml: string | null = result.page
 
     // 依赖检查
     if (m.requires?.plugins) {
@@ -325,20 +322,17 @@ class PluginSystemImpl {
 
     // 权限校验
     const perms = m.permissions || []
-    const granted: string[] = []
     const denied: string[] = []
     for (const p of perms) {
-      if (p === 'files' && (window as any).electronAPI?.fs) granted.push(p)
-      else if (p === 'ai') granted.push(p)
-      else if (p === 'sandbox' && (window as any).electronAPI?.sandbox && isAnySandboxEnabled()) granted.push(p)
-      else if (p === 'workspace' && (window as any).electronAPI?.workspace) granted.push(p)
-      else if (p === 'supabase' && isSupabaseConfigured()) granted.push(p)
-      else if (p === 'cloudinary' && isCloudinaryConfigured()) granted.push(p)
+      if (p === 'files' && (window as any).electronAPI?.fs) continue
+      else if (p === 'ai') continue
+      else if (p === 'sandbox' && (window as any).electronAPI?.sandbox && isAnySandboxEnabled()) continue
+      else if (p === 'workspace' && (window as any).electronAPI?.workspace) continue
+      else if (p === 'supabase' && isSupabaseConfigured()) continue
+      else if (p === 'cloudinary' && isCloudinaryConfigured()) continue
       else denied.push(p)
     }
     if (denied.length > 0) console.warn(`[Plugin] "${m.id}" 权限未满足: ${denied.join(', ')}`)
-
-    const grantedSet = new Set(granted)
 
     // === React/TSX 模式：编译并加载 index.tsx / index.jsx ===
     try {
@@ -348,7 +342,7 @@ class PluginSystemImpl {
       const compileResult = await api.compile?.(dirPath)
       if (compileResult && !compileResult.success) {
         console.warn(`[PluginSystem] "${m.id}" TSX 编译失败: ${compileResult.error} (路径: ${dirPath})`)
-        import('@/hooks/useToast').then(m => m.toast({ title: `插件「${m.name}」编译失败`, description: compileResult.error, variant: 'destructive' }))
+        import('@/hooks/useToast').then(toastMod => toastMod.toast({ title: `插件「${m.name}」编译失败`, description: compileResult.error, variant: 'destructive' }))
       }
       if (compileResult?.success && compileResult.code) {
         const exports = evaluatePluginModule(compileResult.code)
@@ -375,49 +369,12 @@ class PluginSystemImpl {
         }
       }
     } catch (e: any) {
-      // TSX 编译失败不应阻止回退到 HTML 模式
-      console.log(`[PluginSystem] "${m.id}" TSX 加载失败，回退 HTML 模式:`, e.message)
+      console.error(`[PluginSystem] "${m.id}" TSX 编译/加载失败:`, e.message)
+      return { success: false, error: `插件编译失败: ${e.message}` }
     }
 
-    // === HTML 模式（回退） ===
-    const plugin: Plugin = {
-      manifest: { id: m.id, name: m.name, version: m.version, description: m.description || '', icon: m.icon || 'Package', navOrder: m.navOrder || 90, enabled: true, systemHeader: m.systemHeader },
-      register(ctx) {
-        if (pageHtml) {
-          const pid = m.id; const pname = m.name; const pver = m.version; const pdesc = m.description; const phtml = pageHtml
-          const perms = grantedSet
-          ctx.registerNav({ id: pid, label: pname, icon: m.icon || 'Package', order: m.navOrder || 90 })
-          ctx.registerRoute(pid, async () => {
-            const { PluginPage } = await import('@/components/plugins/PluginPage')
-            return { default: () => PluginPage({ manifest: { name: pname, version: pver, description: pdesc || '' }, htmlContent: phtml, pluginDir: result.pluginDir || '', permissions: [...perms] }) }
-          })
-        }
-        // 注册 AI 工具
-        if (m.tools?.length > 0) {
-          ctx.onToolRegister((tools) => {
-            for (const t of m.tools) {
-              const toolName = `plugin__${t.name}`
-              tools[toolName] = {
-                description: `[${m.name}] ${t.description}`,
-                inputSchema: jsonSchema(t.inputSchema || { type: 'object', properties: {} }),
-                execute: async (args: any) => {
-                  try {
-                    const keys = Object.keys(args || {})
-                    if (keys.length === 0) return t.outputTemplate
-                    const fn = new Function(...keys, `return \`${t.outputTemplate}\``)
-                    return fn(...keys.map(k => args[k]))
-                  } catch { return t.outputTemplate }
-                },
-              }
-            }
-          })
-        }
-      },
-    }
-    this.register(plugin, result.pluginDir)
-    const paths = this.getInstalledPaths()
-    if (!paths.includes(dirPath)) { paths.push(dirPath); this.saveInstalledPaths(paths) }
-    return { success: true }
+    // 没有 index.tsx/index.jsx，无法加载
+    return { success: false, error: '未找到 index.tsx 或 index.jsx 入口文件' }
   }
 
   /** 卸载插件 */
