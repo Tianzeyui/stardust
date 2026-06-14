@@ -77,15 +77,25 @@ export function AIPage() {
   }
 
   // 工具操作
-  const handleCreateItem = async () => {
+  const handleSaveItem = async () => {
     if (!editItem.name?.trim()) return
-    await createItem({
-      category_id: selCatId,
-      name: editItem.name.trim(),
-      url: editItem.url || '',
-      icon: editItem.icon || '',
-      description: editItem.description || '',
-    })
+    if (editItem.id) {
+      await updateItem(editItem.id, {
+        name: editItem.name.trim(),
+        url: editItem.url || '',
+        icon: editItem.icon || '',
+        description: editItem.description || '',
+        category_id: selCatId || undefined,
+      })
+    } else {
+      await createItem({
+        category_id: selCatId,
+        name: editItem.name.trim(),
+        url: editItem.url || '',
+        icon: editItem.icon || '',
+        description: editItem.description || '',
+      })
+    }
     setShowAddItem(false)
     setEditItem({})
     loadData()
@@ -195,6 +205,11 @@ export function AIPage() {
                       {item.description && <p className="text-[10px] text-muted-foreground/50 truncate">{item.description}</p>}
                     </div>
                   </button>
+                  <button className="opacity-0 group-hover:opacity-100 p-0.5 text-muted-foreground hover:text-foreground shrink-0"
+                    onClick={() => { setEditItem({ id: item.id, name: item.name, url: item.url, icon: item.icon, description: item.description }); setShowAddItem(true) }}
+                    title="编辑">
+                    <Pencil className="h-3 w-3" />
+                  </button>
                   <button className="opacity-0 group-hover:opacity-100 p-0.5 text-muted-foreground hover:text-destructive shrink-0"
                     onClick={() => handleDeleteItem(item.id)}>
                     <Trash2 className="h-3 w-3" />
@@ -210,7 +225,7 @@ export function AIPage() {
                   <Input className="h-7 text-xs" placeholder="图标地址（可选）" value={editItem.icon || ''} onChange={e => setEditItem(p => ({ ...p, icon: e.target.value }))} />
                   <Input className="h-7 text-xs" placeholder="描述（可选）" value={editItem.description || ''} onChange={e => setEditItem(p => ({ ...p, description: e.target.value }))} />
                   <div className="flex gap-1">
-                    <Button size="sm" className="h-6 text-[10px]" onClick={handleCreateItem} disabled={!editItem.name?.trim()}>添加</Button>
+                    <Button size="sm" className="h-6 text-[10px]" onClick={handleSaveItem} disabled={!editItem.name?.trim()}>{editItem.id ? '保存' : '添加'}</Button>
                     <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => { setShowAddItem(false); setEditItem({}) }}>取消</Button>
                   </div>
                 </div>
