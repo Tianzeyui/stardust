@@ -943,8 +943,8 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
             <h2 className="text-xl font-bold text-foreground mb-1">BrainPlus</h2>
             <p className="text-sm text-muted-foreground mb-6">Version {APP_VERSION}</p>
             <p className="text-sm text-muted-foreground leading-relaxed max-w-xs mb-8">
-              AI 赋能创作，让灵感自由流淌。<br />
-              AI 辅助内容创作软件，通过灵感收集记录、知识蒸馏等功能，帮助多媒体创作者高效产出内容。
+              开源自由的 AI Agent 平台。<br />
+              构建、扩展、自动化——连接 60+ AI 模型，支持 MCP 工具、沙箱执行和强大的插件系统。
             </p>
             <div className="relative inline-block mb-3">
               <img src="/assets/logo/immersionBitLogo.png" alt="沉浸位工作室" className="w-32" />
