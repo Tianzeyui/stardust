@@ -4,10 +4,12 @@
  */
 import fs from 'fs'
 import path from 'path'
+import https from 'https'
 
 const REPO = 'Tianzeyui/brainPlus-community-plugins'
-const API_BASE = `https://api.github.com/repos/${REPO}`
-const RAW_BASE = `https://raw.githubusercontent.com/${REPO}/main`
+const API_HOST = 'api.github.com'
+const RAW_HOST = 'raw.githubusercontent.com'
+const UA = 'BrainPlus/1.0'
 
 interface GitHubContent {
   name: string
@@ -18,15 +20,72 @@ interface GitHubContent {
 }
 
 /**
+ * 发起 HTTPS GET 请求，返回 JSON
+ */
+function httpsGetJSON(url: string): Promise<any> {
+  return new Promise((resolve, reject) => {
+    https.get(url, {
+      timeout: 30000,
+      headers: {
+        'User-Agent': UA,
+        'Accept': 'application/vnd.github.v3+json',
+      },
+    }, (res) => {
+      // 处理重定向
+      if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
+        res.resume()
+        httpsGetJSON(res.headers.location).then(resolve, reject)
+        return
+      }
+      if (res.statusCode !== 200) {
+        res.resume()
+        reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`))
+        return
+      }
+      let data = ''
+      res.setEncoding('utf-8')
+      res.on('data', (chunk: string) => { data += chunk })
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)) }
+        catch (e) { reject(new Error('JSON 解析失败')) }
+      })
+    }).on('error', reject)
+      .on('timeout', function(this: any) { this.destroy(); reject(new Error('请求超时')) })
+  })
+}
+
+/**
+ * 下载文件内容，返回 Buffer
+ */
+function httpsGetBuffer(url: string): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    https.get(url, {
+      timeout: 30000,
+      headers: { 'User-Agent': UA },
+    }, (res) => {
+      if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
+        res.resume()
+        httpsGetBuffer(res.headers.location).then(resolve, reject)
+        return
+      }
+      if (res.statusCode !== 200) {
+        res.resume()
+        reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`))
+        return
+      }
+      const chunks: Buffer[] = []
+      res.on('data', (chunk: Buffer) => { chunks.push(chunk) })
+      res.on('end', () => { resolve(Buffer.concat(chunks)) })
+    }).on('error', reject)
+      .on('timeout', function(this: any) { this.destroy(); reject(new Error('下载超时')) })
+  })
+}
+
+/**
  * 递归获取 GitHub 目录下所有文件的 download_url
  */
-async function listDirContents(dirUrl: string): Promise<Array<{ path: string; download_url: string }>> {
-  const res = await fetch(dirUrl, {
-    headers: { 'User-Agent': 'brainPlus', 'Accept': 'application/vnd.github.v3+json' },
-  })
-  if (!res.ok) throw new Error(`GitHub API error (${res.status}): ${res.statusText}`)
-
-  const items: GitHubContent[] = await res.json()
+async function listDirContents(apiUrl: string): Promise<Array<{ path: string; download_url: string }>> {
+  const items: GitHubContent[] = await httpsGetJSON(apiUrl)
   const files: Array<{ path: string; download_url: string }> = []
 
   for (const item of items) {
@@ -42,10 +101,10 @@ async function listDirContents(dirUrl: string): Promise<Array<{ path: string; do
 }
 
 /**
- * 获取某个插件的文件列表（相对路径 → download_url）
+ * 获取某个插件的文件列表
  */
 export async function listPluginFiles(pluginId: string): Promise<Array<{ path: string; download_url: string }>> {
-  const url = `${API_BASE}/contents/${encodeURIComponent(pluginId)}`
+  const url = `https://${API_HOST}/repos/${REPO}/contents/${encodeURIComponent(pluginId)}`
   return listDirContents(url)
 }
 
@@ -53,12 +112,8 @@ export async function listPluginFiles(pluginId: string): Promise<Array<{ path: s
  * 从 GitHub 下载插件 manifest.json
  */
 export async function fetchManifestFromGithub(pluginId: string): Promise<any> {
-  const url = `${API_BASE}/contents/${encodeURIComponent(pluginId)}/manifest.json`
-  const res = await fetch(url, {
-    headers: { 'User-Agent': 'brainPlus', 'Accept': 'application/vnd.github.v3+json' },
-  })
-  if (!res.ok) throw new Error(`获取 manifest 失败 (${res.status})`)
-  const data = await res.json()
+  const url = `https://${API_HOST}/repos/${REPO}/contents/${encodeURIComponent(pluginId)}/manifest.json`
+  const data = await httpsGetJSON(url)
   // GitHub API 返回的 content 是 base64 编码
   if (data.content && data.encoding === 'base64') {
     return JSON.parse(Buffer.from(data.content, 'base64').toString('utf-8'))
@@ -68,9 +123,6 @@ export async function fetchManifestFromGithub(pluginId: string): Promise<any> {
 
 /**
  * 下载插件的所有文件到目标目录
- * @param pluginId 插件目录名（如 "diary"）
- * @param destDir 目标目录路径
- * @param onProgress 进度回调
  */
 export async function downloadPluginFiles(
   pluginId: string,
@@ -78,6 +130,8 @@ export async function downloadPluginFiles(
   onProgress?: (file: string, current: number, total: number) => void,
 ): Promise<void> {
   const files = await listPluginFiles(pluginId)
+
+  if (files.length === 0) throw new Error('插件目录为空')
 
   // 确保目标目录存在
   fs.mkdirSync(destDir, { recursive: true })
@@ -93,12 +147,7 @@ export async function downloadPluginFiles(
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
 
     // 下载文件
-    const res = await fetch(file.download_url, {
-      headers: { 'User-Agent': 'brainPlus' },
-    })
-    if (!res.ok) throw new Error(`下载 ${relativePath} 失败 (${res.status})`)
-
-    const buffer = Buffer.from(await res.arrayBuffer())
+    const buffer = await httpsGetBuffer(file.download_url)
     fs.writeFileSync(targetPath, buffer)
 
     completed++
