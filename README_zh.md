@@ -208,6 +208,11 @@ ctx.onToolRegister((tools) => {
 
 详细的插件开发指南请参见[社区插件仓库](https://github.com/Tianzeyui/brainPlus-community-plugins)中 `_template/docs/` 目录。
 
+## 版本发布
+
+- [v0.22.0](docs/releases/v0.22.0.md) — 社区插件、仓库管理、Skill 开关
+- [v0.21.0](docs/releases/v0.21.0.md) — 项目系统、工具箱升级、界面重构
+
 ## 许可证
 
 Apache 2.0 © 沉浸位工作室

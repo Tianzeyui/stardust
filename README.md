@@ -208,6 +208,11 @@ Contributions are welcome! Here's how you can help:
 
 See the plugin documentation in the [community plugins repo](https://github.com/Tianzeyui/brainPlus-community-plugins) under `_template/docs/` for detailed development guides.
 
+## Release Notes
+
+- [v0.22.0](docs/releases/v0.22.0.md) — Community plugins, repo management, Skill toggles
+- [v0.21.0](docs/releases/v0.21.0.md) — Project system, toolbox upgrade, UI redesign
+
 ## License
 
 Apache 2.0 © 沉浸位工作室
