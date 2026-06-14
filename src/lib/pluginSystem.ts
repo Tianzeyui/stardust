@@ -210,9 +210,20 @@ class PluginSystemImpl {
       },
       ui: {
         toast: (message: string, type?: string) => {
-          // 动态导入 toast 避免循环依赖
           import('@/hooks/useToast').then(m => m.toast({ title: message, variant: type === 'error' ? 'destructive' : 'default' }))
         },
+      },
+      notify: (opts) => {
+        const { getNotificationAPI } = require('@/contexts/NotificationContext')
+        const api = getNotificationAPI()
+        if (!api) return ''
+        return api.notify({ type: opts.type || 'info', title: opts.title, message: opts.message })
+      },
+      confirm: (opts) => {
+        const { getNotificationAPI } = require('@/contexts/NotificationContext')
+        const api = getNotificationAPI()
+        if (!api) return Promise.reject(new Error('通知系统不可用'))
+        return api.confirm({ title: opts.title, message: opts.message, actions: opts.actions })
       },
       workspace: {
         getPaths: async () => {

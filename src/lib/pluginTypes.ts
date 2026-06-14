@@ -72,6 +72,10 @@ export interface PluginAPI {
     /** 弹出 Toast 通知 */
     toast: (message: string, type?: 'success' | 'error' | 'info') => void
   }
+  /** 通知中心：发送通知 */
+  notify: (opts: { type?: 'info' | 'warning' | 'error'; title: string; message: string }) => string
+  /** 通知中心：确认请求，返回 Promise 等待用户操作 */
+  confirm: (opts: { title: string; message: string; actions: Array<{ key: string; label: string; variant?: 'default' | 'destructive' }> }) => Promise<string>
   workspace: {
     getPaths: () => Promise<{ root: string; output: string; input: string }>
     openFile: (filePath: string) => Promise<void>

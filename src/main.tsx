@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { AuthProvider } from './contexts/AuthContext'
+import { NotificationProvider } from './contexts/NotificationContext'
 import { ToastProvider } from './hooks/useToast'
 import { ToastViewport } from './components/ui/toast'
 import { useToast } from './hooks/useToast'
@@ -21,8 +22,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ToastProvider>
       <AuthProvider>
-        <App />
-        <ToastContainer />
+        <NotificationProvider>
+          <App />
+          <ToastContainer />
+        </NotificationProvider>
       </AuthProvider>
     </ToastProvider>
   </React.StrictMode>,
