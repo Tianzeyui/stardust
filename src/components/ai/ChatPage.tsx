@@ -502,12 +502,12 @@ export function ChatPage() {
           const code = typeof event.toolInput === 'object' && (event.toolInput as any)?.code
             ? `\n\`\`\`js\n${(event.toolInput as any).code}\n\`\`\`\n`
             : ''
-          agentStreamedRef.current += `\n\n<span style="color:#f59e0b">●</span> **${event.toolName}** 执行中...${code}\n`
+          agentStreamedRef.current += `\n\n▶ **${event.toolName}** 执行中...${code}\n`
           ensureAgentContainer(event.agentName ? `Agent: ${event.agentName}` : 'Agent')
         } else if (event.type === 'agent-tool-result') {
           const output = String(event.toolOutput ?? '').slice(0, 2000)
           const ok = !output.startsWith('Error')
-          agentStreamedRef.current += `\n<span style="color:${ok ? '#22c55e' : '#ef4444'}">●</span> **${event.toolName}** ${ok ? '完成' : '失败'}\n\`\`\`\n${output}\n\`\`\`\n`
+          agentStreamedRef.current += `\n${ok ? '✓' : '✗'} **${event.toolName}** ${ok ? '完成' : '失败'}\n\`\`\`\n${output}\n\`\`\`\n`
           ensureAgentContainer(event.agentName ? `Agent: ${event.agentName}` : 'Agent')
         } else if (event.type === 'agent-text-delta') {
           // Agent 流式文字输出：带 Agent 标签的独立消息
