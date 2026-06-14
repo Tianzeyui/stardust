@@ -12,7 +12,7 @@ import {
   clearPluginCache,
   type CommunityPlugin,
 } from '@/lib/communityPluginService'
-import { getSavedRepos, addRepo, removeRepo, refreshRepo, type PluginRepo } from '@/lib/repoService'
+import { getSavedRepos, addRepo, removeRepo, refreshRepo, recloneRepo, type PluginRepo } from '@/lib/repoService'
 
 export function PluginsPage() {
   const [plugins, setPlugins] = useState(pluginSystem.getAllPlugins())
@@ -146,6 +146,17 @@ export function PluginsPage() {
       setRepos(getSavedRepos())
     } else {
       setRepoMsg(`刷新失败: ${result.error}`)
+    }
+  }
+
+  const handleRecloneRepo = async (url: string) => {
+    setRepoMsg('重新克隆中...')
+    const result = await recloneRepo(url)
+    if (result.success) {
+      setRepos(getSavedRepos())
+      setRepoMsg('重新克隆成功！')
+    } else {
+      setRepoMsg(`克隆失败: ${result.error}`)
     }
   }
 
@@ -290,10 +301,10 @@ export function PluginsPage() {
                   variant="ghost"
                   size="sm"
                   className="h-7 text-xs"
-                  onClick={() => { clearPluginCache(); loadCommunity(true) }}
+                  onClick={() => { clearPluginCache(); setCommunityPlugins([]); setCommunityLoading(true); loadCommunity(true) }}
                   title="清空本地缓存后重新拉取"
                 >
-                  <Trash2 className="mr-1 h-3 w-3" />清缓存
+                  <Trash2 className="mr-1 h-3 w-3" />清理缓存
                 </Button>
               </div>
             </div>
@@ -413,6 +424,9 @@ export function PluginsPage() {
                       <span className="text-[10px] text-muted-foreground/50 mr-1">{repo.plugins.length} 个插件</span>
                       <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleRefreshRepo(repo.url)}>
                         <RefreshCw className="mr-1 h-3 w-3" />刷新
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleRecloneRepo(repo.url)} title="重新克隆整个仓库">
+                        <Trash2 className="mr-1 h-3 w-3" />清理
                       </Button>
                       <button
                         className="text-muted-foreground/30 hover:text-destructive p-1"

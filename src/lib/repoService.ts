@@ -112,6 +112,34 @@ export async function refreshRepo(repoUrl: string): Promise<{ success: boolean; 
 /**
  * 删除仓库
  */
+/**
+ * 重新克隆仓库（删除本地后重新 clone）
+ */
+export async function recloneRepo(repoUrl: string): Promise<{ success: boolean; error?: string; repo?: PluginRepo }> {
+  const api = (window as any).electronAPI?.plugin
+  if (!api) return { success: false, error: '仅 Electron 环境支持' }
+
+  const repos = getSavedRepos()
+  const idx = repos.findIndex(r => r.url === repoUrl)
+  if (idx === -1) return { success: false, error: '仓库未找到' }
+
+  // 重新克隆（cloneRepo 会先删除旧目录）
+  const result = await api.cloneRepo(repoUrl)
+  if (!result.success) return { success: false, error: result.error }
+
+  const updated: PluginRepo = {
+    ...repos[idx],
+    repoDir: result.repoDir,
+    plugins: (result.plugins || []).map((p: any) => ({
+      id: p.id, name: p.name, version: p.version,
+      description: p.description, icon: p.icon, permissions: p.permissions, files: p.files,
+    })),
+  }
+  repos[idx] = updated
+  saveRepos(repos)
+  return { success: true, repo: updated }
+}
+
 export function removeRepo(url: string): void {
   const repos = getSavedRepos().filter(r => r.url !== url)
   saveRepos(repos)
