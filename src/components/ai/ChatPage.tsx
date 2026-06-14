@@ -525,14 +525,15 @@ export function ChatPage() {
           const marker = `\n> ${label} <span style="color:#f59e0b">...</span>\n`
           const resultIcon = ok ? '✓' : '✗'
           const resultColor = ok ? '#22c55e' : '#ef4444'
-          const resultLine = `\n> ${label} <span style="color:${resultColor}">${resultIcon} 完成</span>\n`
-          if (agentStreamedRef.current.includes(marker)) {
-            agentStreamedRef.current = agentStreamedRef.current.replace(marker, resultLine)
+          const resultBlock = `\n> ${label} <span style="color:${resultColor}">${resultIcon} 完成</span>\n` +
+            (output ? `<details>\n<summary><span style="color:#888;font-size:12px">展开输出</span></summary>\n\n\`\`\`\n${output}\n\`\`\`\n</details>\n` : '')
+          // 精确替换并插入输出到同一位置，保证调用和返回成对
+          const idx = agentStreamedRef.current.indexOf(marker)
+          if (idx !== -1) {
+            agentStreamedRef.current =
+              agentStreamedRef.current.slice(0, idx) + resultBlock + agentStreamedRef.current.slice(idx + marker.length)
           } else {
-            agentStreamedRef.current += resultLine
-          }
-          if (output) {
-            agentStreamedRef.current += `\n<details>\n<summary><span style="color:#888;font-size:12px">展开输出</span></summary>\n\n\`\`\`\n${output}\n\`\`\`\n</details>\n`
+            agentStreamedRef.current += resultBlock
           }
           ensureAgentContainer(event.agentName ? `Agent: ${event.agentName}` : 'Agent')
         } else if (event.type === 'agent-text-delta') {
