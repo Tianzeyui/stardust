@@ -39,7 +39,7 @@ export function ModelPicker({
             <div key={provider.id} className="mb-1 last:mb-0">
               <div className="px-2 py-0.5">
                 <span className="text-[10px] text-muted-foreground/50 font-medium tracking-wide uppercase">
-                  {provider.displayName}
+                  {provider.name}
                 </span>
               </div>
               {provider.availableModels?.length > 0 ? (

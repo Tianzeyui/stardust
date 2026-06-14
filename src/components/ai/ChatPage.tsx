@@ -865,7 +865,7 @@ export function ChatPage() {
         <textarea
           className="w-full resize-none bg-transparent px-3 pt-2 pb-0 text-sm leading-relaxed placeholder:text-muted-foreground outline-none disabled:cursor-not-allowed disabled:opacity-50 custom-scrollbar"
           rows={3}
-          placeholder={askUser ? '请在上方回答 AI 的问题...' : activeModel ? `向 ${activeModel.displayName} 提问...` : '请先配置模型'}
+          placeholder={askUser ? '请在上方回答 AI 的问题...' : activeModel ? `向 ${activeModel.name} 提问...` : '请先配置模型'}
           value={input}
           onChange={e => handleInputChange(e.target.value)}
           onKeyDown={e => {
