@@ -349,3 +349,14 @@ export function getBingTimeout(): number {
 export function saveBingTimeout(sec: number): void {
   localStorage.setItem(BING_TIMEOUT_KEY, String(Math.max(3, Math.min(60, sec))))
 }
+
+// ========== 图数据库开关 ==========
+
+const GRAPH_ENABLED_KEY = 'brainplus_graph_enabled'
+
+export function getGraphEnabled(): boolean {
+  try { const v = localStorage.getItem(GRAPH_ENABLED_KEY); if (v !== null) return v === 'true' } catch {}
+  return false  // 默认关闭
+}
+
+export function saveGraphEnabled(v: boolean): void { localStorage.setItem(GRAPH_ENABLED_KEY, String(v)) }
