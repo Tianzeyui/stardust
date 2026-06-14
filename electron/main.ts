@@ -10,6 +10,7 @@ import { initWorkspace, getWorkspacePaths, listOutputFiles, openFile, deleteFile
 import { writeSkillFiles, readSkillFile, deleteSkillFiles } from './main/skillDiskStore.js'
 import { downloadPluginFiles } from './main/pluginDownloader.js'
 import { cloneRepo, pullRepo, readRepoPluginsJson, parseGitHubUrl, cloneToTemp, removeTempDir } from './main/pluginRepoManager.js'
+import { configureGraph, graphQuery, testGraphConnection, getGraphConfig, closeGraphDriver } from './main/graphService.js'
 import { convertWithMarkitdown, isImageFile, isConvertible } from './main/fileConvert.js'
 import {
   getModelStatus,
@@ -850,6 +851,16 @@ ipcMain.handle('skill:cleanupTemp', async (_event, dirPath: string) => {
   }
 })
 
+// 图数据库
+ipcMain.handle('graph:configure', async (_event, uri: string, username: string, password: string) => {
+  return configureGraph(uri, username, password)
+})
+ipcMain.handle('graph:getConfig', async () => getGraphConfig())
+ipcMain.handle('graph:testConnection', async () => testGraphConnection())
+ipcMain.handle('graph:query', async (_event, cypher: string, pluginId: string) => {
+  return graphQuery(cypher, pluginId)
+})
+
 // 搜索代理：主进程发起 HTTP 请求（绕过渲染进程 CORS 限制）
 ipcMain.handle('search:fetch', async (_e, url: string, timeout: number) => {
   try {
@@ -898,4 +909,5 @@ ipcMain.handle('http:fetch', async (_e, url: string, opts?: { method?: string; h
 
 app.on('before-quit', async () => {
   await mcpService.cleanup()
+  closeGraphDriver()
 })

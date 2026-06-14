@@ -876,6 +876,8 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
                 </div>
               ))
             )}
+            {/* ====== Neo4j 图数据库 ====== */}
+            <GraphDatabaseSection />
           </div>
         )}
 
@@ -1251,6 +1253,78 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
           </div>
         )}
         {/* end of call modal */}
+      </div>
+    </div>
+  )
+}
+
+/** Neo4j 图数据库配置 */
+function GraphDatabaseSection() {
+  const [uri, setUri] = useState('')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [saved, setSaved] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [testMsg, setTestMsg] = useState('')
+
+  useEffect(() => {
+    const api = (window as any).electronAPI?.graph
+    if (!api) return
+    api.getConfig().then((cfg: any) => {
+      if (cfg) { setUri(cfg.uri || ''); setUsername(cfg.username || '') }
+    }).catch(() => {})
+  }, [])
+
+  const handleSave = async () => {
+    const api = (window as any).electronAPI?.graph
+    if (!api) return
+    await api.configure(uri, username, password)
+    setSaved(true); setTimeout(() => setSaved(false), 2000)
+  }
+
+  const handleTest = async () => {
+    setTesting(true); setTestMsg('')
+    const api = (window as any).electronAPI?.graph
+    if (!api) { setTestMsg('API 不可用'); setTesting(false); return }
+    try {
+      await api.configure(uri, username, password)
+      const r = await api.testConnection()
+      setTestMsg(r.success ? '连接成功' : '连接失败: ' + (r.error || '未知错误'))
+    } catch (e: any) { setTestMsg(e.message) }
+    setTesting(false)
+  }
+
+  return (
+    <div className="rounded-lg border border-border">
+      <div className="flex items-center justify-between px-4 py-3">
+        <div>
+          <span className="text-sm font-medium">Neo4j 图数据库</span>
+          <p className="text-[10px] text-muted-foreground/50 mt-0.5">接入 Neo4j AuraDB，为插件提供图数据库能力</p>
+        </div>
+      </div>
+      <div className="border-t border-border px-4 py-3 space-y-2">
+        <Input className="h-7 text-xs" placeholder="bolt://localhost:7687" value={uri}
+          onChange={e => setUri(e.target.value)} />
+        <div className="flex gap-2">
+          <Input className="flex-1 h-7 text-xs" placeholder="用户名" value={username}
+            onChange={e => setUsername(e.target.value)} />
+          <Input className="flex-1 h-7 text-xs" type="password" placeholder="密码" value={password}
+            onChange={e => setPassword(e.target.value)} />
+        </div>
+        <div className="flex items-center gap-2">
+          <Button size="sm" className="h-7 text-xs" onClick={handleSave}>
+            {saved ? <Check className="mr-1 h-3 w-3" /> : null}{saved ? '已保存' : '保存'}
+          </Button>
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleTest} disabled={testing}>
+            <RefreshCw className={`mr-1 h-3 w-3 ${testing ? 'animate-spin' : ''}`} />测试连接
+          </Button>
+          {testMsg && (
+            <span className={`text-[10px] ${testMsg.startsWith('连接成功') ? 'text-green-500' : 'text-destructive'}`}>{testMsg}</span>
+          )}
+        </div>
+        <p className="text-[10px] text-muted-foreground/40">
+          密码加密存储。插件通过 ctx.api.graph.query() 调用。
+        </p>
       </div>
     </div>
   )

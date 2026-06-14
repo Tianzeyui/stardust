@@ -76,6 +76,10 @@ export interface PluginAPI {
   notify: (opts: { type?: 'info' | 'warning' | 'error'; title: string; message: string }) => string
   /** 通知中心：确认请求，返回 Promise 等待用户操作 */
   confirm: (opts: { title: string; message: string; actions: Array<{ key: string; label: string; variant?: 'default' | 'destructive' }> }) => Promise<string>
+  /** 图数据库：执行 Cypher 查询 */
+  graph: {
+    query: (cypher: string) => Promise<{ success: boolean; data?: any; error?: string }>
+  }
   workspace: {
     getPaths: () => Promise<{ root: string; output: string; input: string }>
     openFile: (filePath: string) => Promise<void>

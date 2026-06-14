@@ -133,6 +133,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     create: (title?: string, modelName?: string, projectId?: string | null, projectName?: string) => ipcRenderer.invoke('conv:create', title, modelName, projectId, projectName),
   },
 
+  graph: {
+    configure: (uri: string, username: string, password: string) =>
+      ipcRenderer.invoke('graph:configure', uri, username, password),
+    getConfig: () => ipcRenderer.invoke('graph:getConfig'),
+    testConnection: () => ipcRenderer.invoke('graph:testConnection'),
+    query: (cypher: string, pluginId: string) =>
+      ipcRenderer.invoke('graph:query', cypher, pluginId),
+  },
+
   skills: {
     writeFiles: (skillId: string, files: Record<string, string>) =>
       ipcRenderer.invoke('skills:writeFiles', skillId, files),

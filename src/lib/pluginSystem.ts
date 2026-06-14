@@ -224,6 +224,13 @@ class PluginSystemImpl {
         if (!api) return Promise.reject(new Error('通知系统不可用'))
         return api.confirm({ title: opts.title, message: opts.message, actions: opts.actions })
       },
+      graph: {
+        query: async (cypher: string) => {
+          if (!ea?.graph) throw new Error('图数据库不可用')
+          const pluginId = pluginDir?.split('/').pop() || 'unknown'
+          return ea.graph.query(cypher, pluginId)
+        },
+      },
       workspace: {
         getPaths: async () => {
           if (!ea?.workspace) return { root: '~/BrainPlus/workspace', output: '~/BrainPlus/workspace/output' }
