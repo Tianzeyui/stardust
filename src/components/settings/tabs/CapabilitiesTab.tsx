@@ -53,7 +53,6 @@ export function CapabilitiesTab() {
   const [graphUri, setGraphUri] = useState('')
   const [graphUser, setGraphUser] = useState('')
   const [graphPass, setGraphPass] = useState('')
-  const [graphSaved, setGraphSaved] = useState(false)
   const [graphTesting, setGraphTesting] = useState(false)
   const [graphTestMsg, setGraphTestMsg] = useState('')
 
@@ -63,6 +62,16 @@ export function CapabilitiesTab() {
       if (cfg) { setGraphUri(cfg.uri || ''); setGraphUser(cfg.username || '') }
     }).catch(() => {})
   }, [])
+
+  // 自动保存图数据库配置
+  useEffect(() => {
+    if (!graphEnabled) return
+    const timer = setTimeout(() => {
+      const api = (window as any).electronAPI?.graph
+      if (api && graphUri) api.configure(graphUri, graphUser, graphPass).catch(() => {})
+    }, 800)
+    return () => clearTimeout(timer)
+  }, [graphUri, graphUser, graphPass, graphEnabled])
 
   return (
     <div className="w-full space-y-3">
@@ -145,10 +154,6 @@ export function CapabilitiesTab() {
                   <Input className="flex-1 h-7 text-xs" type="password" placeholder="密码" value={graphPass} onChange={e => setGraphPass(e.target.value)} />
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button size="sm" className="h-7 text-xs" onClick={async () => {
-                    const api = (window as any).electronAPI?.graph; if (!api) return
-                    await api.configure(graphUri, graphUser, graphPass); setGraphSaved(true); setTimeout(() => setGraphSaved(false), 2000)
-                  }}>{graphSaved ? <Check className="mr-1 h-3 w-3" /> : null}{graphSaved ? '已保存' : '保存'}</Button>
                   <Button size="sm" variant="outline" className="h-7 text-xs" onClick={async () => {
                     setGraphTesting(true); setGraphTestMsg('')
                     const api = (window as any).electronAPI?.graph
