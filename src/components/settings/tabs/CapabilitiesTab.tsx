@@ -57,10 +57,16 @@ export function CapabilitiesTab() {
   const [graphTesting, setGraphTesting] = useState(false)
   const [graphTestMsg, setGraphTestMsg] = useState('')
 
+  const [hasSavedPwd, setHasSavedPwd] = useState(false)
+
   useEffect(() => {
     const api = (window as any).electronAPI?.graph
     if (api) api.getConfig().then((cfg: any) => {
-      if (cfg) { setGraphUri(cfg.uri || ''); setGraphUser(cfg.username || '') }
+      if (cfg) {
+        setGraphUri(cfg.uri || '')
+        setGraphUser(cfg.username || '')
+        setHasSavedPwd(!!cfg.password)
+      }
       setGraphLoaded(true)
     }).catch(() => { setGraphLoaded(true) })
   }, [])
@@ -160,7 +166,7 @@ export function CapabilitiesTab() {
                 <Input className="h-7 text-xs" placeholder="bolt://localhost:7687" value={graphUri} onChange={e => setGraphUri(e.target.value)} />
                 <div className="flex gap-2">
                   <Input className="flex-1 h-7 text-xs" placeholder="用户名" value={graphUser} onChange={e => setGraphUser(e.target.value)} />
-                  <Input className="flex-1 h-7 text-xs" type="password" placeholder="密码" value={graphPass} onChange={e => setGraphPass(e.target.value)} />
+                  <Input className="flex-1 h-7 text-xs" type="password" placeholder={hasSavedPwd ? '已保存' : '密码'} value={graphPass} onChange={e => setGraphPass(e.target.value)} />
                 </div>
                 <div className="flex items-center gap-2">
                   <Button size="sm" variant="outline" className="h-7 text-xs" onClick={async () => {
