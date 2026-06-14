@@ -14,7 +14,6 @@ export interface CommunityPlugin {
 }
 
 const REPO = 'Tianzeyui/brainPlus-community-plugins'
-const API_BASE = `https://api.github.com/repos/${REPO}`
 const RAW_BASE = `https://raw.githubusercontent.com/${REPO}/main`
 const CACHE_KEY = 'brainplus_community_plugins'
 const CACHE_TIME_KEY = 'brainplus_community_plugins_time'
@@ -45,39 +44,12 @@ async function fetchJSON(url: string): Promise<any> {
 
 /**
  * 获取社区插件列表
- * 1. 用 GitHub API 列出目录（1 次请求）
- * 2. 用 raw.githubusercontent.com 获取每个 manifest.json（无需解码 base64）
+ * 从 raw.githubusercontent.com 读取 plugins.json 索引文件，无需 GitHub API 认证
  */
 export async function fetchCommunityPlugins(): Promise<CommunityPlugin[]> {
-  // 1. 列出仓库顶级目录
-  const contents: Array<{ name: string; type: string }> = await fetchJSON(`${API_BASE}/contents/`)
-
-  const dirs = contents.filter(
-    (item) => item.type === 'dir' && !item.name.startsWith('_') && !item.name.startsWith('.'),
-  )
-
-  if (dirs.length === 0) return []
-
-  // 2. 并行从 raw.githubusercontent.com 获取每个插件的 manifest.json
-  const results = await Promise.allSettled(
-    dirs.map(async (dir) => {
-      const manifestUrl = `${RAW_BASE}/${encodeURIComponent(dir.name)}/manifest.json`
-      const text = await fetchText(manifestUrl)
-      const manifest = JSON.parse(text)
-      return {
-        id: manifest.id || dir.name,
-        name: manifest.name || dir.name,
-        version: manifest.version || '0.0.0',
-        description: manifest.description || '',
-        icon: manifest.icon || 'Package',
-        permissions: manifest.permissions,
-      } as CommunityPlugin
-    }),
-  )
-
-  return results
-    .filter((r): r is PromiseFulfilledResult<CommunityPlugin> => r.status === 'fulfilled')
-    .map((r) => r.value)
+  const url = `${RAW_BASE}/plugins.json`
+  const plugins: CommunityPlugin[] = await fetchJSON(url)
+  return plugins.filter(p => !p.id.startsWith('_'))
 }
 
 /**
