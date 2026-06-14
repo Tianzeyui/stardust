@@ -724,9 +724,11 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
               添加模型连接，支持同一供应商多个连接。数据仅存储在本机。
             </p>
 
-            <Button variant="outline" size="sm" className="w-full h-8 text-xs" onClick={() => { setEditingModelId(null); setNewModel({ providerId: 'openai', customName: '', apiKey: '', baseUrl: '' }); setShowAddModel(true) }}>
-              <Plus className="mr-1 h-3.5 w-3.5" />添加连接
-            </Button>
+            <div className="flex justify-end">
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => { setEditingModelId(null); setNewModel({ providerId: 'openai', customName: '', apiKey: '', baseUrl: '' }); setShowAddModel(true) }}>
+                <Plus className="mr-1 h-3 w-3" />添加连接
+              </Button>
+            </div>
 
             {/* 添加/编辑弹窗 */}
             {showAddModel && (
