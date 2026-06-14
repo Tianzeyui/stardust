@@ -11,13 +11,6 @@ let cloudinaryCache: CloudinaryConfig = { cloudName: '', uploadPreset: '' }
 
 const api = () => window.electronAPI?.config
 
-let encryptionEmail = ''
-
-/** 设置 API Key 加密密钥（用户邮箱） */
-export function setEncryptionKey(email: string) {
-  encryptionEmail = email
-}
-
 /** 启动时调用，从磁盘加载到内存 */
 export async function initConfig() {
   if (!api()) return
@@ -30,7 +23,7 @@ export async function initConfig() {
 
 async function loadAIModelsFromDiskInternal(): Promise<void> {
   if (!api()) return
-  const saved = await api()!.getAIModels(encryptionEmail || undefined)
+  const saved = await api()!.getAIModels()
   if (Array.isArray(saved) && saved.length > 0) {
     aiModelsCache = saved
   }
@@ -115,7 +108,7 @@ export function getAIModels(): AIModelConfig[] {
 
 export async function saveAIModels(models: AIModelConfig[]): Promise<void> {
   aiModelsCache = models
-  await api()?.saveAIModels(models, encryptionEmail || undefined)
+  await api()?.saveAIModels(models)
 }
 
 export async function deleteAIModel(id: string): Promise<void> {
