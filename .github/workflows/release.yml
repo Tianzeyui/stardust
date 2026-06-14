@@ -24,10 +24,6 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
-    defaults:
-      run:
-        working-directory: brainPlusDesktop
-
     steps:
       - uses: actions/checkout@v4
 
@@ -35,7 +31,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: brainPlusDesktop/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - run: npm ci
 
@@ -50,7 +46,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: BrainPlus-${{ matrix.platform }}
-          path: brainPlusDesktop/release/*
+          path: release/*
 
   release:
     needs: build
