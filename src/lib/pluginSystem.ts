@@ -19,6 +19,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardContent } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { getNotificationAPI } from '@/contexts/NotificationContext'
 
 /** 插件 require() 可访问的宿主模块表 */
 const hostModules: Record<string, any> = {
@@ -214,13 +215,11 @@ class PluginSystemImpl {
         },
       },
       notify: (opts) => {
-        const { getNotificationAPI } = require('@/contexts/NotificationContext')
         const api = getNotificationAPI()
         if (!api) return ''
         return api.notify({ type: opts.type || 'info', title: opts.title, message: opts.message })
       },
       confirm: (opts) => {
-        const { getNotificationAPI } = require('@/contexts/NotificationContext')
         const api = getNotificationAPI()
         if (!api) return Promise.reject(new Error('通知系统不可用'))
         return api.confirm({ title: opts.title, message: opts.message, actions: opts.actions })
