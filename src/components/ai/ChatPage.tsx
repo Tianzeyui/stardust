@@ -532,7 +532,7 @@ export function ChatPage() {
             agentStreamedRef.current += resultLine
           }
           if (output) {
-            agentStreamedRef.current += `\n<details>\n<summary>📄 返回内容</summary>\n\n\`\`\`\n${output}\n\`\`\`\n</details>\n`
+            agentStreamedRef.current += `\n<details>\n<summary><span style="color:#888;font-size:12px">展开输出</span></summary>\n\n\`\`\`\n${output}\n\`\`\`\n</details>\n`
           }
           ensureAgentContainer(event.agentName ? `Agent: ${event.agentName}` : 'Agent')
         } else if (event.type === 'agent-text-delta') {
