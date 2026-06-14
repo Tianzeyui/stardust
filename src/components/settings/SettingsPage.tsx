@@ -947,7 +947,7 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
             </p>
             <div className="relative inline-block mb-3">
               <img src="/assets/logo/immersionBitLogo.svg" alt="沉浸位工作室" className="w-32" />
-              <sup className="absolute -top-1 -right-3 text-[10px] font-bold text-muted-foreground/70">™</sup>
+              <sup className="absolute -top-0.5 -right-1 text-[10px] font-bold text-muted-foreground/70">™</sup>
             </div>
             <p className="text-xs text-muted-foreground/50">
               © {__BUILD_YEAR__} 沉浸位工作室
