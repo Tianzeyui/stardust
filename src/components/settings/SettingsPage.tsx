@@ -605,6 +605,51 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
                   </div>
                 </div>
               )}
+
+            {/* ====== Neo4j 图数据库 ====== */}
+            <div className="rounded-lg border border-border">
+              <div className="flex items-center justify-between px-4 py-3">
+                <div>
+                  <span className="text-sm font-medium">Neo4j 图数据库</span>
+                  <p className="text-[10px] text-muted-foreground/50 mt-0.5">接入 Neo4j AuraDB，为插件提供图数据库能力。密码加密存储。</p>
+                </div>
+              </div>
+              <div className="border-t border-border px-4 py-3 space-y-2">
+                <Input className="h-7 text-xs" placeholder="bolt://localhost:7687" value={graphUri}
+                  onChange={e => setGraphUri(e.target.value)} />
+                <div className="flex gap-2">
+                  <Input className="flex-1 h-7 text-xs" placeholder="用户名" value={graphUser}
+                    onChange={e => setGraphUser(e.target.value)} />
+                  <Input className="flex-1 h-7 text-xs" type="password" placeholder="密码" value={graphPass}
+                    onChange={e => setGraphPass(e.target.value)} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" className="h-7 text-xs" onClick={async () => {
+                    const api = (window as any).electronAPI?.graph
+                    if (!api) return
+                    await api.configure(graphUri, graphUser, graphPass)
+                    setGraphSaved(true); setTimeout(() => setGraphSaved(false), 2000)
+                  }}>
+                    {graphSaved ? <Check className="mr-1 h-3 w-3" /> : null}{graphSaved ? '已保存' : '保存'}
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={async () => {
+                    setGraphTesting(true); setGraphTestMsg('')
+                    const api = (window as any).electronAPI?.graph
+                    if (!api) { setGraphTestMsg('API 不可用'); setGraphTesting(false); return }
+                    try {
+                      await api.configure(graphUri, graphUser, graphPass)
+                      const r = await api.testConnection()
+                      setGraphTestMsg(r.success ? '连接成功' : '连接失败: ' + (r.error || ''))
+                    } catch (e: any) { setGraphTestMsg(e.message) }
+                    setGraphTesting(false)
+                  }} disabled={graphTesting}>
+                    <RefreshCw className={`mr-1 h-3 w-3 ${graphTesting ? 'animate-spin' : ''}`} />测试连接
+                  </Button>
+                  {graphTestMsg && (
+                    <span className={`text-[10px] ${graphTestMsg.startsWith('连接成功') ? 'text-green-500' : 'text-destructive'}`}>{graphTestMsg}</span>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -728,52 +773,6 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
                 </Button>
               </div>
             </fieldset>
-
-            {/* ====== Neo4j 图数据库 ====== */}
-            <div className="rounded-lg border border-border">
-              <div className="flex items-center justify-between px-4 py-3">
-                <div>
-                  <span className="text-sm font-medium">Neo4j 图数据库</span>
-                  <p className="text-[10px] text-muted-foreground/50 mt-0.5">接入 Neo4j AuraDB，为插件提供图数据库能力。密码加密存储。</p>
-                </div>
-              </div>
-              <div className="border-t border-border px-4 py-3 space-y-2">
-                <Input className="h-7 text-xs" placeholder="bolt://localhost:7687" value={graphUri}
-                  onChange={e => setGraphUri(e.target.value)} />
-                <div className="flex gap-2">
-                  <Input className="flex-1 h-7 text-xs" placeholder="用户名" value={graphUser}
-                    onChange={e => setGraphUser(e.target.value)} />
-                  <Input className="flex-1 h-7 text-xs" type="password" placeholder="密码" value={graphPass}
-                    onChange={e => setGraphPass(e.target.value)} />
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button size="sm" className="h-7 text-xs" onClick={async () => {
-                    const api = (window as any).electronAPI?.graph
-                    if (!api) return
-                    await api.configure(graphUri, graphUser, graphPass)
-                    setGraphSaved(true); setTimeout(() => setGraphSaved(false), 2000)
-                  }}>
-                    {graphSaved ? <Check className="mr-1 h-3 w-3" /> : null}{graphSaved ? '已保存' : '保存'}
-                  </Button>
-                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={async () => {
-                    setGraphTesting(true); setGraphTestMsg('')
-                    const api = (window as any).electronAPI?.graph
-                    if (!api) { setGraphTestMsg('API 不可用'); setGraphTesting(false); return }
-                    try {
-                      await api.configure(graphUri, graphUser, graphPass)
-                      const r = await api.testConnection()
-                      setGraphTestMsg(r.success ? '连接成功' : '连接失败: ' + (r.error || ''))
-                    } catch (e: any) { setGraphTestMsg(e.message) }
-                    setGraphTesting(false)
-                  }} disabled={graphTesting}>
-                    <RefreshCw className={`mr-1 h-3 w-3 ${graphTesting ? 'animate-spin' : ''}`} />测试连接
-                  </Button>
-                  {graphTestMsg && (
-                    <span className={`text-[10px] ${graphTestMsg.startsWith('连接成功') ? 'text-green-500' : 'text-destructive'}`}>{graphTestMsg}</span>
-                  )}
-                </div>
-              </div>
-            </div>
           </div>
         )}
 
