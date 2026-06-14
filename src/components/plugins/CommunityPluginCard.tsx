@@ -1,7 +1,15 @@
-import { Download, Check, Loader2 } from 'lucide-react'
+import { Download, Check, Loader2, Package, BookOpen, Lightbulb, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { getIconComponent } from '@/lib/communityPluginService'
 import type { CommunityPlugin } from '@/lib/communityPluginService'
+
+/** 已知图标映射 */
+const ICON_MAP: Record<string, LucideIcon> = {
+  Package, BookOpen, Lightbulb,
+}
+
+function getIconComponent(iconName: string): LucideIcon {
+  return ICON_MAP[iconName] || Package
+}
 
 interface Props {
   plugin: CommunityPlugin

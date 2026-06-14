@@ -2,7 +2,6 @@
  * 社区插件服务
  * 通过 GitHub REST API 获取 brainPlus-community-plugins 仓库中的插件列表
  */
-import * as lucide from 'lucide-react'
 
 export interface CommunityPlugin {
   id: string
@@ -126,11 +125,4 @@ export function getCacheAgeMinutes(): number | null {
   } catch {
     return null
   }
-}
-
-/**
- * 获取 lucide-react 图标组件
- */
-export function getIconComponent(iconName: string) {
-  return (lucide as any)[iconName] || lucide.Package
 }
