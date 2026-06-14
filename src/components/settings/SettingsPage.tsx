@@ -942,12 +942,11 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
             <img src="/assets/icons/icon.png" alt="BrainPlus" className="w-20 h-20 rounded-2xl mb-4 shadow-sm" />
             <h2 className="text-xl font-bold text-foreground mb-1">BrainPlus</h2>
             <p className="text-sm text-muted-foreground mb-6">Version {APP_VERSION}</p>
-            <p className="text-sm text-muted-foreground leading-relaxed max-w-xs mb-8">
-              开源自由的 AI Agent 平台。<br />
-              构建、扩展、自动化——连接 60+ AI 模型，支持 MCP 工具、沙箱执行和强大的插件系统。
+            <p className="text-sm text-muted-foreground mb-8">
+              开源自由的 AI Agent 平台。
             </p>
             <div className="relative inline-block mb-3">
-              <img src="/assets/logo/immersionBitLogo.png" alt="沉浸位工作室" className="w-32" />
+              <img src="/assets/logo/immersionBitLogo.svg" alt="沉浸位工作室" className="w-32" />
               <sup className="absolute -top-1 -right-3 text-[10px] font-bold text-muted-foreground/70">™</sup>
             </div>
             <p className="text-xs text-muted-foreground/50">
