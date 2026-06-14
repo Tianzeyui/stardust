@@ -542,14 +542,15 @@ export function ChatPage() {
           // Agent 流式文字输出：带 Agent 标签的独立消息
           const agentLabel = event.agentName ? `Agent: ${event.agentName}` : 'Agent'
           agentStreamedRef.current += event.text || ''
+          const toolCalls = [...agentToolCallsRef.current]
           setMessages(prev => {
             const n = prev.map(m => ({ ...m }))
             const l = n[n.length - 1]
             if (!l || l.role !== 'assistant' || l.modelName !== agentLabel) {
               if (l?.role === 'assistant' && l.streaming) { n[n.length - 1] = { ...l, streaming: false } }
-              n.push({ role: 'assistant', content: agentStreamedRef.current, streaming: true, modelName: agentLabel })
+              n.push({ role: 'assistant', content: agentStreamedRef.current, streaming: true, modelName: agentLabel, agentToolCalls: toolCalls })
             } else {
-              n[n.length - 1] = { ...l, content: agentStreamedRef.current }
+              n[n.length - 1] = { ...l, content: agentStreamedRef.current, agentToolCalls: toolCalls }
             }
             return n
           })
