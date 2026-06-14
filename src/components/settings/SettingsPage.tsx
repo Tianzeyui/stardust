@@ -825,6 +825,12 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
                   {/* 展开：获取模型列表 */}
                   {expandedModel === model.id && (
                     <div className="border-t border-border px-4 py-3 space-y-3">
+                      <Input
+                        className="h-7 text-xs"
+                        placeholder="连接名称"
+                        value={model.displayName}
+                        onChange={e => updateModel(model.id, { displayName: e.target.value })}
+                      />
                       <div className="flex items-center justify-between">
                         <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => fetchModels(model.id)} disabled={!model.apiKey}>
                           <RefreshCw className={`mr-1 h-3 w-3 ${!model.modelsFetched && model.apiKey ? 'animate-spin' : ''}`} />
