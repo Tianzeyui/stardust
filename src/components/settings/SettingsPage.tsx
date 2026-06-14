@@ -207,17 +207,18 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
   }
 
   const handleAddModel = async () => {
+    if (!newModel.apiKey.trim()) return
     const tpl = PROVIDER_TEMPLATES.find(t => t.id === newModel.providerId)
-    if (!tpl || !newModel.apiKey.trim()) return
-    const name = newModel.customName.trim() || tpl.displayName
+    const providerName = tpl?.name || newModel.providerId || 'Custom'
+    const name = newModel.customName.trim() || tpl?.displayName || newModel.providerId || '自定义连接'
     const id = generateModelId()
     const model: AIModelConfig = {
       id,
-      name: tpl.name,
+      name: providerName,
       displayName: name,
-      defaultBaseUrl: tpl.defaultBaseUrl || newModel.baseUrl,
+      defaultBaseUrl: tpl?.defaultBaseUrl || newModel.baseUrl,
       apiKey: newModel.apiKey.trim(),
-      baseUrl: newModel.baseUrl || tpl.defaultBaseUrl,
+      baseUrl: newModel.baseUrl || tpl?.defaultBaseUrl || '',
       enabled: false,
       availableModels: [],
       selectedModel: '',
@@ -731,23 +732,34 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
             {showAddModel && (
               <div className="rounded-lg border border-primary/30 p-4 space-y-3">
                 <p className="text-xs font-medium">{editingModelId ? '编辑连接' : '新建连接'}</p>
-                <Input
-                  className="h-8 text-xs"
-                  placeholder="连接名称（如：我的 OpenAI、公司 Claude）"
-                  value={newModel.customName}
-                  onChange={e => setNewModel(p => ({ ...p, customName: e.target.value }))}
-                />
                 <div>
-                  <label className="text-[10px] text-muted-foreground mb-1 block">供应商</label>
-                  <select
-                    className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs"
-                    value={newModel.providerId}
-                    onChange={e => setNewModel(p => ({ ...p, providerId: e.target.value, baseUrl: PROVIDER_TEMPLATES.find(t => t.id === e.target.value)?.defaultBaseUrl || '' }))}
-                  >
-                    {PROVIDER_TEMPLATES.map(t => (
-                      <option key={t.id} value={t.id}>{t.displayName}</option>
-                    ))}
-                  </select>
+                  <label className="text-[10px] text-muted-foreground mb-1 block">供应商（选择或输入自定义名称）</label>
+                  <div className="flex gap-1">
+                    <select
+                      className="flex-1 h-8 rounded-md border border-input bg-background px-2 text-xs"
+                      value={PROVIDER_TEMPLATES.some(t => t.id === newModel.providerId) ? newModel.providerId : '__custom__'}
+                      onChange={e => {
+                        if (e.target.value === '__custom__') {
+                          setNewModel(p => ({ ...p, providerId: '', baseUrl: '' }))
+                        } else {
+                          setNewModel(p => ({ ...p, providerId: e.target.value, baseUrl: PROVIDER_TEMPLATES.find(t => t.id === e.target.value)?.defaultBaseUrl || '' }))
+                        }
+                      }}
+                    >
+                      {PROVIDER_TEMPLATES.map(t => (
+                        <option key={t.id} value={t.id}>{t.displayName}</option>
+                      ))}
+                      <option value="__custom__">自定义…</option>
+                    </select>
+                    {!PROVIDER_TEMPLATES.some(t => t.id === newModel.providerId) && (
+                      <Input
+                        className="flex-1 h-8 text-xs"
+                        placeholder="供应商名称（如：硅基流动）"
+                        value={newModel.providerId}
+                        onChange={e => setNewModel(p => ({ ...p, providerId: e.target.value }))}
+                      />
+                    )}
+                  </div>
                 </div>
                 <Input
                   type="password"
@@ -773,11 +785,11 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
               </div>
             )}
 
-            {/* 已添加的连接 — 简洁块 */}
-            {models.length === 0 ? (
+            {/* 已添加的连接 — 只显示已配置的 */}
+            {models.filter(m => m.apiKey).length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-8">暂无模型连接，点击上方添加</p>
             ) : (
-              models.map((model) => (
+              models.filter(m => m.apiKey).map((model) => (
                 <div key={model.id} className={`rounded-lg border transition-colors ${model.enabled ? 'border-primary bg-primary/5' : 'border-border'}`}>
                   <div className="flex items-center justify-between px-4 py-3">
                     <div className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer" onClick={() => setExpandedModel(expandedModel === model.id ? null : model.id)}>
