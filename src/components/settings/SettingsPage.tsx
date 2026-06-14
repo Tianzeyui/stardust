@@ -734,8 +734,14 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
             {showAddModel && (
               <div className="rounded-lg border border-primary/30 p-4 space-y-3">
                 <p className="text-xs font-medium">{editingModelId ? '编辑连接' : '新建连接'}</p>
+                <Input
+                  className="h-8 text-xs"
+                  placeholder="连接名称（如：我的 OpenAI、公司 Claude）"
+                  value={newModel.customName}
+                  onChange={e => setNewModel(p => ({ ...p, customName: e.target.value }))}
+                />
                 <div>
-                  <label className="text-[10px] text-muted-foreground mb-1 block">供应商（选择或输入自定义名称）</label>
+                  <label className="text-[10px] text-muted-foreground mb-1 block">供应商</label>
                   <div className="flex gap-1">
                     <select
                       className="flex-1 h-8 rounded-md border border-input bg-background px-2 text-xs"
