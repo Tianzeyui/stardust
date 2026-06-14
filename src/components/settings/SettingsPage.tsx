@@ -938,23 +938,27 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
 
         {/* ===== 关于 ===== */}
         {tab === 'about' && (
-          <div className="flex flex-col items-center text-center py-8">
-            <img src="/assets/icons/icon.png" alt="BrainPlus" className="w-20 h-20 rounded-2xl mb-4 shadow-sm" />
-            <h2 className="text-xl font-bold text-foreground mb-1">BrainPlus</h2>
-            <p className="text-sm text-muted-foreground mb-6">Version {APP_VERSION}</p>
-            <p className="text-sm text-muted-foreground mb-8">
-              开源自由的 AI Agent 平台。
-            </p>
-            <div className="relative inline-block mb-3">
-              <img src="/assets/logo/immersionBitLogo.svg" alt="沉浸位工作室" className="w-32" />
-              <sup className="absolute -top-0.5 -right-1 text-[10px] font-bold text-muted-foreground/70">™</sup>
+          <div className="flex flex-col items-center text-center flex-1">
+            <div className="flex flex-col items-center flex-1 justify-center pb-8">
+              <img src="/assets/icons/icon.png" alt="BrainPlus" className="w-20 h-20 rounded-2xl mb-4 shadow-sm" />
+              <h2 className="text-xl font-bold text-foreground mb-1">BrainPlus</h2>
+              <p className="text-sm text-muted-foreground mb-6">Version {APP_VERSION}</p>
+              <p className="text-sm text-muted-foreground">
+                开源自由的 AI Agent 平台。
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground/50">
-              © {__BUILD_YEAR__} 沉浸位工作室
-            </p>
-            <p className="text-[11px] text-muted-foreground/40 mt-3 max-w-xs leading-relaxed">
-              基于 Apache License 2.0 开源。Free as in Freedom.
-            </p>
+            <div className="pb-8">
+              <div className="relative inline-block mb-3">
+                <img src="/assets/logo/immersionBitLogo.svg" alt="沉浸位工作室" className="w-32" />
+                <sup className="absolute -top-0.5 -right-1 text-[10px] font-bold text-muted-foreground/70">™</sup>
+              </div>
+              <p className="text-xs text-muted-foreground/50">
+                © {__BUILD_YEAR__} 沉浸位工作室
+              </p>
+              <p className="text-[11px] text-muted-foreground/40 mt-3 max-w-xs leading-relaxed">
+                基于 Apache License 2.0 开源。Free as in Freedom.
+              </p>
+            </div>
           </div>
         )}
 
