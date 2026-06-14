@@ -114,6 +114,7 @@ export function ChatPage() {
   // Agent 流式输出跟踪 + 累计消耗
   const agentActiveRef = useRef<string | null>(null)
   const agentStreamedRef = useRef('')
+  const agentToolCallsRef = useRef<Array<{ name: string; brief: string; status: 'running' | 'ok' | 'error'; output?: string }>>([])
   const agentTotalTokensRef = useRef(0)  // 本轮所有子 Agent 累计 token
   // 记忆管理器（根据项目+对话隔离）
   const [memoryManager, setMemoryManager] = useState<MemoryManager | null>(null)
@@ -483,6 +484,7 @@ export function ChatPage() {
       let streamed = ''
       setConsoleLog([]); setTaskList([]); setActivatedToolNames(new Set())
       agentStreamedRef.current = ''
+      agentToolCallsRef.current = []
       agentTotalTokensRef.current = 0
       pushLog('--', '开始处理', 'info')
 
@@ -498,42 +500,42 @@ export function ChatPage() {
         const ensureAgentContainer = (label: string) => {
           const content = agentStreamedRef.current
           if (!content) return
+          const toolCalls = [...agentToolCallsRef.current]
           setMessages(prev => {
             const n = [...prev]
             const l = n[n.length - 1]
             const hasContainer = l?.role === 'assistant' && l.modelName?.startsWith('Agent:')
             if (hasContainer) {
-              l.content = content  // 更新已有容器的内容
+              l.content = content
+              l.agentToolCalls = toolCalls
             } else {
               if (l?.role === 'assistant' && l.streaming) { l.streaming = false }
-              n.push({ role: 'assistant', content, streaming: true, modelName: label })
+              n.push({ role: 'assistant', content, streaming: true, modelName: label, agentToolCalls: toolCalls })
             }
             return [...n]
           })
         }
         if (event.type === 'agent-tool-call') {
-          // 提取关键入参用于区分同名调用
           const brief = briefArgs(event.toolInput)
-          const label = brief ? `**${event.toolName}**(${brief})` : `**${event.toolName}**`
-          agentStreamedRef.current += `\n> ${label} <span style="color:#f59e0b">...</span>\n`
+          agentToolCallsRef.current.push({ name: event.toolName || '', brief, status: 'running' })
           ensureAgentContainer(event.agentName ? `Agent: ${event.agentName}` : 'Agent')
         } else if (event.type === 'agent-tool-result') {
           const output = String(event.toolOutput ?? '').slice(0, 2000)
           const ok = !output.startsWith('Error')
           const brief = briefArgs(event.toolInput)
-          const label = brief ? `**${event.toolName}**(${brief})` : `**${event.toolName}**`
-          const marker = `\n> ${label} <span style="color:#f59e0b">...</span>\n`
-          const resultIcon = ok ? '✓' : '✗'
-          const resultColor = ok ? '#22c55e' : '#ef4444'
-          const resultBlock = `\n> ${label} <span style="color:${resultColor}">${resultIcon} 完成</span>\n` +
-            (output ? `<details>\n<summary><span style="color:#888;font-size:12px">展开输出</span></summary>\n\n\`\`\`\n${output}\n\`\`\`\n</details>\n` : '')
-          // 精确替换并插入输出到同一位置，保证调用和返回成对
-          const idx = agentStreamedRef.current.indexOf(marker)
+          // 更新匹配的工具调用（找最近的同名+同参+status=running 的项）
+          const idx = [...agentToolCallsRef.current].reverse().findIndex(
+            tc => tc.name === event.toolName && tc.brief === brief && tc.status === 'running'
+          )
           if (idx !== -1) {
-            agentStreamedRef.current =
-              agentStreamedRef.current.slice(0, idx) + resultBlock + agentStreamedRef.current.slice(idx + marker.length)
+            const realIdx = agentToolCallsRef.current.length - 1 - idx
+            agentToolCallsRef.current[realIdx] = {
+              ...agentToolCallsRef.current[realIdx],
+              status: ok ? 'ok' : 'error',
+              output: output || undefined,
+            }
           } else {
-            agentStreamedRef.current += resultBlock
+            agentToolCallsRef.current.push({ name: event.toolName || '', brief, status: ok ? 'ok' : 'error', output: output || undefined })
           }
           ensureAgentContainer(event.agentName ? `Agent: ${event.agentName}` : 'Agent')
         } else if (event.type === 'agent-text-delta') {

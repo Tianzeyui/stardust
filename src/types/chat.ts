@@ -16,6 +16,13 @@ export interface MessageAttachment {
   error?: string
 }
 
+export interface AgentToolCallEntry {
+  name: string
+  brief: string
+  status: 'running' | 'ok' | 'error'
+  output?: string
+}
+
 export interface UIMessage {
   role: 'user' | 'assistant' | 'tool'
   content: string
@@ -25,6 +32,7 @@ export interface UIMessage {
   modelName?: string
   trace?: string  // 可观测性信息
   parentAgent?: string  // 子 Agent 标签，工具消息渲染到 Agent 容器内
+  agentToolCalls?: AgentToolCallEntry[]  // Agent 工具调用列表（组件渲染）
 }
 
 export interface ConsoleLine {

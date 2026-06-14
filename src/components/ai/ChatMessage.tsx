@@ -1,6 +1,7 @@
-import { Check, X, Shield, ShieldCheck, Cable, BookOpen, MessageSquare, FileText, Image, Zap, FolderOpen } from 'lucide-react'
+import { useState } from 'react'
+import { Check, X, Shield, ShieldCheck, Cable, BookOpen, MessageSquare, FileText, Image, Zap, FolderOpen, Loader2, ChevronDown } from 'lucide-react'
 import MarkdownPreview from '@uiw/react-markdown-preview'
-import type { UIMessage, ToolCallStatus, MessageAttachment } from '@/types/chat'
+import type { UIMessage, ToolCallStatus, MessageAttachment, AgentToolCallEntry } from '@/types/chat'
 
 /** 工具结果格式化：JSON 结果包进代码块，纯文本保持原样 */
 function formatToolResult(result: string, type: string): string {
@@ -93,6 +94,14 @@ export function ChatMessage({ msg }: ChatMessageProps) {
                 />
               )}
             </div>
+            {/* Agent 工具调用列表 */}
+            {msg.agentToolCalls && msg.agentToolCalls.length > 0 && (
+              <div className="border-t border-border/50 px-3 py-2 space-y-1.5">
+                {msg.agentToolCalls.map((tc, i) => (
+                  <AgentToolCallItem key={i} tc={tc} />
+                ))}
+              </div>
+            )}
             {msg.trace && !msg.streaming && (
               <p className="px-3 pb-1.5 text-[10px] text-muted-foreground/40 select-none">{msg.trace}</p>
             )}
@@ -202,6 +211,53 @@ function AttachmentChip({ att }: { att: MessageAttachment }) {
         <FileText className="h-3 w-3" />
       )}
       <span className="max-w-[100px] truncate">{att.name}</span>
+    </div>
+  )
+}
+
+/** Agent 工具调用条目 */
+function AgentToolCallItem({ tc }: { tc: AgentToolCallEntry }) {
+  const [expanded, setExpanded] = useState(false)
+  const isRunning = tc.status === 'running'
+  const isOk = tc.status === 'ok'
+
+  return (
+    <div className={`rounded-md border text-xs overflow-hidden ${
+      isRunning ? 'border-yellow-500/30 bg-yellow-500/5' :
+      isOk ? 'border-border bg-card' :
+      'border-destructive/30 bg-destructive/5'
+    }`}>
+      <div className="flex items-center gap-2 px-2.5 py-1.5">
+        {isRunning ? (
+          <Loader2 className="h-3 w-3 text-yellow-500 animate-spin shrink-0" />
+        ) : isOk ? (
+          <Check className="h-3 w-3 text-green-500 shrink-0" />
+        ) : (
+          <X className="h-3 w-3 text-destructive shrink-0" />
+        )}
+        <span className="font-medium truncate">{tc.name}</span>
+        {tc.brief ? <span className="text-muted-foreground/50 truncate">({tc.brief})</span> : null}
+        <span className={`ml-auto shrink-0 text-[10px] ${
+          isRunning ? 'text-yellow-600' : isOk ? 'text-green-600' : 'text-destructive'
+        }`}>
+          {isRunning ? '执行中' : isOk ? '完成' : '失败'}
+        </span>
+        {tc.output && (
+          <button
+            className="ml-1 p-0.5 text-muted-foreground/40 hover:text-muted-foreground transition-colors shrink-0"
+            onClick={() => setExpanded(!expanded)}
+          >
+            <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+          </button>
+        )}
+      </div>
+      {expanded && tc.output && (
+        <div className="border-t border-border/50">
+          <pre className="max-h-32 overflow-auto custom-scrollbar px-3 py-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-all text-muted-foreground bg-muted/20">
+            {tc.output}
+          </pre>
+        </div>
+      )}
     </div>
   )
 }
