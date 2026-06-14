@@ -714,6 +714,9 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
                 </Button>
               </div>
             </fieldset>
+
+            {/* ====== Neo4j 图数据库 ====== */}
+            <GraphDatabaseSection />
           </div>
         )}
 
@@ -876,8 +879,6 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
                 </div>
               ))
             )}
-            {/* ====== Neo4j 图数据库 ====== */}
-            <GraphDatabaseSection />
           </div>
         )}
 
