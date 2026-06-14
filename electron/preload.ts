@@ -139,6 +139,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('skills:readFile', skillId, filePath),
     deleteFiles: (skillId: string) =>
       ipcRenderer.invoke('skills:deleteFiles', skillId),
+    cloneFromUrl: (url: string) =>
+      ipcRenderer.invoke('skill:cloneFromUrl', url),
+    cleanupTemp: (dirPath: string) =>
+      ipcRenderer.invoke('skill:cleanupTemp', dirPath),
   },
 
   mcp: {

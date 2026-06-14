@@ -9,7 +9,7 @@ import { executeJS, executePython, preInit } from './main/sandboxService.js'
 import { initWorkspace, getWorkspacePaths, listOutputFiles, openFile, deleteFile, clearOutputFiles } from './main/workspace.js'
 import { writeSkillFiles, readSkillFile, deleteSkillFiles } from './main/skillDiskStore.js'
 import { downloadPluginFiles } from './main/pluginDownloader.js'
-import { cloneRepo, pullRepo, readRepoPluginsJson } from './main/pluginRepoManager.js'
+import { cloneRepo, pullRepo, readRepoPluginsJson, parseGitHubUrl, cloneToTemp, removeTempDir } from './main/pluginRepoManager.js'
 import { convertWithMarkitdown, isImageFile, isConvertible } from './main/fileConvert.js'
 import {
   getModelStatus,
@@ -811,6 +811,31 @@ ipcMain.handle('plugin:pullRepo', async (_event, repoDir: string) => {
     if (!result.success) return result
     const plugins = readRepoPluginsJson(repoDir)
     return { success: true, plugins: plugins || [] }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+// Skill 从 GitHub URL 安装
+ipcMain.handle('skill:cloneFromUrl', async (_event, url: string) => {
+  try {
+    const parsed = parseGitHubUrl(url)
+    if (!parsed) return { success: false, error: '无法解析 GitHub URL，支持的格式：https://github.com/user/repo 或 .../tree/branch/path' }
+
+    const result = await cloneToTemp(parsed.repoUrl)
+    if (!result.success) return result
+
+    const fullPath = parsed.subPath ? path.join(result.localPath!, parsed.subPath) : result.localPath!
+    return { success: true, localPath: fullPath, tempDir: result.localPath }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+ipcMain.handle('skill:cleanupTemp', async (_event, dirPath: string) => {
+  try {
+    removeTempDir(dirPath)
+    return { success: true }
   } catch (e: any) {
     return { success: false, error: e.message }
   }

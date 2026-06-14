@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, FolderSearch, Loader2, Package } from 'lucide-react'
+import { Plus, FolderSearch, Loader2, Package, Globe } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -18,6 +18,8 @@ export function SkillsPage() {
   const [installPath, setInstallPath] = useState('')
   const [installing, setInstalling] = useState(false)
   const [detailSkill, setDetailSkill] = useState<InstalledSkill | null>(null)
+  const [gitUrl, setGitUrl] = useState('')
+  const [gitInstalling, setGitInstalling] = useState(false)
 
   useEffect(() => {
     setSkills(getInstalledSkills())
@@ -71,6 +73,35 @@ export function SkillsPage() {
     }
   }, [installPath])
 
+  // 从 GitHub URL 安装
+  const handleGitInstall = useCallback(async () => {
+    const url = gitUrl.trim()
+    if (!url) return
+    setGitInstalling(true)
+    const api = (window as any).electronAPI?.skills
+    let tempDir: string | undefined
+    try {
+      if (!api) throw new Error('仅 Electron 环境支持')
+      // 1. clone 到临时目录
+      const cloneResult = await api.cloneFromUrl(url)
+      if (!cloneResult.success) throw new Error(cloneResult.error)
+      tempDir = cloneResult.tempDir
+      // 2. 验证并安装
+      const validation = await validateInstallPath(cloneResult.localPath)
+      if (validation.errors.length > 0) throw new Error(validation.errors.join('；'))
+      const skill = await installSkill(cloneResult.localPath)
+      setSkills(prev => [...prev, skill])
+      setGitUrl('')
+      toast({ title: `「${skill.name}」安装成功`, description: `来自 ${url}` })
+    } catch (e: any) {
+      toast({ title: 'GitHub 安装失败', description: e.message || '未知错误', variant: 'destructive' })
+    } finally {
+      // 3. 清理临时目录
+      if (tempDir) api?.cleanupTemp(tempDir).catch(() => {})
+      setGitInstalling(false)
+    }
+  }, [gitUrl])
+
   // 卸载
   const handleUninstall = useCallback(async (id: string) => {
     const skill = skills.find(s => s.id === id)
@@ -108,9 +139,9 @@ export function SkillsPage() {
       </div>
 
       <div className="flex-1 overflow-auto p-4">
-        {/* 安装路径 */}
-        <div className="mb-4 rounded-lg border border-border p-3">
-          <h3 className="mb-2 text-xs font-medium text-muted-foreground">安装 Skill</h3>
+        {/* 本地安装 */}
+        <div className="mb-3 rounded-lg border border-border p-3">
+          <h3 className="mb-2 text-xs font-medium text-muted-foreground">本地目录安装</h3>
           <div className="flex gap-2">
             <Input
               className="flex-1 h-7 font-mono text-xs"
@@ -120,6 +151,29 @@ export function SkillsPage() {
               onKeyDown={e => e.key === 'Enter' && handleInstall()}
             />
           </div>
+        </div>
+
+        {/* GitHub 安装 */}
+        <div className="mb-4 rounded-lg border border-border p-3">
+          <h3 className="mb-2 text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+            <Globe className="h-3 w-3" />从 GitHub 安装
+          </h3>
+          <div className="flex gap-2">
+            <Input
+              className="flex-1 h-7 font-mono text-xs"
+              placeholder="https://github.com/user/repo 或 .../tree/main/path"
+              value={gitUrl}
+              onChange={e => setGitUrl(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleGitInstall()}
+            />
+            <Button size="sm" className="h-7 text-xs shrink-0" onClick={handleGitInstall} disabled={gitInstalling || !gitUrl.trim()}>
+              {gitInstalling ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Plus className="mr-1 h-3.5 w-3.5" />}
+              安装
+            </Button>
+          </div>
+          <p className="text-[10px] text-muted-foreground/40 mt-1.5">
+            需安装 Git。支持仓库根目录或子目录（/tree/branch/path）
+          </p>
         </div>
 
         {/* 已安装列表 */}
