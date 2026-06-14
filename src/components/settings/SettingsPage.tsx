@@ -977,45 +977,49 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
 
         {/* ===== 关于 ===== */}
         {tab === 'about' && (
-          <div className="flex flex-col items-center text-center flex-1">
-            <div className="flex flex-col items-center flex-1 justify-center pb-8">
+          <div className="flex flex-col items-center text-center flex-1 overflow-auto">
+            {/* 头部信息 */}
+            <div className="flex flex-col items-center pt-8 pb-6">
               <img src="/assets/icons/icon.png" alt="BrainPlus" className="w-20 h-20 rounded-2xl mb-4 shadow-sm" />
               <h2 className="text-xl font-bold text-foreground mb-1">BrainPlus</h2>
-              <p className="text-sm text-muted-foreground mb-6">Version {APP_VERSION}</p>
-              <p className="text-sm text-muted-foreground mb-6">
+              <p className="text-xs text-muted-foreground/60 mb-4">Version {APP_VERSION}</p>
+              <p className="text-sm text-muted-foreground">
                 开源自由的 AI Agent 平台。
               </p>
-              {changelog.length > 0 && (
-                <div className="w-full max-w-xs text-left mb-4">
-                  <h3 className="text-xs font-semibold text-muted-foreground mb-2 text-center">更新日志</h3>
-                  <div className="space-y-2 max-h-48 overflow-auto">
-                    {changelog.map(entry => (
-                      <div key={entry.version} className="rounded border border-border px-3 py-2">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xs font-medium">{entry.version}</span>
-                          {entry.date && <span className="text-[10px] text-muted-foreground/50">{entry.date}</span>}
-                        </div>
-                        <ul className="space-y-0.5">
-                          {entry.items.map((item, i) => (
-                            <li key={i} className="text-[10px] text-muted-foreground/60 pl-2">{item}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
-            <div className="pb-8">
-              <div className="relative inline-block mb-3">
-                <img src="/assets/logo/immersionBitLogo.svg" alt="沉浸位工作室" className="w-32" />
-                <sup className="absolute -top-0.5 -right-1 text-[10px] font-bold text-muted-foreground/70">™</sup>
+
+            {/* 更新日志 */}
+            {changelog.length > 0 && (
+              <div className="w-full max-w-xs text-left mb-6">
+                <h3 className="text-xs font-semibold text-muted-foreground mb-2 text-center">更新日志</h3>
+                <div className="space-y-1.5 max-h-52 overflow-auto">
+                  {changelog.map(entry => (
+                    <div key={entry.version} className="rounded border border-border px-3 py-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-medium">{entry.version}</span>
+                        {entry.date && <span className="text-[10px] text-muted-foreground/50">{entry.date}</span>}
+                      </div>
+                      <ul className="space-y-0.5">
+                        {entry.items.map((item, i) => (
+                          <li key={i} className="text-[10px] text-muted-foreground/60 pl-2">{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground/50">
-                © {__BUILD_YEAR__} 沉浸位工作室
-              </p>
-              <p className="text-[11px] text-muted-foreground/40 mt-3 max-w-xs leading-relaxed">
-                基于 Apache License 2.0 开源。Free as in Freedom.
+            )}
+
+            {/* 底部：工作室 */}
+            <div className="mt-auto pb-8">
+              <a href="https://immersionvoid.cc/" target="_blank"
+                className="relative inline-block mb-3 hover:opacity-80 transition-opacity"
+                title="沉浸位工作室官网">
+                <img src="/assets/logo/immersionBitLogo.svg" alt="沉浸位工作室" className="w-28" />
+                <sup className="absolute -top-0.5 -right-1 text-[10px] font-bold text-muted-foreground/70">™</sup>
+              </a>
+              <p className="text-[10px] text-muted-foreground/40">
+                © {__BUILD_YEAR__} 沉浸位工作室 · Apache 2.0
               </p>
             </div>
           </div>
