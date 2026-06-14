@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ChevronDown, Code, Search, Check, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -53,6 +53,7 @@ export function CapabilitiesTab() {
   const [graphUri, setGraphUri] = useState('')
   const [graphUser, setGraphUser] = useState('')
   const [graphPass, setGraphPass] = useState('')
+  const [graphLoaded, setGraphLoaded] = useState(false)
   const [graphTesting, setGraphTesting] = useState(false)
   const [graphTestMsg, setGraphTestMsg] = useState('')
 
@@ -60,18 +61,26 @@ export function CapabilitiesTab() {
     const api = (window as any).electronAPI?.graph
     if (api) api.getConfig().then((cfg: any) => {
       if (cfg) { setGraphUri(cfg.uri || ''); setGraphUser(cfg.username || '') }
-    }).catch(() => {})
+      setGraphLoaded(true)
+    }).catch(() => { setGraphLoaded(true) })
   }, [])
 
-  // 自动保存（密码为空时仅保存 URI/用户名，不覆盖已加密的密码）
+  // 自动保存（仅在配置加载完成后触发，防抖 800ms）
+  const graphLastSaved = useRef<{ uri: string; user: string; pass: string }>({ uri: '', user: '', pass: '' })
   useEffect(() => {
-    if (!graphEnabled) return
+    if (!graphEnabled || !graphLoaded) return
     const timer = setTimeout(() => {
+      const cur = { uri: graphUri, user: graphUser, pass: graphPass }
+      if (cur.uri === graphLastSaved.current.uri && cur.user === graphLastSaved.current.user && cur.pass === graphLastSaved.current.pass) return
       const api = (window as any).electronAPI?.graph
-      if (api && graphUri) api.configure(graphUri, graphUser, graphPass).catch(() => {})
+      if (api && graphUri) {
+        api.configure(graphUri, graphUser, graphPass).then(() => {
+          graphLastSaved.current = cur
+        }).catch(() => {})
+      }
     }, 800)
     return () => clearTimeout(timer)
-  }, [graphUri, graphUser, graphPass, graphEnabled])
+  }, [graphUri, graphUser, graphPass, graphEnabled, graphLoaded])
 
   return (
     <div className="w-full space-y-3">
