@@ -150,6 +150,8 @@ export interface ElectronAPI {
     installFromGithub: (pluginId: string, fileList: string[], manifestId?: string) =>
       Promise<{ success: boolean; error?: string; manifest?: any; pluginDir?: string }>
     onGithubProgress: (cb: (data: { pluginId: string; file: string; current: number; total: number }) => void) => () => void
+    cloneRepo: (url: string) => Promise<{ success: boolean; error?: string; repoDir?: string; plugins?: any[] }>
+    pullRepo: (repoDir: string) => Promise<{ success: boolean; error?: string; plugins?: any[] }>
   }
   search: {
     fetch: (url: string, timeout: number) => Promise<{ success: boolean; error?: string; data?: string }>

@@ -9,6 +9,7 @@ import { executeJS, executePython, preInit } from './main/sandboxService.js'
 import { initWorkspace, getWorkspacePaths, listOutputFiles, openFile, deleteFile, clearOutputFiles } from './main/workspace.js'
 import { writeSkillFiles, readSkillFile, deleteSkillFiles } from './main/skillDiskStore.js'
 import { downloadPluginFiles } from './main/pluginDownloader.js'
+import { cloneRepo, pullRepo, readRepoPluginsJson } from './main/pluginRepoManager.js'
 import { convertWithMarkitdown, isImageFile, isConvertible } from './main/fileConvert.js'
 import {
   getModelStatus,
@@ -784,6 +785,32 @@ ipcMain.handle('plugin:installFromGithub', async (event, pluginId: string, fileL
     }
 
     return { success: true, manifest, pluginDir: destDir }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+// 插件仓库管理
+ipcMain.handle('plugin:cloneRepo', async (_event, url: string) => {
+  try {
+    const reposDir = path.join(app.getPath('userData'), 'plugin-repos')
+    const result = await cloneRepo(url, reposDir)
+    if (!result.success) return result
+
+    // 读取插件索引
+    const plugins = readRepoPluginsJson(result.repoDir!)
+    return { success: true, repoDir: result.repoDir, plugins: plugins || [] }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+ipcMain.handle('plugin:pullRepo', async (_event, repoDir: string) => {
+  try {
+    const result = await pullRepo(repoDir)
+    if (!result.success) return result
+    const plugins = readRepoPluginsJson(repoDir)
+    return { success: true, plugins: plugins || [] }
   } catch (e: any) {
     return { success: false, error: e.message }
   }

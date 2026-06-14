@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Trash2, FolderOpen, Package, Globe, RefreshCw, AlertCircle } from 'lucide-react'
+import { Plus, Trash2, FolderOpen, Package, Globe, RefreshCw, AlertCircle, GitBranch, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { pluginSystem } from '@/lib/pluginSystem'
@@ -11,13 +11,14 @@ import {
   getCacheAgeMinutes,
   type CommunityPlugin,
 } from '@/lib/communityPluginService'
+import { getSavedRepos, addRepo, removeRepo, refreshRepo, type PluginRepo } from '@/lib/repoService'
 
 export function PluginsPage() {
   const [plugins, setPlugins] = useState(pluginSystem.getAllPlugins())
   const [path, setPath] = useState('')
   const [installing, setInstalling] = useState(false)
   const [msg, setMsg] = useState('')
-  const [tab, setTab] = useState<'local' | 'community'>('local')
+  const [tab, setTab] = useState<'local' | 'community' | 'repos'>('local')
 
   // 社区插件状态
   const [communityPlugins, setCommunityPlugins] = useState<CommunityPlugin[]>([])
@@ -26,6 +27,13 @@ export function PluginsPage() {
   const [cacheAge, setCacheAge] = useState<number | null>(null)
   const [installingId, setInstallingId] = useState<string | null>(null)
   const [installProgress, setInstallProgress] = useState<{ current: number; total: number; file: string } | null>(null)
+
+  // 仓库管理状态
+  const [repos, setRepos] = useState<PluginRepo[]>(getSavedRepos)
+  const [repoUrl, setRepoUrl] = useState('')
+  const [repoAdding, setRepoAdding] = useState(false)
+  const [repoMsg, setRepoMsg] = useState('')
+  const [repoInstallingId, setRepoInstallingId] = useState<string | null>(null)
 
   const refresh = useCallback(() => {
     setPlugins(pluginSystem.getAllPlugins())
@@ -116,6 +124,50 @@ export function PluginsPage() {
 
   const isInstalled = (pluginId: string) => plugins.some(p => p.manifest.id === pluginId)
 
+  // 仓库操作
+  const handleAddRepo = async () => {
+    if (!repoUrl.trim()) return
+    setRepoAdding(true); setRepoMsg('')
+    const result = await addRepo(repoUrl.trim())
+    if (result.success) {
+      setRepos(getSavedRepos())
+      setRepoUrl('')
+      setRepoMsg('仓库添加成功！')
+    } else {
+      setRepoMsg(`添加失败: ${result.error}`)
+    }
+    setRepoAdding(false)
+  }
+
+  const handleRefreshRepo = async (repoUrl: string) => {
+    const result = await refreshRepo(repoUrl)
+    if (result.success) {
+      setRepos(getSavedRepos())
+    } else {
+      setRepoMsg(`刷新失败: ${result.error}`)
+    }
+  }
+
+  const handleRemoveRepo = (url: string) => {
+    removeRepo(url)
+    setRepos(getSavedRepos())
+    setRepoMsg('')
+  }
+
+  const handleRepoInstall = async (repo: PluginRepo, plugin: CommunityPlugin) => {
+    if (!repo.repoDir) return
+    setRepoInstallingId(plugin.id)
+    const srcPath = `${repo.repoDir}/${plugin.id}`
+    const result = await pluginSystem.install(srcPath)
+    if (result.success) {
+      setMsg('安装成功！')
+      refresh()
+    } else {
+      setMsg(`安装失败: ${result.error}`)
+    }
+    setRepoInstallingId(null)
+  }
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-11 items-center gap-2 border-b border-border px-4">
@@ -135,6 +187,12 @@ export function PluginsPage() {
             onClick={() => setTab('community')}
           >
             社区
+          </button>
+          <button
+            className={`px-2.5 py-1 rounded text-xs transition-colors ${tab === 'repos' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            onClick={() => setTab('repos')}
+          >
+            仓库
           </button>
         </div>
       </div>
@@ -283,6 +341,114 @@ export function PluginsPage() {
             {/* 底部提示 */}
             <p className="text-[10px] text-muted-foreground/40 text-center pt-2">
               插件来自 <a href="https://github.com/Tianzeyui/brainPlus-community-plugins" target="_blank" className="underline hover:text-muted-foreground">GitHub 社区仓库</a>
+            </p>
+          </>
+        )}
+
+        {/* === 仓库 Tab === */}
+        {tab === 'repos' && (
+          <>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <GitBranch className="h-4 w-4 text-muted-foreground" />
+                <span className="text-xs font-medium">插件仓库</span>
+              </div>
+            </div>
+
+            {/* 添加仓库 */}
+            <div className="rounded-lg border border-border p-4">
+              <p className="text-xs font-medium mb-2">添加 Git 仓库</p>
+              <div className="flex items-center gap-2">
+                <Input
+                  className="h-8 text-sm flex-1"
+                  value={repoUrl}
+                  onChange={e => setRepoUrl(e.target.value)}
+                  placeholder="https://github.com/user/plugins.git"
+                  onKeyDown={e => { if (e.key === 'Enter') handleAddRepo() }}
+                />
+                <Button size="sm" className="h-8 text-xs" onClick={handleAddRepo} disabled={repoAdding || !repoUrl.trim()}>
+                  <Plus className="mr-1 h-3 w-3" />{repoAdding ? '克隆中...' : '添加'}
+                </Button>
+              </div>
+              {repoMsg && (
+                <p className={`text-xs mt-2 ${repoMsg.includes('失败') ? 'text-destructive' : 'text-green-500'}`}>
+                  {repoMsg}
+                </p>
+              )}
+              <p className="text-[10px] text-muted-foreground/50 mt-2">
+                需安装 Git。私有仓库请确保已配置 SSH Key 或凭据
+              </p>
+            </div>
+
+            {/* 仓库列表 */}
+            {repos.length === 0 ? (
+              <div className="py-12 text-center">
+                <p className="text-xs text-muted-foreground">暂无添加的仓库</p>
+              </div>
+            ) : (
+              repos.map(repo => (
+                <div key={repo.url} className="rounded-lg border border-border">
+                  {/* 仓库头部 */}
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <GitBranch className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <p className="text-sm font-medium truncate">{repo.name}</p>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground/50 truncate mt-0.5">{repo.url}</p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0 ml-3">
+                      <span className="text-[10px] text-muted-foreground/50 mr-1">{repo.plugins.length} 个插件</span>
+                      <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleRefreshRepo(repo.url)}>
+                        <RefreshCw className="mr-1 h-3 w-3" />刷新
+                      </Button>
+                      <button
+                        className="text-muted-foreground/30 hover:text-destructive p-1"
+                        onClick={() => { if (confirm(`确定移除仓库「${repo.name}」？`)) handleRemoveRepo(repo.url) }}
+                        title="移除"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 仓库插件列表 */}
+                  <div className="p-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {repo.plugins.length === 0 ? (
+                      <p className="text-xs text-muted-foreground col-span-2 text-center py-4">
+                        该仓库暂无插件（缺少 plugins.json）
+                      </p>
+                    ) : (
+                      repo.plugins.map(p => (
+                        <div key={p.id} className="flex items-center justify-between rounded border border-border p-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-medium truncate">{p.name}</p>
+                            <p className="text-[10px] text-muted-foreground/50 truncate">{p.description || p.id} · v{p.version}</p>
+                          </div>
+                          {isInstalled(p.id) ? (
+                            <span className="text-[10px] text-green-500 shrink-0 ml-2">已安装</span>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-6 text-[10px] shrink-0 ml-2"
+                              onClick={() => handleRepoInstall(repo, p)}
+                              disabled={repoInstallingId === p.id}
+                            >
+                              <Download className="mr-1 h-2.5 w-2.5" />
+                              {repoInstallingId === p.id ? '安装中...' : '安装'}
+                            </Button>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+
+            <p className="text-[10px] text-muted-foreground/40 text-center pt-2">
+              仓库需包含 plugins.json 索引文件
             </p>
           </>
         )}

@@ -191,6 +191,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('plugin:githubProgress', handler)
       return () => { ipcRenderer.removeListener('plugin:githubProgress', handler) }
     },
+    cloneRepo: (url: string) => ipcRenderer.invoke('plugin:cloneRepo', url),
+    pullRepo: (repoDir: string) => ipcRenderer.invoke('plugin:pullRepo', repoDir),
   },
 
   search: {
