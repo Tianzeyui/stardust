@@ -168,7 +168,20 @@ class PluginSystemImpl {
 
     return {
       supabase: {
-        getClient: () => getSupabaseClient(),
+        getClient: () => {
+          const client = getSupabaseClient()
+          if (!client) return null
+          // 返回受限客户端：禁止访问 auth（防止插件获取用户邮箱等敏感信息）
+          return new Proxy(client, {
+            get(target, prop) {
+              if (prop === 'auth') {
+                console.warn('[plugin] 插件尝试访问 supabase.auth 被拦截')
+                return undefined
+              }
+              return (target as any)[prop]
+            },
+          })
+        },
         isConfigured: () => isSupabaseConfigured(),
       },
       cloudinary: {
