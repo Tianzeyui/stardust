@@ -802,9 +802,10 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
                           {model.name}{model.baseUrl ? ` · ${model.baseUrl}` : ''}
                         </p>
                       </div>
-                      <svg className={`h-3.5 w-3.5 text-muted-foreground/30 shrink-0 transition-transform ${expandedModel === model.id ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 9l-7 7-7-7" /></svg>
                     </div>
                     <div className="flex items-center gap-1 shrink-0 ml-2">
+                      <svg className={`h-3.5 w-3.5 text-muted-foreground/30 shrink-0 transition-transform cursor-pointer ${expandedModel === model.id ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                        onClick={(e) => { e.stopPropagation(); setExpandedModel(expandedModel === model.id ? null : model.id) }}><path d="M19 9l-7 7-7-7" /></svg>
                       <button className="p-1 text-muted-foreground/30 hover:text-foreground transition-colors" onClick={() => openEditDialog(model)} title="编辑">
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
