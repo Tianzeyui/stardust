@@ -835,8 +835,9 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
                       </div>
                       {model.modelsFetched && model.availableModels.length > 0 && (
                         <details className="group">
-                          <summary className="cursor-pointer text-[10px] text-muted-foreground/50 hover:text-muted-foreground select-none">
-                            展开模型列表 <ChevronDown className="inline h-3 w-3 transition-transform group-open:rotate-180" />
+                          <summary className="cursor-pointer text-[10px] text-muted-foreground/50 hover:text-muted-foreground select-none flex items-center justify-between">
+                            <span>模型列表</span>
+                            <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-180" />
                           </summary>
                           <div className="max-h-48 overflow-auto space-y-1 rounded border border-border p-2 mt-2">
                             {model.availableModels.map((sm) => (
