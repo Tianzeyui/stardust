@@ -40,6 +40,19 @@ import {
 import { TokenUsageBar } from './TokenUsageBar'
 import { addTrace } from '@/lib/traceStore'
 
+/** 从 tool input 提取简要描述，用于区分同名调用 */
+function briefArgs(input: any): string {
+  if (!input || typeof input !== 'object') return ''
+  // 取第一个有意义的字段作为摘要
+  const keys = Object.keys(input).filter(k => !['code', 'input', 'description'].includes(k))
+  const firstKey = keys[0]
+  if (!firstKey) return ''
+  const val = input[firstKey]
+  if (typeof val === 'string') return val.length > 30 ? val.slice(0, 30) + '…' : val
+  if (typeof val === 'number' || typeof val === 'boolean') return String(val)
+  return firstKey
+}
+
 export function ChatPage() {
   const { user } = useAuth()
   const [messages, setMessages] = useState<UIMessage[]>([])
@@ -499,21 +512,27 @@ export function ChatPage() {
           })
         }
         if (event.type === 'agent-tool-call') {
-          agentStreamedRef.current += `\n> **${event.toolName}** <span style="color:#f59e0b">...</span>\n`
+          // 提取关键入参用于区分同名调用
+          const brief = briefArgs(event.toolInput)
+          const label = brief ? `**${event.toolName}**(${brief})` : `**${event.toolName}**`
+          agentStreamedRef.current += `\n> ${label} <span style="color:#f59e0b">...</span>\n`
           ensureAgentContainer(event.agentName ? `Agent: ${event.agentName}` : 'Agent')
         } else if (event.type === 'agent-tool-result') {
           const output = String(event.toolOutput ?? '').slice(0, 2000)
           const ok = !output.startsWith('Error')
-          // 替换上一条「执行中」为结果
-          const marker = `\n> **${event.toolName}** <span style="color:#f59e0b">...</span>\n`
-          const resultLine = `\n> **${event.toolName}** <span style="color:${ok ? '#22c55e' : '#ef4444'}">${ok ? '✓ 完成' : '✗ 失败'}</span>\n`
+          const brief = briefArgs(event.toolInput)
+          const label = brief ? `**${event.toolName}**(${brief})` : `**${event.toolName}**`
+          const marker = `\n> ${label} <span style="color:#f59e0b">...</span>\n`
+          const resultIcon = ok ? '✓' : '✗'
+          const resultColor = ok ? '#22c55e' : '#ef4444'
+          const resultLine = `\n> ${label} <span style="color:${resultColor}">${resultIcon} 完成</span>\n`
           if (agentStreamedRef.current.includes(marker)) {
             agentStreamedRef.current = agentStreamedRef.current.replace(marker, resultLine)
           } else {
             agentStreamedRef.current += resultLine
           }
           if (output) {
-            agentStreamedRef.current += `\n\`\`\`\n${output}\n\`\`\`\n`
+            agentStreamedRef.current += `\n<details>\n<summary>📄 返回内容</summary>\n\n\`\`\`\n${output}\n\`\`\`\n</details>\n`
           }
           ensureAgentContainer(event.agentName ? `Agent: ${event.agentName}` : 'Agent')
         } else if (event.type === 'agent-text-delta') {
