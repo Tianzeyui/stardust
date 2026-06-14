@@ -1,5 +1,22 @@
-import { Terminal } from 'lucide-react'
+import { Terminal, Bot, ChevronRight, Check, CheckCircle, XCircle, RefreshCw, LogIn, LogOut, AlertCircle, StopCircle } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import type { ConsoleLine } from '@/types/chat'
+
+const iconMap: Record<string, LucideIcon> = {
+  '🤖': Bot,
+  '>': ChevronRight,
+  'OK': CheckCircle,
+  'ERR': XCircle,
+  '✅': CheckCircle,
+  '❌': XCircle,
+  '🔄': RefreshCw,
+  'OUT': LogOut,
+  'SYS': AlertCircle,
+  'DONE': Check,
+  'STOP': StopCircle,
+  'USR': LogIn,
+  '--': ChevronRight,
+}
 
 interface ChatConsoleProps {
   lines: ConsoleLine[]
@@ -22,21 +39,24 @@ export function ChatConsole({ lines, onClose }: ChatConsoleProps) {
         {lines.length === 0 ? (
           <span className="text-gray-600">(空)</span>
         ) : (
-          lines.map((line) => (
-            <div
-              key={line.id}
-              className={`flex gap-2 ${
-                line.status === 'error' ? 'text-red-400'
-                : line.status === 'ok' ? 'text-green-400'
-                : line.status === 'running' ? 'text-yellow-400'
-                : 'text-gray-400'
-              }`}
-            >
-              <span className="shrink-0 text-gray-600 w-16">{line.time}</span>
-              <span className="shrink-0">{line.icon}</span>
-              <span className="whitespace-pre-wrap break-all">{line.msg}</span>
-            </div>
-          ))
+          lines.map((line) => {
+            const IconComp = iconMap[line.icon] || ChevronRight
+            return (
+              <div
+                key={line.id}
+                className={`flex gap-2 ${
+                  line.status === 'error' ? 'text-red-400'
+                  : line.status === 'ok' ? 'text-green-400'
+                  : line.status === 'running' ? 'text-yellow-400'
+                  : 'text-gray-400'
+                }`}
+              >
+                <span className="shrink-0 text-gray-600 w-16">{line.time}</span>
+                <IconComp className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                <span className="whitespace-pre-wrap break-all">{line.msg}</span>
+              </div>
+            )
+          })
         )}
       </div>
     </div>
