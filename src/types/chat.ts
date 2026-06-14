@@ -23,6 +23,10 @@ export interface AgentToolCallEntry {
   output?: string
 }
 
+export type AgentTimelineItem =
+  | { type: 'text'; content: string }
+  | { type: 'tool'; name: string; brief: string; status: 'running' | 'ok' | 'error'; output?: string }
+
 export interface UIMessage {
   role: 'user' | 'assistant' | 'tool'
   content: string
@@ -32,7 +36,8 @@ export interface UIMessage {
   modelName?: string
   trace?: string  // 可观测性信息
   parentAgent?: string  // 子 Agent 标签，工具消息渲染到 Agent 容器内
-  agentToolCalls?: AgentToolCallEntry[]  // Agent 工具调用列表（组件渲染）
+  agentToolCalls?: AgentToolCallEntry[]  // 保留兼容
+  agentTimeline?: AgentTimelineItem[]    // 时间线：文字+工具调用按顺序穿插
 }
 
 export interface ConsoleLine {

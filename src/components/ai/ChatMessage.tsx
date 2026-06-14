@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Check, X, Shield, ShieldCheck, Cable, BookOpen, MessageSquare, FileText, Image, Zap, FolderOpen, Loader2, ChevronDown } from 'lucide-react'
 import MarkdownPreview from '@uiw/react-markdown-preview'
-import type { UIMessage, ToolCallStatus, MessageAttachment, AgentToolCallEntry } from '@/types/chat'
+import type { UIMessage, ToolCallStatus, MessageAttachment, AgentToolCallEntry, AgentTimelineItem } from '@/types/chat'
 
 /** 工具结果格式化：JSON 结果包进代码块，纯文本保持原样 */
 function formatToolResult(result: string, type: string): string {
@@ -82,26 +82,34 @@ export function ChatMessage({ msg }: ChatMessageProps) {
               {msg.streaming && <span className="text-[10px] text-muted-foreground/50">输出中...</span>}
             </div>
             <div className="px-3 py-2">
-              {msg.streaming && !msg.content && (
+              {msg.streaming && !msg.content && !msg.agentTimeline?.length && (
                 <p className="text-sm text-muted-foreground/40 py-2 select-none">
                   <span className="animate-dots"><span>.</span><span>.</span><span>.</span></span>
                 </p>
               )}
-              {(!msg.streaming || msg.content) && (
-                <MarkdownPreview
-                  source={msg.content || ''}
-                  style={{ fontSize: 14, backgroundColor: 'transparent', overflowWrap: 'break-word', wordBreak: 'break-word' }}
-                />
+              {/* 时间线模式：文字和工具调用按顺序穿插 */}
+              {msg.agentTimeline && msg.agentTimeline.length > 0 ? (
+                <div className="space-y-2">
+                  {msg.agentTimeline.map((item, i) =>
+                    item.type === 'text' ? (
+                      <MarkdownPreview key={i}
+                        source={item.content}
+                        style={{ fontSize: 14, backgroundColor: 'transparent', overflowWrap: 'break-word', wordBreak: 'break-word' }}
+                      />
+                    ) : (
+                      <AgentToolCallItem key={i} tc={{ name: item.name, brief: item.brief, status: item.status, output: item.output }} />
+                    )
+                  )}
+                </div>
+              ) : (
+                (!msg.streaming || msg.content) && (
+                  <MarkdownPreview
+                    source={msg.content || ''}
+                    style={{ fontSize: 14, backgroundColor: 'transparent', overflowWrap: 'break-word', wordBreak: 'break-word' }}
+                  />
+                )
               )}
             </div>
-            {/* Agent 工具调用列表 */}
-            {msg.agentToolCalls && msg.agentToolCalls.length > 0 && (
-              <div className="border-t border-border/50 px-3 py-2 space-y-1.5">
-                {msg.agentToolCalls.map((tc, i) => (
-                  <AgentToolCallItem key={i} tc={tc} />
-                ))}
-              </div>
-            )}
             {msg.trace && !msg.streaming && (
               <p className="px-3 pb-1.5 text-[10px] text-muted-foreground/40 select-none">{msg.trace}</p>
             )}

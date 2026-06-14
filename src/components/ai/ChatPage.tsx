@@ -114,7 +114,7 @@ export function ChatPage() {
   // Agent 流式输出跟踪 + 累计消耗
   const agentActiveRef = useRef<string | null>(null)
   const agentStreamedRef = useRef('')
-  const agentToolCallsRef = useRef<Array<{ name: string; brief: string; status: 'running' | 'ok' | 'error'; output?: string }>>([])
+  const agentTimelineRef = useRef<Array<{ type: 'text'; content: string } | { type: 'tool'; name: string; brief: string; status: 'running' | 'ok' | 'error'; output?: string }>>([])
   const agentTotalTokensRef = useRef(0)  // 本轮所有子 Agent 累计 token
   // 记忆管理器（根据项目+对话隔离）
   const [memoryManager, setMemoryManager] = useState<MemoryManager | null>(null)
@@ -485,7 +485,7 @@ export function ChatPage() {
       let streamed = ''
       setConsoleLog([]); setTaskList([]); setActivatedToolNames(new Set())
       agentStreamedRef.current = ''
-      agentToolCallsRef.current = []
+      agentTimelineRef.current = []
       agentTotalTokensRef.current = 0
       pushLog('--', '开始处理', 'info')
 
@@ -499,72 +499,76 @@ export function ChatPage() {
         }
         // AgentRunner 流式事件：写入 Agent 容器文本流，首条事件时立即创建容器
         const ensureAgentContainer = (label: string) => {
+          if (agentTimelineRef.current.length === 0) return
+          const timeline = [...agentTimelineRef.current]
           const content = agentStreamedRef.current
-          if (!content) return
-          const toolCalls = [...agentToolCallsRef.current]
           setMessages(prev => {
             const n = [...prev]
             const l = n[n.length - 1]
             const hasContainer = l?.role === 'assistant' && l.modelName?.startsWith('Agent:')
             if (hasContainer) {
               l.content = content
-              l.agentToolCalls = toolCalls
+              l.agentTimeline = timeline as any
             } else {
               if (l?.role === 'assistant' && l.streaming) { l.streaming = false }
-              n.push({ role: 'assistant', content, streaming: true, modelName: label, agentToolCalls: toolCalls })
+              n.push({ role: 'assistant', content, streaming: true, modelName: label, agentTimeline: timeline as any })
             }
             return [...n]
           })
         }
         if (event.type === 'agent-tool-call') {
           const brief = briefArgs(event.toolInput)
-          agentToolCallsRef.current.push({ name: event.toolName || '', brief, status: 'running' })
+          agentTimelineRef.current.push({ type: 'tool', name: event.toolName || '', brief, status: 'running' })
           ensureAgentContainer(event.agentName ? `Agent: ${event.agentName}` : 'Agent')
         } else if (event.type === 'agent-tool-result') {
           const output = String(event.toolOutput ?? '').slice(0, 2000)
           const ok = !output.startsWith('Error')
           const brief = briefArgs(event.toolInput)
-          // 更新匹配的工具调用（找最近的同名+同参+status=running 的项）
-          const idx = [...agentToolCallsRef.current].reverse().findIndex(
-            tc => tc.name === event.toolName && tc.brief === brief && tc.status === 'running'
-          )
-          if (idx !== -1) {
-            const realIdx = agentToolCallsRef.current.length - 1 - idx
-            agentToolCallsRef.current[realIdx] = {
-              ...agentToolCallsRef.current[realIdx],
-              status: ok ? 'ok' : 'error',
-              output: output || undefined,
+          // 找到最后一个同名+同参+running 的工具项并更新
+          for (let i = agentTimelineRef.current.length - 1; i >= 0; i--) {
+            const item = agentTimelineRef.current[i]
+            if (item.type === 'tool' && item.name === event.toolName && item.brief === brief && item.status === 'running') {
+              item.status = ok ? 'ok' : 'error'
+              item.output = output || undefined
+              break
             }
-          } else {
-            agentToolCallsRef.current.push({ name: event.toolName || '', brief, status: ok ? 'ok' : 'error', output: output || undefined })
           }
           ensureAgentContainer(event.agentName ? `Agent: ${event.agentName}` : 'Agent')
         } else if (event.type === 'agent-text-delta') {
-          // Agent 流式文字输出：带 Agent 标签的独立消息
           const agentLabel = event.agentName ? `Agent: ${event.agentName}` : 'Agent'
           agentStreamedRef.current += event.text || ''
-          const toolCalls = [...agentToolCallsRef.current]
+          // 追加到时间线：合并到最后一个 text 项，或新建
+          const last = agentTimelineRef.current[agentTimelineRef.current.length - 1]
+          if (last?.type === 'text') {
+            last.content += event.text || ''
+          } else {
+            agentTimelineRef.current.push({ type: 'text', content: event.text || '' })
+          }
+          const timeline = [...agentTimelineRef.current]
           setMessages(prev => {
             const n = prev.map(m => ({ ...m }))
             const l = n[n.length - 1]
             if (!l || l.role !== 'assistant' || l.modelName !== agentLabel) {
               if (l?.role === 'assistant' && l.streaming) { n[n.length - 1] = { ...l, streaming: false } }
-              n.push({ role: 'assistant', content: agentStreamedRef.current, streaming: true, modelName: agentLabel, agentToolCalls: toolCalls })
+              n.push({ role: 'assistant', content: agentStreamedRef.current, streaming: true, modelName: agentLabel, agentTimeline: timeline as any })
             } else {
-              n[n.length - 1] = { ...l, content: agentStreamedRef.current, agentToolCalls: toolCalls }
+              n[n.length - 1] = { ...l, content: agentStreamedRef.current, agentTimeline: timeline as any }
             }
             return n
           })
         } else if (event.type === 'agent-done') {
           // Agent 结束，确保有容器（纯工具调用无文本时兜底），关闭流式
           const agentLabel = event.agentName ? `Agent: ${event.agentName}` : 'Agent'
+          const timeline = [...agentTimelineRef.current]
           setMessages(prev => {
-            const n = [...prev]
+            const n = prev.map(m => ({ ...m }))
             const l = n[n.length - 1]
             const hasContainer = l?.role === 'assistant' && l.modelName?.startsWith('Agent:')
-            if (!hasContainer && agentStreamedRef.current.trim()) {
+            if (!hasContainer && (agentStreamedRef.current.trim() || timeline.length > 0)) {
               if (l?.role === 'assistant' && l.streaming) { l.streaming = false }
-              n.push({ role: 'assistant', content: agentStreamedRef.current, streaming: false, modelName: agentLabel })
+              n.push({ role: 'assistant', content: agentStreamedRef.current, streaming: false, modelName: agentLabel, agentTimeline: timeline as any })
+            } else if (hasContainer) {
+              n[n.length - 1] = { ...l, streaming: false, agentTimeline: timeline as any }
             } else {
               n.forEach(m => { if (m.role === 'assistant' && m.streaming && m.modelName?.startsWith('Agent:')) m.streaming = false })
             }
