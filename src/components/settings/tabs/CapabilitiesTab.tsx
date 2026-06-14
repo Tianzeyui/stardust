@@ -63,7 +63,7 @@ export function CapabilitiesTab() {
     }).catch(() => {})
   }, [])
 
-  // 自动保存图数据库配置
+  // 自动保存（密码为空时仅保存 URI/用户名，不覆盖已加密的密码）
   useEffect(() => {
     if (!graphEnabled) return
     const timer = setTimeout(() => {

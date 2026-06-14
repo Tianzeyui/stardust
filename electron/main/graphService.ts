@@ -48,10 +48,13 @@ export function getGraphConfig(): GraphConfig | null {
 
 export function configureGraph(uri: string, username: string, password: string): { success: boolean; error?: string } {
   try {
-    saveConfig({ uri, username, password })
+    const old = loadConfig()
+    const pwd = password || old?.password || ''  // 空密码时保留旧密码
+    if (!pwd) return { success: false, error: '密码不能为空' }
+    saveConfig({ uri, username, password: pwd })
     // 重建连接
     if (driver) { driver.close(); driver = null }
-    driver = neo4j.driver(uri, neo4j.auth.basic(username, password))
+    driver = neo4j.driver(uri, neo4j.auth.basic(username, pwd))
     return { success: true }
   } catch (e: any) {
     return { success: false, error: e.message }
