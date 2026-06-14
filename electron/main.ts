@@ -359,6 +359,15 @@ ipcMain.handle('shell:openInTerminal', async (_event, targetPath: string) => {
   }
 })
 
+ipcMain.handle('shell:openExternal', async (_event, url: string) => {
+  try {
+    await shell.openExternal(url)
+    return { success: true }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
 // ==================== Config IPC ====================
 
 ipcMain.handle('config:getSupabase', () => getSupabase())

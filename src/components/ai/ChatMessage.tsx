@@ -66,7 +66,15 @@ export function ChatMessage({ msg }: ChatMessageProps) {
           </div>
         ) : msg.modelName?.startsWith('Agent:') ? (
           // Agent 子对话输出：独立视觉容器 + 实时流式
-          <div className="rounded-lg border border-border bg-card overflow-x-hidden">
+          <div className="rounded-lg border border-border bg-card overflow-x-hidden"
+            onClick={e => {
+              const t = e.target as HTMLElement
+              if (t.tagName === 'A' && (t as HTMLAnchorElement).href) {
+                e.preventDefault()
+                ;(window as any).electronAPI?.shell?.openExternal((t as HTMLAnchorElement).href)
+              }
+            }}
+          >
             <div className="flex items-center gap-1.5 border-b border-border/50 px-3 py-1.5 bg-muted/30">
               <MessageSquare className="h-3 w-3 text-primary/50" />
               <span className="text-[11px] font-medium text-primary/70">{msg.modelName}</span>
@@ -90,7 +98,15 @@ export function ChatMessage({ msg }: ChatMessageProps) {
             )}
           </div>
         ) : (
-          <div className="overflow-x-hidden">
+          <div className="overflow-x-hidden"
+            onClick={e => {
+              const t = e.target as HTMLElement
+              if (t.tagName === 'A' && (t as HTMLAnchorElement).href) {
+                e.preventDefault()
+                ;(window as any).electronAPI?.shell?.openExternal((t as HTMLAnchorElement).href)
+              }
+            }}
+          >
             {msg.streaming && !msg.content && (
               <p className="text-sm text-muted-foreground/40 py-2 select-none">
                 <span className="animate-dots"><span>.</span><span>.</span><span>.</span></span>

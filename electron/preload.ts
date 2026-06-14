@@ -53,6 +53,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   shell: {
+    openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
     openInExplorer: (targetPath: string) => ipcRenderer.invoke('shell:openInExplorer', targetPath),
     openInTerminal: (targetPath: string) => ipcRenderer.invoke('shell:openInTerminal', targetPath),
   },
