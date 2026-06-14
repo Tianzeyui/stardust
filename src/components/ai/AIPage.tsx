@@ -59,9 +59,13 @@ export function AIPage() {
   }
 
   // 分类操作
-  const handleCreateCat = async () => {
+  const handleSaveCat = async () => {
     if (!editingCat?.name.trim()) return
-    await createCategory(editingCat.name.trim())
+    if (editingCat.id) {
+      await updateCat(editingCat.id, { name: editingCat.name.trim() })
+    } else {
+      await createCategory(editingCat.name.trim())
+    }
     setEditingCat(null)
     loadData()
   }
@@ -129,6 +133,10 @@ export function AIPage() {
                 <FolderKanban className="h-3 w-3 shrink-0" />
                 <span className="truncate">{cat.name}</span>
               </button>
+              <button className="opacity-0 group-hover:opacity-100 p-0.5 text-muted-foreground hover:text-foreground shrink-0"
+                onClick={() => setEditingCat({ id: cat.id, name: cat.name })} title="重命名">
+                <Pencil className="h-3 w-3" />
+              </button>
               <button className="opacity-0 group-hover:opacity-100 p-0.5 text-muted-foreground hover:text-destructive shrink-0"
                 onClick={() => handleDeleteCat(cat.id)}>
                 <Trash2 className="h-3 w-3" />
@@ -139,10 +147,10 @@ export function AIPage() {
           {/* 新建/编辑分类 */}
           {editingCat ? (
             <div className="flex items-center gap-1 px-1">
-              <Input className="h-6 text-xs flex-1" value={editingCat.name} onChange={e => setEditingCat({ name: e.target.value })}
-                onKeyDown={e => { if (e.key === 'Enter') handleCreateCat(); if (e.key === 'Escape') setEditingCat(null) }}
+              <Input className="h-6 text-xs flex-1" value={editingCat.name} onChange={e => setEditingCat(p => p ? { ...p, name: e.target.value } : null)}
+                onKeyDown={e => { if (e.key === 'Enter') handleSaveCat(); if (e.key === 'Escape') setEditingCat(null) }}
                 placeholder="分类名" autoFocus />
-              <button className="p-0.5 text-green-500" onClick={handleCreateCat}><Check className="h-3 w-3" /></button>
+              <button className="p-0.5 text-green-500" onClick={handleSaveCat}><Check className="h-3 w-3" /></button>
               <button className="p-0.5 text-muted-foreground" onClick={() => setEditingCat(null)}><X className="h-3 w-3" /></button>
             </div>
           ) : (
