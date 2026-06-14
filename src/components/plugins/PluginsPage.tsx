@@ -9,6 +9,7 @@ import {
   getCachedPlugins,
   cachePlugins,
   getCacheAgeMinutes,
+  clearPluginCache,
   type CommunityPlugin,
 } from '@/lib/communityPluginService'
 import { getSavedRepos, addRepo, removeRepo, refreshRepo, type PluginRepo } from '@/lib/repoService'
@@ -274,16 +275,27 @@ export function PluginsPage() {
                   </span>
                 )}
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={() => { setCommunityLoading(true); loadCommunity(true) }}
-                disabled={communityLoading}
-              >
-                <RefreshCw className={`mr-1 h-3 w-3 ${communityLoading ? 'animate-spin' : ''}`} />
-                刷新
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => { clearPluginCache(); setCommunityLoading(true); loadCommunity(true) }}
+                  disabled={communityLoading}
+                >
+                  <RefreshCw className={`mr-1 h-3 w-3 ${communityLoading ? 'animate-spin' : ''}`} />
+                  刷新
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => { clearPluginCache(); loadCommunity(true) }}
+                  title="清空本地缓存后重新拉取"
+                >
+                  <Trash2 className="mr-1 h-3 w-3" />清缓存
+                </Button>
+              </div>
             </div>
 
             {/* 加载中 */}

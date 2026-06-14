@@ -86,6 +86,13 @@ export function cachePlugins(plugins: CommunityPlugin[]): void {
 /**
  * 获取缓存年龄（分钟），null 表示无缓存
  */
+export function clearPluginCache(): void {
+  try {
+    localStorage.removeItem(CACHE_KEY)
+    localStorage.removeItem(CACHE_TIME_KEY)
+  } catch {}
+}
+
 export function getCacheAgeMinutes(): number | null {
   try {
     const timeStr = localStorage.getItem(CACHE_TIME_KEY)
