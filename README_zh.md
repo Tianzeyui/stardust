@@ -210,6 +210,7 @@ ctx.onToolRegister((tools) => {
 
 ## 版本发布
 
+- [v0.22.1](docs/releases/v0.22.1.md) — Agent 输出重构、时间线穿插、工卡、GitHub Skill 安装
 - [v0.22.0](docs/releases/v0.22.0.md) — 社区插件、仓库管理、Skill 开关
 - [v0.21.0](docs/releases/v0.21.0.md) — 项目系统、工具箱升级、界面重构
 

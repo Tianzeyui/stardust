@@ -210,6 +210,7 @@ See the plugin documentation in the [community plugins repo](https://github.com/
 
 ## Release Notes
 
+- [v0.22.1](docs/releases/v0.22.1.md) — Agent output refactor, timeline rendering, agent card, GitHub Skill install
 - [v0.22.0](docs/releases/v0.22.0.md) — Community plugins, repo management, Skill toggles
 - [v0.21.0](docs/releases/v0.21.0.md) — Project system, toolbox upgrade, UI redesign
 
