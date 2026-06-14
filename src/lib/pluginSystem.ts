@@ -357,6 +357,7 @@ class PluginSystemImpl {
       else if (p === 'workspace' && (window as any).electronAPI?.workspace) continue
       else if (p === 'supabase' && isSupabaseConfigured()) continue
       else if (p === 'cloudinary' && isCloudinaryConfigured()) continue
+      else if (p === 'graph' && (window as any).electronAPI?.graph) continue
       else denied.push(p)
     }
     if (denied.length > 0) console.warn(`[Plugin] "${m.id}" 权限未满足: ${denied.join(', ')}`)

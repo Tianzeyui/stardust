@@ -126,14 +126,17 @@ export function CapabilitiesTab() {
               <p className="text-[10px] text-muted-foreground">Neo4j AuraDB，为插件提供图数据库能力</p>
             </div>
           </div>
-          <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-            <Toggle enabled={graphEnabled} onToggle={() => { const v = !graphEnabled; setGraphEnabled(v); saveGraphEnabled(v) }} />
-            <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${capExpanded.graph ? '' : '-rotate-90'}`} />
-          </div>
+          <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${capExpanded.graph ? '' : '-rotate-90'}`} />
         </div>
         {capExpanded.graph && (
           <div className="border-t border-border px-4 py-3 space-y-2">
-            {!graphEnabled && <p className="text-[10px] text-muted-foreground/50">开启后可配置 Neo4j 连接，插件通过 ctx.api.graph.query() 调用。</p>}
+            <div className="rounded-md border border-border bg-muted/20 px-3 py-2.5 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-foreground">Neo4j</p>
+                <p className="text-[10px] text-muted-foreground">图数据库引擎，支持 Cypher 查询，自动按插件名隔离数据</p>
+              </div>
+              <Toggle enabled={graphEnabled} onToggle={() => { const v = !graphEnabled; setGraphEnabled(v); saveGraphEnabled(v) }} />
+            </div>
             {graphEnabled && (
               <>
                 <Input className="h-7 text-xs" placeholder="bolt://localhost:7687" value={graphUri} onChange={e => setGraphUri(e.target.value)} />
