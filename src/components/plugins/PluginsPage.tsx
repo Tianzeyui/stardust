@@ -38,7 +38,7 @@ export function PluginsPage() {
   }, [refresh])
 
   // 加载社区插件列表
-  const loadCommunity = useCallback(async (forceRefresh = false) => {
+  const loadCommunity = async (forceRefresh = false) => {
     // 先读缓存
     if (!forceRefresh) {
       const cached = getCachedPlugins()
@@ -50,25 +50,28 @@ export function PluginsPage() {
     }
 
     try {
+      console.log('[community] fetching plugins...')
       const plugins = await fetchCommunityPlugins()
+      console.log('[community] got', plugins.length, 'plugins')
       setCommunityPlugins(plugins)
       cachePlugins(plugins)
       setCacheAge(0)
       setCommunityError('')
     } catch (err: any) {
+      console.error('[community] fetch failed:', err.message)
       setCommunityError(err.message || '无法加载社区插件')
       setCacheAge(getCacheAgeMinutes())
     } finally {
       setCommunityLoading(false)
     }
-  }, [])
+  }
 
   useEffect(() => {
     if (tab === 'community') {
       setCommunityLoading(true)
       loadCommunity()
     }
-  }, [tab, loadCommunity])
+  }, [tab])
 
   // 监听安装进度
   useEffect(() => {

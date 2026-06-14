@@ -1,14 +1,15 @@
-import { Download, Check, Loader2, Package, BookOpen, Lightbulb, type LucideIcon } from 'lucide-react'
+import { Download, Check, Loader2, Package, BookOpen, Lightbulb } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { CommunityPlugin } from '@/lib/communityPluginService'
 
 /** 已知图标映射 */
-const ICON_MAP: Record<string, LucideIcon> = {
+const iconMap: Record<string, LucideIcon> = {
   Package, BookOpen, Lightbulb,
 }
 
-function getIconComponent(iconName: string): LucideIcon {
-  return ICON_MAP[iconName] || Package
+function getIcon(name: string): LucideIcon {
+  return iconMap[name] || Package
 }
 
 interface Props {
@@ -20,7 +21,7 @@ interface Props {
 }
 
 export function CommunityPluginCard({ plugin, installed, installing, progress, onInstall }: Props) {
-  const IconComp = getIconComponent(plugin.icon)
+  const IconComp = getIcon(plugin.icon)
 
   return (
     <div className={`rounded-lg border p-4 transition-colors ${installed ? 'border-muted bg-muted/20' : 'border-border hover:border-primary/30'}`}>
@@ -46,7 +47,6 @@ export function CommunityPluginCard({ plugin, installed, installing, progress, o
         </div>
       </div>
 
-      {/* 进度条 */}
       {installing && progress && (
         <div className="mt-3">
           <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
@@ -62,7 +62,6 @@ export function CommunityPluginCard({ plugin, installed, installing, progress, o
         </div>
       )}
 
-      {/* 按钮 */}
       <div className="mt-3">
         {installed ? (
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
