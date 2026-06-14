@@ -56,9 +56,7 @@ export function PluginsPage() {
       setCacheAge(0)
       setCommunityError('')
     } catch (err: any) {
-      if (communityPlugins.length === 0) {
-        setCommunityError(err.message || '无法加载社区插件')
-      }
+      setCommunityError(err.message || '无法加载社区插件')
       setCacheAge(getCacheAgeMinutes())
     } finally {
       setCommunityLoading(false)

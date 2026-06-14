@@ -1,6 +1,7 @@
 /**
  * 社区插件服务
- * 通过 GitHub REST API 获取 brainPlus-community-plugins 仓库中的插件列表
+ * 从 GitHub brainPlus-community-plugins 仓库获取插件列表
+ * 使用 raw.githubusercontent.com 直接获取文件，避免 API 限流和 base64 解码
  */
 
 export interface CommunityPlugin {
@@ -14,74 +15,69 @@ export interface CommunityPlugin {
 
 const REPO = 'Tianzeyui/brainPlus-community-plugins'
 const API_BASE = `https://api.github.com/repos/${REPO}`
+const RAW_BASE = `https://raw.githubusercontent.com/${REPO}/main`
 const CACHE_KEY = 'brainplus_community_plugins'
 const CACHE_TIME_KEY = 'brainplus_community_plugins_time'
 const CACHE_TTL_MS = 5 * 60 * 1000 // 5 分钟
 
 /**
- * 通过 Electron IPC 发起 HTTP 请求（绕过 CORS）
+ * 通过 Electron IPC 发起 HTTP 请求，返回原始文本
  */
-async function fetchViaIPC(url: string): Promise<any> {
+async function fetchText(url: string): Promise<string> {
   const api = (window as any).electronAPI?.http
   if (!api) throw new Error('Electron HTTP API 不可用')
 
-  const result = await api.fetch(url, {
-    headers: {
-      'User-Agent': 'brainPlus',
-      'Accept': 'application/vnd.github.v3+json',
-    },
-  })
+  const result = await api.fetch(url)
 
   if (!result.success) throw new Error(result.error || 'HTTP 请求失败')
-  if (result.status === 403) throw new Error('GitHub API 限流，请稍后再试')
-  if (result.status !== 200) throw new Error(`GitHub API 错误 (${result.status})`)
+  if (result.status !== 200) throw new Error(`HTTP ${result.status}`)
 
-  return JSON.parse(result.data)
+  return result.data
+}
+
+/**
+ * 通过 Electron IPC 请求 JSON
+ */
+async function fetchJSON(url: string): Promise<any> {
+  const text = await fetchText(url)
+  return JSON.parse(text)
 }
 
 /**
  * 获取社区插件列表
+ * 1. 用 GitHub API 列出目录（1 次请求）
+ * 2. 用 raw.githubusercontent.com 获取每个 manifest.json（无需解码 base64）
  */
 export async function fetchCommunityPlugins(): Promise<CommunityPlugin[]> {
   // 1. 列出仓库顶级目录
-  const contents: Array<{ name: string; type: string }> = await fetchViaIPC(
-    `${API_BASE}/contents/`,
-  )
+  const contents: Array<{ name: string; type: string }> = await fetchJSON(`${API_BASE}/contents/`)
 
   const dirs = contents.filter(
     (item) => item.type === 'dir' && !item.name.startsWith('_') && !item.name.startsWith('.'),
   )
 
-  // 2. 并行获取每个插件的 manifest.json
+  if (dirs.length === 0) return []
+
+  // 2. 并行从 raw.githubusercontent.com 获取每个插件的 manifest.json
   const results = await Promise.allSettled(
     dirs.map(async (dir) => {
-      const manifest = await fetchViaIPC(
-        `${API_BASE}/contents/${encodeURIComponent(dir.name)}/manifest.json`,
-      )
-      // GitHub API 返回的 content 是 base64 编码（UTF-8）
-      if (manifest.content && manifest.encoding === 'base64') {
-        // atob 不处理 UTF-8，需要用 TextDecoder 正确解码中文
-        const bytes = Uint8Array.from(atob(manifest.content), c => c.charCodeAt(0))
-        const text = new TextDecoder().decode(bytes)
-        const decoded = JSON.parse(text)
-        return {
-          id: decoded.id || dir.name,
-          name: decoded.name || dir.name,
-          version: decoded.version || '0.0.0',
-          description: decoded.description || '',
-          icon: decoded.icon || 'Package',
-          permissions: decoded.permissions,
-        } as CommunityPlugin
-      }
-      return null
+      const manifestUrl = `${RAW_BASE}/${encodeURIComponent(dir.name)}/manifest.json`
+      const text = await fetchText(manifestUrl)
+      const manifest = JSON.parse(text)
+      return {
+        id: manifest.id || dir.name,
+        name: manifest.name || dir.name,
+        version: manifest.version || '0.0.0',
+        description: manifest.description || '',
+        icon: manifest.icon || 'Package',
+        permissions: manifest.permissions,
+      } as CommunityPlugin
     }),
   )
 
-  // 过滤掉失败的请求
   return results
-    .filter((r): r is PromiseFulfilledResult<CommunityPlugin | null> => r.status === 'fulfilled')
+    .filter((r): r is PromiseFulfilledResult<CommunityPlugin> => r.status === 'fulfilled')
     .map((r) => r.value)
-    .filter((p): p is CommunityPlugin => p !== null)
 }
 
 /**
