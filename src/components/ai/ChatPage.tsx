@@ -257,6 +257,7 @@ export function ChatPage() {
         setProgressMsg(event.message + pct)
       } else if (event.type === 'notify_complete') {
         setProgressMsg('')
+        setTaskList(prev => prev.map(t => t.status === 'running' ? { ...t, status: 'done' } : t))
         pushLog('OK', event.message + (event.result ? ` -- ${event.result}` : ''), 'ok')
       } else if (event.type === 'update_task_list') {
         setTaskList((prev) => {
@@ -648,6 +649,8 @@ export function ChatPage() {
           })
         } else if (event.type === 'done') {
           pushLog('DONE', `回复 (${streamed.length}字)`, streamed ? 'ok' : 'info')
+          // AI 回复结束，未完成的任务自动标记为完成
+          setTaskList(prev => prev.map(t => t.status === 'running' ? { ...t, status: 'done' } : t))
           if (event.trace) {
             const t = event.trace
             const agentTok = agentTotalTokensRef.current
@@ -1108,20 +1111,32 @@ function AttachmentChips({ attachments, onRemove }: { attachments: Attachment[];
 }
 
 function TaskListCard({ tasks }: { tasks: Array<{ id: string; title: string; status: string }> }) {
+  const [localTasks, setLocalTasks] = useState(tasks)
+  useEffect(() => { setLocalTasks(tasks) }, [tasks])
+
+  const toggleTask = (id: string) => {
+    setLocalTasks(prev => prev.map(t =>
+      t.id === id ? { ...t, status: t.status === 'done' ? 'pending' : 'done' } : t
+    ))
+  }
+
+  const doneCount = localTasks.filter(t => t.status === 'done').length
+
   return (
     <div className="flex gap-3">
       <div className="flex-1 rounded-lg border border-border bg-card px-4 py-3">
         <div className="flex items-center gap-2 mb-2">
           <ListTodo className="h-4 w-4 text-muted-foreground" />
-          <span className="text-xs font-medium text-muted-foreground">任务进度 ({tasks.filter(t => t.status === 'done').length}/{tasks.length})</span>
+          <span className="text-xs font-medium text-muted-foreground">任务进度 ({doneCount}/{localTasks.length})</span>
         </div>
         <div className="space-y-1">
-          {tasks.map(t => (
-            <div key={t.id} className="flex items-center gap-2 text-xs">
-              {t.status === 'done' ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          {localTasks.map(t => (
+            <div key={t.id} className="flex items-center gap-2 text-xs cursor-pointer select-none"
+              onClick={() => toggleTask(t.id)} title="点击切换完成状态">
+              {t.status === 'done' ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-500" />
               : t.status === 'running' ? <Loader2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground animate-spin" />
               : t.status === 'cancelled' ? <X className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              : <Circle className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />}
+              : <Circle className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40 hover:text-muted-foreground" />}
               <span className={`truncate ${t.status === 'done' ? 'text-muted-foreground line-through' : t.status === 'running' ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>{t.title}</span>
             </div>
           ))}
