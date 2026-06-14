@@ -823,15 +823,22 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
 
                   {/* 展开：获取模型列表 */}
                   {expandedModel === model.id && (
-                    <div className="border-t border-border px-4 py-3 space-y-2">
-                      <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => fetchModels(model.id)} disabled={!model.apiKey}>
-                        <RefreshCw className={`mr-1 h-3 w-3 ${!model.modelsFetched && model.apiKey ? 'animate-spin' : ''}`} />
-                        {model.modelsFetched ? '刷新模型列表' : '获取模型列表'}
-                      </Button>
+                    <div className="border-t border-border px-4 py-3 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => fetchModels(model.id)} disabled={!model.apiKey}>
+                          <RefreshCw className={`mr-1 h-3 w-3 ${!model.modelsFetched && model.apiKey ? 'animate-spin' : ''}`} />
+                          {model.modelsFetched ? '刷新模型列表' : '获取模型列表'}
+                        </Button>
+                        {model.modelsFetched && model.availableModels.length > 0 && (
+                          <span className="text-[10px] text-muted-foreground">{model.availableModels.length} 个模型可用</span>
+                        )}
+                      </div>
                       {model.modelsFetched && model.availableModels.length > 0 && (
-                        <>
-                          <span className="text-[10px] text-muted-foreground">{model.availableModels.length} 个模型</span>
-                          <div className="max-h-48 overflow-auto space-y-1 rounded border border-border p-2">
+                        <details className="group">
+                          <summary className="cursor-pointer text-[10px] text-muted-foreground/50 hover:text-muted-foreground select-none">
+                            展开模型列表 <ChevronDown className="inline h-3 w-3 transition-transform group-open:rotate-180" />
+                          </summary>
+                          <div className="max-h-48 overflow-auto space-y-1 rounded border border-border p-2 mt-2">
                             {model.availableModels.map((sm) => (
                               <div
                                 key={sm.id}
@@ -843,7 +850,7 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
                               </div>
                             ))}
                           </div>
-                        </>
+                        </details>
                       )}
                       {model.modelsFetched && model.availableModels.length === 0 && (
                         <p className="text-[10px] text-muted-foreground/50">未能获取模型列表，请检查 API Key 和 Base URL</p>
