@@ -1,7 +1,9 @@
-import { useState } from 'react'
-import { Check, X, Shield, ShieldCheck, Cable, BookOpen, MessageSquare, FileText, Image, Zap, FolderOpen, Loader2, ChevronDown } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Check, X, Shield, ShieldCheck, Cable, BookOpen, MessageSquare, FileText, Image, Zap, FolderOpen, Loader2, ChevronDown, Info, ExternalLink } from 'lucide-react'
 import MarkdownPreview from '@uiw/react-markdown-preview'
 import type { UIMessage, ToolCallStatus, MessageAttachment, AgentToolCallEntry, AgentTimelineItem } from '@/types/chat'
+import { useAuth } from '@/contexts/AuthContext'
+import { listAgents, type Agent } from '@/lib/agentStore'
 
 /** 工具结果格式化：JSON 结果包进代码块，纯文本保持原样 */
 function formatToolResult(result: string, type: string): string {
@@ -80,6 +82,8 @@ export function ChatMessage({ msg }: ChatMessageProps) {
               <MessageSquare className="h-3 w-3 text-primary/50" />
               <span className="text-[11px] font-medium text-primary/70">{msg.modelName}</span>
               {msg.streaming && <span className="text-[10px] text-muted-foreground/50">输出中...</span>}
+              <div className="flex-1" />
+              <AgentCardButton agentName={msg.modelName?.replace('Agent: ', '') || ''} />
             </div>
             <div className="px-3 py-2">
               {msg.streaming && !msg.content && !msg.agentTimeline?.length && (
@@ -265,6 +269,80 @@ function AgentToolCallItem({ tc }: { tc: AgentToolCallEntry }) {
             {tc.output}
           </pre>
         </div>
+      )}
+    </div>
+  )
+}
+
+/** Agent 工卡按钮 + 弹窗 */
+function AgentCardButton({ agentName }: { agentName: string }) {
+  const { user } = useAuth()
+  const [show, setShow] = useState(false)
+  const [agent, setAgent] = useState<Agent | null>(null)
+
+  useEffect(() => {
+    if (show && user?.id) {
+      listAgents(user.id).then(list => {
+        setAgent(list.find(a => a.name === agentName) || null)
+      }).catch(() => setAgent(null))
+    }
+  }, [show, user?.id, agentName])
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        className="p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors"
+        onClick={() => setShow(!show)}
+        title="查看 Agent 详情"
+      >
+        <Info className="h-3.5 w-3.5" />
+      </button>
+      {show && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setShow(false)} />
+          <div className="absolute right-0 top-full z-50 mt-1 w-64 rounded-lg border border-border bg-card shadow-lg">
+            <div className="px-3 py-2.5 border-b border-border/50">
+              <div className="flex items-center gap-1.5">
+                <MessageSquare className="h-3.5 w-3.5 text-primary/50 shrink-0" />
+                <span className="text-xs font-semibold truncate">{agentName}</span>
+              </div>
+              {agent?.description && (
+                <p className="text-[10px] text-muted-foreground/60 mt-1 leading-relaxed">{agent.description}</p>
+              )}
+            </div>
+            {agent ? (
+              <div className="px-3 py-2 space-y-2 text-xs">
+                {agent.skills.length > 0 && (
+                  <div>
+                    <span className="text-[10px] font-medium text-muted-foreground/50 uppercase tracking-wider">Skills</span>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {agent.skills.map(s => (
+                        <span key={s.id} className="inline-block rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                          {s.name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="flex items-center gap-4 text-[10px] text-muted-foreground/50">
+                  <span>类型: {agent.type === 'local' ? '本地' : '远程'}</span>
+                  <span>版本: {agent.version || '-'}</span>
+                </div>
+                {agent.url && (
+                  <a href={agent.url} target="_blank" className="flex items-center gap-1 text-[10px] text-primary/60 hover:text-primary transition-colors"
+                    onClick={e => {
+                      e.preventDefault()
+                      ;(window as any).electronAPI?.shell?.openExternal(agent.url)
+                    }}>
+                    <ExternalLink className="h-2.5 w-2.5" />{agent.url}
+                  </a>
+                )}
+              </div>
+            ) : (
+              <p className="px-3 py-4 text-[10px] text-muted-foreground/40 text-center">无法加载 Agent 详情</p>
+            )}
+          </div>
+        </>
       )}
     </div>
   )
