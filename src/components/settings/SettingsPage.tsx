@@ -99,6 +99,34 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
   const [bingResultCount, setBingResultCount] = useState(getBingResultCount)
   const [bingTimeout, setBingTimeout] = useState(getBingTimeout)
   const [capExpanded, setCapExpanded] = useState<Record<string, boolean>>({ sandbox: true, search: true })
+
+  // 更新日志
+  const [changelog, setChangelog] = useState<Array<{ version: string; date: string; items: string[] }>>([])
+  useEffect(() => {
+    const url = 'https://cdn.jsdelivr.net/gh/Tianzeyui/brainPlus@main/CHANGELOG.md'
+    const fetchChangelog = async () => {
+      try {
+        const api = (window as any).electronAPI?.http
+        if (!api) return
+        const result = await api.fetch(url)
+        if (!result.success || result.status !== 200) return
+        const text = result.data
+        // 解析: ## v0.22.0 (2026-06-14) ... - item1 ... - item2 ... ## v0.21.0 ...
+        const entries: Array<{ version: string; date: string; items: string[] }> = []
+        const sections = text.split(/\n## /).slice(1) // 跳过标题
+        for (const sec of sections) {
+          const lines = sec.trim().split('\n')
+          const headerMatch = lines[0].match(/^v([\d.]+)\s*(?:\((.+?)\))?/)
+          if (!headerMatch) continue
+          const items = lines.slice(1).filter(l => l.trim().startsWith('- ')).map(l => l.replace(/^-\s*/, ''))
+          entries.push({ version: `v${headerMatch[1]}`, date: headerMatch[2] || '', items })
+        }
+        setChangelog(entries)
+      } catch {}
+    }
+    fetchChangelog()
+  }, [])
+
   const memoryManagerRef = useRef(new MemoryManager(
     // 短期记忆只读 —— 设置页无法确定当前 convId，仅展示长期记忆
     createLocalMemoryStore('settings'),
@@ -943,9 +971,29 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
               <img src="/assets/icons/icon.png" alt="BrainPlus" className="w-20 h-20 rounded-2xl mb-4 shadow-sm" />
               <h2 className="text-xl font-bold text-foreground mb-1">BrainPlus</h2>
               <p className="text-sm text-muted-foreground mb-6">Version {APP_VERSION}</p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-muted-foreground mb-6">
                 开源自由的 AI Agent 平台。
               </p>
+              {changelog.length > 0 && (
+                <div className="w-full max-w-xs text-left mb-4">
+                  <h3 className="text-xs font-semibold text-muted-foreground mb-2 text-center">更新日志</h3>
+                  <div className="space-y-2 max-h-48 overflow-auto">
+                    {changelog.map(entry => (
+                      <div key={entry.version} className="rounded border border-border px-3 py-2">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs font-medium">{entry.version}</span>
+                          {entry.date && <span className="text-[10px] text-muted-foreground/50">{entry.date}</span>}
+                        </div>
+                        <ul className="space-y-0.5">
+                          {entry.items.map((item, i) => (
+                            <li key={i} className="text-[10px] text-muted-foreground/60 pl-2">{item}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             <div className="pb-8">
               <div className="relative inline-block mb-3">
