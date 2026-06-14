@@ -808,15 +808,15 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
                       <button className="p-1 text-muted-foreground/30 hover:text-foreground transition-colors" onClick={() => openEditDialog(model)} title="编辑">
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
+                      <button className="p-1 text-muted-foreground/30 hover:text-destructive transition-colors"
+                        onClick={() => { if (confirm(`确定删除「${model.displayName}」连接？`)) handleDeleteModel(model.id) }}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                       <button
                         className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${model.enabled ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600'}`}
                         onClick={() => toggleModel(model.id)}
                       >
                         <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${model.enabled ? 'translate-x-4' : 'translate-x-1'}`} />
-                      </button>
-                      <button className="p-1 text-muted-foreground/30 hover:text-destructive transition-colors"
-                        onClick={() => { if (confirm(`确定删除「${model.displayName}」连接？`)) handleDeleteModel(model.id) }}>
-                        <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   </div>
