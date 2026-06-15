@@ -5,7 +5,6 @@
 import { jsonSchema } from 'ai'
 import type { ToolMap } from './registry'
 import { createFileOp, updateFileOp, getFileOp, setFileOpResolver } from '@/lib/fileOpManager'
-import { getFileOpUIHandler } from '@/lib/chatService'
 
 /** 当前工作区根目录（由 ChatPage 动态注入） */
 let _workspaceRoot: string | undefined
@@ -25,7 +24,9 @@ function isInsideWorkspace(filePath: string): boolean {
   return absPath.startsWith(root)
 }
 
-function notifyUI(event: any) { getFileOpUIHandler()?.(event) }
+function notifyUI(event: any) {
+  window.dispatchEvent(new CustomEvent('brainplus:fileop', { detail: event }))
+}
 
 /** 确认流程：工作区外操作需用户确认。返回 { confirmed, id }，调用方用 id 更新状态 */
 async function confirmOutside(opType: 'write' | 'delete', absPath: string, content?: string): Promise<{ confirmed: boolean; id: string }> {

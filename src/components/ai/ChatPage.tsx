@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { chat, setAgentUIHandler, setTerminalUIHandler, setFileOpUIHandler, type ChatStreamEvent, type AskUserEvent } from '@/lib/chatService'
+import { chat, setAgentUIHandler, setTerminalUIHandler, type ChatStreamEvent, type AskUserEvent } from '@/lib/chatService'
 import type { ModelMessage } from 'ai'
 import { formatDuration, estimateTokens } from '@/lib/observability'
 import { ContextWindowManager } from '@/lib/contextWindowManager'
@@ -339,9 +339,10 @@ export function ChatPage() {
     return () => { setTerminalUIHandler(() => {}) }
   }, [])
 
-  // 文件操作 UI 事件
+  // 文件操作 UI 事件（用 DOM 事件，避免模块级变量 HMR 后丢失）
   useEffect(() => {
-    setFileOpUIHandler((event: any) => {
+    const handler = (e: CustomEvent) => {
+      const event = e.detail
       if (event.type === 'fileop_created') {
         setMessages(prev => [...prev, { role: 'assistant', content: '', fileOp: event.fileOp, streaming: false } as any])
       } else if (event.type === 'fileop_updated') {
@@ -352,8 +353,9 @@ export function ChatPage() {
           return m
         }))
       }
-    })
-    return () => { setFileOpUIHandler(null) }
+    }
+    window.addEventListener('brainplus:fileop', handler as EventListener)
+    return () => window.removeEventListener('brainplus:fileop', handler as EventListener)
   }, [])
 
   // 新对话
