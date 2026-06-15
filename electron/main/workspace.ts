@@ -1,7 +1,7 @@
 /**
  * AI 工作区管理
- * 支持用户选择任意目录作为工作区根，AI 在其中读写
- * 默认: ~/BrainPlus/workspace/
+ * .brainplus/ 目录同时作为工作区标识和内部存储
+ * 结构: {root}/.brainplus/output/  AI 生成的文件
  */
 import { app, shell, dialog, BrowserWindow } from 'electron'
 import fs from 'fs'
@@ -10,10 +10,9 @@ import path from 'path'
 const CONFIG_FILE = path.join(app.getPath('userData'), 'workspace.json')
 
 interface WorkspaceConfig {
-  root: string   // 工作区根目录（绝对路径）
+  root: string
 }
 
-// 默认值
 const DEFAULT_ROOT = path.join(app.getPath('home'), 'BrainPlus', 'workspace')
 
 function loadConfig(): WorkspaceConfig {
@@ -41,6 +40,13 @@ function getRoot(): string {
   return _cachedRoot
 }
 
+/** 检测目录是否为 BrainPlus 工作区（有 .brainplus/ 目录） */
+export function isBrainPlusWorkspace(dirPath: string): boolean {
+  try {
+    return fs.existsSync(path.join(dirPath, '.brainplus'))
+  } catch { return false }
+}
+
 export function setWorkspaceRoot(newRoot: string): boolean {
   try {
     const absRoot = path.resolve(newRoot)
@@ -50,8 +56,8 @@ export function setWorkspaceRoot(newRoot: string): boolean {
     if (!fs.statSync(absRoot).isDirectory) return false
     _cachedRoot = absRoot
     saveConfig({ root: absRoot })
-    // 确保 output 子目录存在
-    fs.mkdirSync(path.join(absRoot, 'output'), { recursive: true })
+    // 确保 .brainplus/output 存在
+    fs.mkdirSync(path.join(absRoot, '.brainplus', 'output'), { recursive: true })
     console.log('[Workspace] Root changed:', absRoot)
     return true
   } catch (e: any) {
@@ -60,7 +66,6 @@ export function setWorkspaceRoot(newRoot: string): boolean {
   }
 }
 
-/** 打开原生目录选择器，返回所选路径 */
 export async function pickWorkspaceRoot(win: BrowserWindow): Promise<string | null> {
   const result = await dialog.showOpenDialog(win, {
     title: '选择工作区目录',
@@ -71,39 +76,33 @@ export async function pickWorkspaceRoot(win: BrowserWindow): Promise<string | nu
 }
 
 export function resetWorkspaceRoot(): void {
-  try {
-    if (fs.existsSync(CONFIG_FILE)) fs.unlinkSync(CONFIG_FILE)
-  } catch {}
+  try { if (fs.existsSync(CONFIG_FILE)) fs.unlinkSync(CONFIG_FILE) } catch {}
   _cachedRoot = DEFAULT_ROOT
-  fs.mkdirSync(path.join(DEFAULT_ROOT, 'output'), { recursive: true })
+  fs.mkdirSync(path.join(DEFAULT_ROOT, '.brainplus', 'output'), { recursive: true })
 }
 
-export function getWorkspaceInfo(): { root: string; output: string; isCustom: boolean } {
+export function getWorkspaceInfo(): { root: string; output: string; brainplusDir: string; isCustom: boolean } {
   const root = getRoot()
   return {
     root,
-    output: path.join(root, 'output'),
+    brainplusDir: path.join(root, '.brainplus'),
+    output: path.join(root, '.brainplus', 'output'),
     isCustom: root !== DEFAULT_ROOT,
   }
 }
 
 export function getWorkspacePaths() {
-  const root = getRoot()
-  return {
-    root,
-    output: path.join(root, 'output'),
-    isCustom: root !== DEFAULT_ROOT,
-  }
+  return getWorkspaceInfo()
 }
 
 export function initWorkspace() {
   const root = getRoot()
-  fs.mkdirSync(root, { recursive: true })
-  fs.mkdirSync(path.join(root, 'output'), { recursive: true })
+  fs.mkdirSync(path.join(root, '.brainplus', 'output'), { recursive: true })
   console.log('[Workspace] Ready:', root)
 }
 
-// 以下为原有工具函数（兼容）
+// ====== 原有工具函数（不变） ======
+
 export function listOutputFiles(): Array<{ name: string; path: string; size: number; mtime: string }> {
   const { output } = getWorkspacePaths()
   if (!fs.existsSync(output)) return []

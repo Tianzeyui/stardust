@@ -22,7 +22,7 @@ export function useWorkspace(projectId?: string | null): WorkspacePaths & { refr
     if (projectId) {
       const p = projectStore.getById(projectId)
       if (p?.path) {
-        setPaths({ root: p.path, output: `${p.path}/output`, isCustom: true })
+        setPaths({ root: p.path, output: `${p.path}/.brainplus/output`, isCustom: true })
         return
       }
     }

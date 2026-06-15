@@ -96,7 +96,7 @@ class ProjectStoreImpl {
         await api.fs.mkdir(projectDir)
       } catch {}
     }
-    await api.fs.mkdir(`${projectDir}/output`).catch(() => {})
+    await api.fs.mkdir(`${projectDir}/.brainplus/output`).catch(() => {})
 
     const project: Project = {
       id, name, description,
