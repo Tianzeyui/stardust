@@ -251,7 +251,8 @@ export async function registerWorkspaceTools(tools: ToolMap) {
       required: ['pattern'],
     }),
     execute: async (args: { pattern: string; path?: string }) => {
-      const basePath = args.path || getRoot()
+      const root = getRoot()
+      const basePath = args.path ? (args.path.startsWith('/') ? args.path : `${root}/${args.path}`) : root
       const regex = globToRegex(args.pattern)
       const results: string[] = []
       await globWalk(basePath, regex, basePath, results, 0)
