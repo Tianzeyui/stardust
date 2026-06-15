@@ -328,4 +328,61 @@ export async function registerWorkspaceTools(tools: ToolMap) {
       }
     },
   }
+
+  tools['workspace_edit_file'] = {
+    description:
+      '精确编辑文件：查找 old_string 并替换为 new_string。old_string 必须在文件中唯一出现（否则报错）。' +
+      '可设置 replace_all=true 替换所有匹配。对大文件改几行时比 write 更高效安全。' +
+      '工作区外需用户确认。',
+    inputSchema: jsonSchema({
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: '文件路径' },
+        old_string: { type: 'string', description: '要被替换的原始字符串（必须唯一匹配）' },
+        new_string: { type: 'string', description: '替换后的新字符串' },
+        replace_all: { type: 'boolean', description: '是否替换所有匹配。默认 false（只替换第一个，且要求唯一）' },
+      },
+      required: ['path', 'old_string', 'new_string'],
+    }),
+    execute: async (args: { path: string; old_string: string; new_string: string; replace_all?: boolean }) => {
+      const api = window.electronAPI?.fs
+      if (!api) return '文件系统不可用'
+      const absPath = resolvePath(args.path)
+
+      // 读文件
+      const readResult = await api.readFile(absPath)
+      if (!readResult.success || readResult.content == null) return `读取失败: ${readResult.error || '文件不存在'}`
+      const original = readResult.content
+
+      // 检查匹配
+      const count = original.split(args.old_string).length - 1
+      if (count === 0) return `❌ 未找到匹配的 old_string。请确认字符串内容与文件中完全一致（包括空格、缩进、换行）。`
+      if (!args.replace_all && count > 1) {
+        return `❌ old_string 匹配了 ${count} 处，不唯一。请扩大匹配范围（包含更多上下文）使其唯一，或设置 replace_all=true。`
+      }
+
+      const newContent = args.replace_all
+        ? original.split(args.old_string).join(args.new_string)
+        : original.replace(args.old_string, args.new_string)
+
+      // 工作区外确认
+      let fopId: string | null = null
+      if (!isInsideWorkspace(absPath)) {
+        const r = await confirmOutside('write', absPath, newContent)
+        if (!r.confirmed) return `编辑 ${absPath} 已被用户拒绝。`
+        fopId = r.id
+      }
+
+      try {
+        await api.writeFile(absPath, newContent)
+        if (fopId) notifyFileOpDone(fopId, { status: 'done', size: newContent.length })
+        const changed = newContent.length - original.length
+        const diff = changed >= 0 ? `+${changed}` : `${changed}`
+        return `✅ 已编辑 ${absPath}（${args.replace_all ? `替换 ${count} 处` : '替换 1 处'}，${diff} 字符）`
+      } catch (e: any) {
+        if (fopId) notifyFileOpDone(fopId, { status: 'error', error: e.message })
+        return `编辑失败: ${e.message}`
+      }
+    },
+  }
 }
