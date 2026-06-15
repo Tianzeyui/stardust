@@ -35,6 +35,5 @@
 
 ## 🟢 长期
 
-- [ ] 项目模板/scaffold
 - [ ] diff accept/reject 逐块修改
 - [ ] LLM 模型切换
