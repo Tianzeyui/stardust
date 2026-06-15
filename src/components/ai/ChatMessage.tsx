@@ -478,23 +478,23 @@ function AgentCardButton({ agentName }: { agentName: string }) {
   )
 }
 
-/** 文件操作气泡（确认/结果展示，样式参考终端） */
+/** 文件操作气泡（确认/结果展示） */
 function FileOpBubble({ fo }: { fo: FileOpRequest }) {
-  const icon = fo.status === 'done' ? <Check className="h-3.5 w-3.5 text-green-400 shrink-0" />
-    : fo.status === 'error' ? <X className="h-3.5 w-3.5 text-red-400 shrink-0" />
-    : fo.status === 'rejected' ? <X className="h-3.5 w-3.5 text-zinc-500 shrink-0" />
-    : <FileText className="h-3.5 w-3.5 text-yellow-400 animate-pulse shrink-0" />
+  const icon = fo.status === 'done' ? <Check className="h-3.5 w-3.5 text-green-500 shrink-0" />
+    : fo.status === 'error' ? <X className="h-3.5 w-3.5 text-destructive shrink-0" />
+    : fo.status === 'rejected' ? <X className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+    : <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
 
   return (
     <div className="flex gap-3 max-w-full">
       <div className="min-w-0 flex-1">
-        <div className="rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-xs overflow-hidden">
+        <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs overflow-hidden">
           <div className="flex items-center gap-2">
             {icon}
-            <span className="text-zinc-200 font-mono text-[11px] truncate">
+            <span className="font-mono text-[11px] truncate">
               {fo.type === 'write' ? '✎' : '✕'} {fo.path}
             </span>
-            <span className="text-[10px] text-zinc-500 shrink-0">
+            <span className="text-[10px] text-muted-foreground shrink-0">
               {fo.status === 'pending_confirm' ? '待确认'
                 : fo.status === 'done' ? (fo.size != null ? `${fo.size} 字符` : '已删除')
                 : fo.status === 'error' ? '失败'
@@ -504,11 +504,11 @@ function FileOpBubble({ fo }: { fo: FileOpRequest }) {
 
           {fo.status === 'pending_confirm' && (
             <div className="flex items-center gap-2 mt-2">
-              <button className="flex items-center gap-1 rounded bg-green-700 px-2.5 py-1 text-[10px] text-green-100 hover:bg-green-600 transition-colors"
+              <button className="flex items-center gap-1 rounded bg-primary px-2.5 py-1 text-[10px] text-primary-foreground hover:bg-primary/90 transition-colors"
                 onClick={async () => { const { confirmFileOp } = await import('@/lib/fileOpManager'); confirmFileOp(fo.id) }}>
                 <Check className="h-3 w-3" />确认{fo.type === 'write' ? '写入' : '删除'}
               </button>
-              <button className="flex items-center gap-1 rounded bg-zinc-700 px-2.5 py-1 text-[10px] text-zinc-300 hover:bg-zinc-600 transition-colors"
+              <button className="flex items-center gap-1 rounded bg-muted px-2.5 py-1 text-[10px] text-muted-foreground hover:bg-muted/80 transition-colors"
                 onClick={async () => { const { rejectFileOp } = await import('@/lib/fileOpManager'); rejectFileOp(fo.id) }}>
                 <X className="h-3 w-3" />拒绝
               </button>
@@ -516,7 +516,7 @@ function FileOpBubble({ fo }: { fo: FileOpRequest }) {
           )}
 
           {fo.status === 'error' && fo.error && (
-            <div className="mt-1 text-[10px] text-red-400 font-mono">{fo.error}</div>
+            <div className="mt-1 text-[10px] text-destructive font-mono">{fo.error}</div>
           )}
         </div>
       </div>
