@@ -589,15 +589,12 @@ function DiffFileBlock({ lines: allLines }: { lines: string[] }) {
           : isHdr ? 'bg-muted/50 text-muted-foreground text-[10px]'
           : ''
         return (
-          <div key={i} className={`flex px-3 py-px ${rowCls}`}>
-            {/* 行号列 */}
-            <span className="shrink-0 w-14 text-right select-none text-zinc-600 text-[10px] mr-2">
-              {isHdr ? '' : nums ? `${nums.old ?? ''}` : ''}
+          <div key={i} className={`flex items-baseline px-3 py-px ${rowCls}`}>
+            {/* 行号 + 符号列：固定总宽度保证内容对齐 */}
+            <span className="shrink-0 inline-flex w-12 text-[10px] text-zinc-600 select-none">
+              <span className="w-8 text-right">{isHdr ? '' : `${nums?.old ?? nums?.new ?? ''}`}</span>
+              <span className={`w-4 text-center font-semibold ${isAdd ? 'text-zinc-400' : isDel ? 'text-zinc-300' : 'text-zinc-500'}`}>{prefix ?? ''}</span>
             </span>
-            {/* 符号列 */}
-            {prefix != null && (
-              <span className={`shrink-0 w-3 select-none font-semibold ${isAdd ? 'text-zinc-400' : isDel ? 'text-zinc-300' : 'text-zinc-500'}`}>{prefix}</span>
-            )}
             <span className="whitespace-pre-wrap break-all">{body || ' '}</span>
           </div>
         )
