@@ -60,7 +60,7 @@ export function ChatPage() {
   const [loading, setLoading] = useState(false)
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null)
   const { configuredModels, activeModel, setActiveModel, refreshModels } = useModelLoader()
-  const workspace = useWorkspace()
+  const workspace = useWorkspace(currentProjectId)
   const projectSettings = currentProjectId ? projectStore.getById(currentProjectId)?.settings : null
   // 插件工具列表
   const pluginToolEntries = (() => {
