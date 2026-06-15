@@ -276,7 +276,7 @@ export function ChatPage() {
     } : undefined
     window.electronAPI.conv.save({
       id: convId, title: convTitle, messages, modelName,
-      createdAt: '', updatedAt: new Date().toISOString(),
+      projectId: currentProjectId, createdAt: '', updatedAt: new Date().toISOString(),
       compression,
     } as any)
     // 更新列表
@@ -528,9 +528,9 @@ export function ChatPage() {
     // 确保有对话
     let cid = convId
     if (!cid && window.electronAPI?.conv) {
-      const c = await window.electronAPI.conv.create('新对话')
+      const c = await window.electronAPI.conv.create('新对话', undefined, currentProjectId)
       cid = c.id; setConvId(c.id)
-      setConvList(prev => [{ id: c.id, title: '新对话', messageCount: 0, updatedAt: c.updatedAt }, ...prev])
+      setConvList(prev => [{ id: c.id, title: '新对话', messageCount: 0, updatedAt: c.updatedAt, projectId: currentProjectId }, ...prev])
       // 立即创建 MemoryManager（不等 useEffect），确保首条消息也能注入记忆
       setMemoryManager(new MemoryManager(
         createLocalMemoryStore(cid),
