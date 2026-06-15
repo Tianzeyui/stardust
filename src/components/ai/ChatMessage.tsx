@@ -545,16 +545,16 @@ function DiffBlock({ text }: { text: string }) {
         const isHdr = line.startsWith('@@')
         const prefix = isHdr ? null : line.slice(0, 1)
         const body = isHdr ? line : line.slice(1)
-        const rowCls = isAdd ? 'bg-emerald-50 border-l-2 border-emerald-400'
-          : isDel ? 'bg-red-50 border-l-2 border-red-300'
+        const rowCls = isAdd ? 'bg-zinc-800 text-zinc-100'
+          : isDel ? 'bg-zinc-100 text-zinc-400 line-through'
           : isHdr ? 'bg-muted text-muted-foreground text-[10px] font-medium'
-          : 'border-l-2 border-transparent'
+          : ''
         return (
           <div key={i} className={`flex px-3 py-px ${rowCls}`}>
             {prefix != null && (
-              <span className={`shrink-0 w-4 select-none font-semibold ${isAdd ? 'text-emerald-600' : isDel ? 'text-red-500' : 'text-zinc-400'}`}>{prefix}</span>
+              <span className={`shrink-0 w-4 select-none font-semibold ${isAdd ? 'text-zinc-400' : isDel ? 'text-zinc-300' : 'text-zinc-500'}`}>{prefix}</span>
             )}
-            <span className="whitespace-pre-wrap break-all text-foreground/80">{body || ' '}</span>
+            <span className="whitespace-pre-wrap break-all">{body || ' '}</span>
           </div>
         )
       })}
