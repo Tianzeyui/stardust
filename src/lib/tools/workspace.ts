@@ -236,10 +236,34 @@ export async function registerWorkspaceTools(tools: ToolMap) {
       const basePath = args.path ? (args.path.startsWith('/') ? args.path : `${root}/${args.path}`) : root
       const regex = globToRegex(args.pattern)
 
-      // 用系统 find 收集文件列表
+      // 用系统命令收集文件列表（跨平台）
       const fsApi = window.electronAPI?.fs
-      const findResult = fsApi?.find ? await fsApi.find(basePath) : null
-      const allFiles: string[] = findResult?.success ? findResult.files! : []
+      let allFiles: string[] = []
+      if (fsApi?.find) {
+        const r = await fsApi.find(basePath)
+        if (r.success) allFiles = r.files!
+      }
+      // 系统命令不可用时回退 IPC 遍历
+      if (allFiles.length === 0) {
+        const fallback: string[] = []
+        const skip = ['node_modules','.git','.brainplus','dist','build','.next','__pycache__','.DS_Store']
+        async function walk(dir: string, depth: number) {
+          if (depth > 15 || fallback.length >= 500) return
+          const api = window.electronAPI?.fs
+          if (!api) return
+          const lr = await api.listDir(dir)
+          if (!lr.success || !lr.files) return
+          for (const name of lr.files) {
+            if (skip.includes(name)) continue
+            const cp = `${dir.replace(/\/+$/, '')}/${name}`
+            fallback.push(cp)
+            const sub = await api.listDir(cp)
+            if (sub.success) await walk(cp, depth + 1)
+          }
+        }
+        await walk(basePath, 0)
+        allFiles = fallback
+      }
 
       const plen = basePath.length + 1
       const results = allFiles

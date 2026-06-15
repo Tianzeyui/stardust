@@ -275,6 +275,14 @@ ipcMain.handle('fs:find', async (_event, dirPath: string) => {
   try {
     const { execSync } = await import('child_process')
     const excludes = ['node_modules', '.git', '.brainplus', 'dist', 'build', '.next', '__pycache__', '.DS_Store']
+    if (process.platform === 'win32') {
+      // Windows: dir /s /b
+      const stdout = execSync(`dir /s /b /a-d "${dirPath}"`, { encoding: 'utf-8', timeout: 10000, maxBuffer: 1024 * 1024 })
+      const lines = stdout.trim().split('\r\n').filter(Boolean)
+      const filtered = lines.filter(f => !excludes.some(e => f.includes(`\\${e}\\`)))
+      return { success: true, files: filtered }
+    }
+    // macOS/Linux: find
     const args = excludes.map(d => `-not -path '*/${d}/*'`).join(' ')
     const stdout = execSync(`find '${dirPath}' -type f ${args}`, { encoding: 'utf-8', timeout: 10000, maxBuffer: 1024 * 1024 })
     return { success: true, files: stdout.trim().split('\n').filter(Boolean) }
