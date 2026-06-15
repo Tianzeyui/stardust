@@ -589,7 +589,7 @@ function DiffFileBlock({ lines: allLines }: { lines: string[] }) {
           : isHdr ? 'bg-muted/50 text-muted-foreground text-[10px]'
           : ''
         return (
-          <div key={i} className={`flex items-baseline px-3 py-px ${rowCls}`}>
+          <div key={i} className={`flex items-baseline pl-1 pr-2 py-px ${rowCls}`}>
             {/* 行号 + 符号列：固定总宽度保证内容对齐 */}
             <span className="shrink-0 inline-flex w-12 text-[10px] text-zinc-600 select-none">
               <span className="w-8 text-right">{isHdr ? '' : `${nums?.old ?? nums?.new ?? ''}`}</span>
