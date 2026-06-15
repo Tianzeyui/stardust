@@ -135,6 +135,29 @@ export function ChatPage() {
   const endRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const userPausedRef = useRef(false)
+  const pendingUpdateRef = useRef<(() => void) | null>(null)
+  const rafRef = useRef(0)
+  const streamTickRef = useRef(0)
+
+  // 节流消息更新：每 16ms 最多刷一次（~60fps）
+  const tickMessages = useCallback((fn: () => void) => {
+    const now = Date.now()
+    if (now - streamTickRef.current < 16) {
+      // 存最新的更新函数，延迟执行
+      pendingUpdateRef.current = fn
+      if (!rafRef.current) {
+        rafRef.current = requestAnimationFrame(() => {
+          rafRef.current = 0
+          streamTickRef.current = Date.now()
+          pendingUpdateRef.current?.()
+          pendingUpdateRef.current = null
+        })
+      }
+      return
+    }
+    streamTickRef.current = now
+    fn()
+  }, [])
   const [showScrollBtn, setShowScrollBtn] = useState(false)
 
   useEffect(() => { messagesRef.current = messages }, [messages])

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, memo } from 'react'
 import { Check, X, Shield, ShieldCheck, Cable, BookOpen, MessageSquare, FileText, Image, Zap, FolderOpen, Loader2, ChevronDown, IdCard, ExternalLink, Brain, Terminal } from 'lucide-react'
 import MarkdownPreview from '@uiw/react-markdown-preview'
 import type { UIMessage, ToolCallStatus, MessageAttachment, AgentToolCallEntry, AgentTimelineItem, TerminalStatus } from '@/types/chat'
@@ -43,7 +43,7 @@ const TOOL_STYLE: Record<string, {
   workspace: { icon: Check, labelIcon: FolderOpen, label: '工作区' },
 }
 
-export function ChatMessage({ msg }: ChatMessageProps) {
+function ChatMessageInner({ msg }: ChatMessageProps) {
   if (msg.terminal) {
     return (
       <TerminalBubble
@@ -715,3 +715,5 @@ export function TerminalBubble({ ts, onConfirm, onReject }: {
     </div>
   )
 }
+
+export const ChatMessage = memo(ChatMessageInner)
