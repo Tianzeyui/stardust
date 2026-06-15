@@ -545,7 +545,7 @@ function DiffBlock({ text }: { text: string }) {
         const isHdr = line.startsWith('@@')
         const prefix = isHdr ? null : line.slice(0, 1)
         const body = isHdr ? line : line.slice(1)
-        const rowCls = isAdd ? 'bg-zinc-700 text-zinc-100'
+        const rowCls = isAdd ? 'bg-zinc-800 text-zinc-200'
           : isDel ? 'bg-zinc-100 text-zinc-400 line-through'
           : isHdr ? 'bg-muted text-muted-foreground text-[10px] font-medium'
           : ''
