@@ -1204,8 +1204,8 @@ export function ChatPage() {
         onNew={handleNewConv}
         onProjectChange={(pid) => {
           setCurrentProjectId(pid)
-          setConvId(null); setMessages([]); setCompressionInfo(null)
-          setConvList([]) // 立即清空旧列表，等待 loadConvList 加载新数据
+          setConvId(null); setConvTitle('新对话'); setMessages([]); setCompressionInfo(null)
+          setConvList([])
         }}
         onSwitch={handleSwitchConv}
         onDelete={handleDeleteConv}
