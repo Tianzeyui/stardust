@@ -206,12 +206,14 @@ export async function registerWorkspaceTools(tools: ToolMap) {
 
   // glob 转正则
   function globToRegex(pattern: string): RegExp {
-    // 先保护 **，避免被 * 替换误伤
+    // 用不含 * 的字符串占位，防止被后续 *→[^/]* 替换误伤
+    const PH = '\x00DEEP\x00'
     let p = pattern
       .replace(/\./g, '\\.')
-      .replace(/\*\*\//g, '\x00DEEP\x00')  // **/ → 占位符
-      .replace(/\*/g, '[^/]*')               // * → 匹配非斜杠字符
-      .replace(/\x00DEEP\x00/g, '(?:.+/)*') // 占位符 → 任意深度目录
+      // 先处理 **/ 再处理 *（顺序关键）
+      .replace(/\*\*\//g, PH)               // **/ → 占位符
+      .replace(/\*/g, '[^/]*')               // * → 非斜杠
+      .replace(/\x00DEEP\x00/g, '(?:.+/)*')  // 占位符 → 任意深度
       .replace(/\?/g, '[^/]')
     p = p.replace(/\{([^}]+)\}/g, (_, alts) => `(${alts.split(',').join('|')})`)
     return new RegExp(`^${p}$`, 'i')
