@@ -20,15 +20,20 @@ async function exec(args: string[]): Promise<string> {
   return r.success ? (r.output || '').trim() : `Git 错误: ${r.error}\n${r.output || ''}`
 }
 
-async function confirmCommit(msg: string): Promise<boolean> {
+function notifyFileOp(event: any) {
+  window.dispatchEvent(new CustomEvent('brainplus:fileop', { detail: event }))
+}
+
+async function confirmCommit(msg: string): Promise<{ confirmed: boolean; id: string }> {
   const id = 'gcm_' + Math.random().toString(36).slice(2, 8)
   const op = createFileOp(id, 'write', `git commit -m "${msg.slice(0, 60)}"`, msg)
-  window.dispatchEvent(new CustomEvent('brainplus:fileop', { detail: { type: 'fileop_created', fileOp: { ...op } } }))
+  notifyFileOp({ type: 'fileop_created', fileOp: { ...op } })
   const confirmed = await new Promise<boolean>(resolve => { setFileOpResolver(id, resolve) })
   if (!confirmed) {
-    window.dispatchEvent(new CustomEvent('brainplus:fileop', { detail: { type: 'fileop_updated', fileOp: { ...op, status: 'rejected' } } }))
+    const o = { ...op, status: 'rejected' as const }
+    notifyFileOp({ type: 'fileop_updated', fileOp: o })
   }
-  return confirmed
+  return { confirmed, id }
 }
 
 export function registerGitTools(tools: ToolMap) {
@@ -101,9 +106,12 @@ export function registerGitTools(tools: ToolMap) {
       required: ['message'],
     }),
     execute: async (args: { message: string }) => {
-      const ok = await confirmCommit(args.message)
-      if (!ok) return '提交已被用户拒绝。'
-      return exec(['commit', '-m', args.message])
+      const r = await confirmCommit(args.message)
+      if (!r.confirmed) return '提交已被用户拒绝。'
+      const result = await exec(['commit', '-m', args.message])
+      const success = !result.startsWith('Git 错误')
+      notifyFileOp({ type: 'fileop_updated', fileOp: { id: r.id, type: 'write', path: `git commit`, status: success ? 'done' : 'error', error: success ? undefined : result } })
+      return result
     },
   }
 
