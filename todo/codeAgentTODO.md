@@ -28,10 +28,9 @@
 
 ## 🟡 WebFetch
 
-- [ ] `web_fetch(url)` 抓取网页内容
-  - 返回网页文本（去 HTML 标签）
-  - 用于查阅文档、API 参考等
-  - Electron IPC 层用 fetch/axios 实现
+- [x] `web_fetch(url)` 抓取网页并转为纯文本 ✅
+  - 自动剥离 HTML/script/style 标签
+  - 限 15000 字符，超长截断
 
 ## 🟢 长期
 
