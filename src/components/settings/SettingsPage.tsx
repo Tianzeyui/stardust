@@ -629,12 +629,12 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
                                       setModels(prev => [...prev])
                                     }}
                                   >
-                                    <option value="fast">⚡ 快</option>
-                                    <option value="balanced">⚖ 均</option>
-                                    <option value="powerful">💪 强</option>
+                                    <option value="fast">Fast</option>
+                                    <option value="balanced">Balanced</option>
+                                    <option value="powerful">Powerful</option>
                                   </select>
                                   <span className={`text-[9px] px-1 py-px rounded font-medium ${tierColors[tier]}`}>
-                                    {tier === 'fast' ? '快' : tier === 'balanced' ? '均' : '强'}
+                                    {tier === 'fast' ? 'Fast' : tier === 'balanced' ? 'Bal' : 'Power'}
                                   </span>
                                   {model.selectedModel === sm.id && <Check className="h-3.5 w-3.5 text-primary" />}
                                 </div>
@@ -660,9 +660,9 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
                   Auto 模式下，系统根据任务复杂度自动选择模型层级。每个模型已根据名称自动标记默认层级，可直接在上方模型列表中调整。
                 </p>
                 <div className="flex gap-3 text-[10px]">
-                  <span className="flex items-center gap-1"><span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-medium">快</span> 简单任务优先</span>
-                  <span className="flex items-center gap-1"><span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">均</span> 默认使用</span>
-                  <span className="flex items-center gap-1"><span className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-medium">强</span> 复杂任务优先</span>
+                  <span className="flex items-center gap-1"><span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-medium">Fast</span> 简单任务</span>
+                  <span className="flex items-center gap-1"><span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">Balanced</span> 默认</span>
+                  <span className="flex items-center gap-1"><span className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-medium">Powerful</span> 复杂任务</span>
                 </div>
               </fieldset>
             )}
