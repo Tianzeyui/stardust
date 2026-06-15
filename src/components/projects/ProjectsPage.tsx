@@ -33,6 +33,7 @@ export function ProjectsPage() {
   const [migratePath, setMigratePath] = useState('')
   const [migrateCopy, setMigrateCopy] = useState(true)
   const [migrating, setMigrating] = useState(false)
+  const [editingName, setEditingName] = useState('')
 
   // Settings
   const [skills, setSkills] = useState<InstalledSkill[]>([])
@@ -197,7 +198,31 @@ export function ProjectsPage() {
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <FolderKanban className="h-5 w-5 text-muted-foreground" />
-                  <h3 className="text-base font-semibold">{selected.name}</h3>
+                  {editingName ? (
+                    <Input
+                      className="h-7 w-48 text-sm font-semibold"
+                      value={editingName}
+                      onChange={e => setEditingName(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          const t = editingName.trim()
+                          if (t && t !== selected.name) projectStore.update(selected.id, { name: t })
+                          setEditingName('')
+                        }
+                        if (e.key === 'Escape') setEditingName('')
+                      }}
+                      onBlur={() => setEditingName('')}
+                      autoFocus
+                    />
+                  ) : (
+                    <h3
+                      className="text-base font-semibold cursor-pointer hover:text-primary transition-colors"
+                      onClick={() => setEditingName(selected.name)}
+                      title="点击修改名称"
+                    >
+                      {selected.name}
+                    </h3>
+                  )}
                 </div>
                 {selected.description && (
                   <p className="text-sm text-muted-foreground mb-2">{selected.description}</p>
