@@ -122,8 +122,8 @@ export async function registerWorkspaceTools(tools: ToolMap) {
 
   tools['workspace_read_file'] = {
     description:
-      '读取工作区内的文件内容。支持分页：offset(起始字符位置) + length(读取字符数)，默认 length=3000。' +
-      '也支持 lines 行范围（如 "1-50"/"100-end"）。不传参数默认返回前 3000 字符。' +
+      '读取工作区内的文件内容。支持分页：offset(起始字符位置) + length(读取字符数)，默认 length=8000。' +
+      '也支持 lines 行范围（如 "1-50"/"100-end"）。不传参数默认返回前 8000 字符。' +
       `工作区根: ${root}` +
       '返回末尾附带总字符数/总行数，方便 AI 计算下一页。' +
       'PPT/Word/Excel/PDF 等文档会自动转换为 Markdown 后返回文本内容。',
@@ -132,7 +132,7 @@ export async function registerWorkspaceTools(tools: ToolMap) {
       properties: {
         path: { type: 'string', description: '文件路径（绝对路径）' },
         offset: { type: 'number', description: '起始字符位置（0-based），默认 0' },
-        length: { type: 'number', description: '读取字符数，默认 3000，最大 10000' },
+        length: { type: 'number', description: '读取字符数，默认 8000，最大 10000' },
         lines: { type: 'string', description: '行范围 "1-50" 或 "100-end"（与 offset/length 互斥）' },
       },
       required: ['path'],
@@ -147,7 +147,7 @@ export async function registerWorkspaceTools(tools: ToolMap) {
         if (convertResult.success && convertResult.content) {
           const total = convertResult.content.length
           const off = Math.max(0, args.offset || 0)
-          const len = Math.min(args.length || 3000, 10000)
+          const len = Math.min(args.length || 8000, 10000)
           const slice = convertResult.content.slice(off, off + len)
           const tail = total > off + len ? `\n\n--- 第 ${off}-${off + len} / ${total} 字符 ---` : `\n\n--- ${total} 字符（已读完）---`
           return slice + tail
@@ -176,7 +176,7 @@ export async function registerWorkspaceTools(tools: ToolMap) {
 
       // 字符分页模式（默认）
       const off = Math.max(0, args.offset || 0)
-      const len = Math.min(args.length || 3000, 10000)
+      const len = Math.min(args.length || 8000, 10000)
       const slice = content.slice(off, off + len)
       if (off + len >= totalChars) {
         return slice + `\n\n--- ${totalChars} 字符，${totalLines} 行（已读完）---`
