@@ -249,9 +249,9 @@ export async function registerWorkspaceTools(tools: ToolMap) {
           const childPath = `${dir}/${name}`
           const relPath = childPath.slice(basePath.length + 1)
           if (regex.test(relPath)) results.push(relPath)
-          // 尝试递归：用 listDir 判断是否是目录
+          // 尝试递归：listDir 成功说明是目录
           const sub = await api.listDir(childPath)
-          if (sub.success && sub.files && sub.files.length > 0) {
+          if (sub.success) {
             await walk(childPath, depth + 1)
           }
         }
