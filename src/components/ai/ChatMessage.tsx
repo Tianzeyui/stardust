@@ -570,32 +570,29 @@ function DiffFileBlock({ lines: allLines }: { lines: string[] }) {
     <div className="border-b border-border/50 last:border-b-0">
       {/* 文件名标题栏 */}
       {filename && (
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/30 text-[10px] font-medium text-muted-foreground">
-          <FileText className="h-3 w-3 shrink-0" />
+        <div className="flex items-center gap-1.5 px-2 py-0.5 bg-muted/30 text-[9px] font-medium text-muted-foreground/60">
           <span className="font-mono truncate">{filename}</span>
-          <span className="text-emerald-600 ml-auto">+{adds}</span>
-          <span className="text-red-400">−{dels}</span>
+          <span className="text-emerald-600/70 ml-auto">+{adds}</span>
+          <span className="text-red-400/70">−{dels}</span>
         </div>
       )}
       {display.map((line, i) => {
         const isAdd = line.startsWith('+') && !line.startsWith('+++')
         const isDel = line.startsWith('-') && !line.startsWith('---')
         const isHdr = line.startsWith('@@')
+        if (isHdr) return null // 隐藏 hunk 头
         const nums = lineNums[i]
-        const prefix = isHdr ? null : line.slice(0, 1)
-        const body = isHdr ? line.replace(/^@@\s+-\d+(?:,\d+)?\s+\+\d+(?:,\d+)?\s+@@/, '') : line.slice(1)
+        const prefix = line.slice(0, 1)
         const rowCls = isAdd ? 'bg-zinc-800 text-zinc-200'
           : isDel ? 'bg-zinc-100 text-zinc-400 line-through'
-          : isHdr ? 'bg-muted/50 text-muted-foreground text-[10px]'
           : ''
         return (
-          <div key={i} className={`flex items-baseline pl-0 pr-2 py-px ${rowCls}`}>
-            {/* 行号 + 符号 */}
-            <span className="shrink-0 text-[10px] text-zinc-600 select-none min-w-[3rem]">
-              <span className="inline-block w-6 text-right">{isHdr ? '' : `${nums?.old ?? nums?.new ?? ''}`}</span>
-              <span className={`inline-block w-4 text-center font-semibold ${isAdd ? 'text-zinc-400' : isDel ? 'text-zinc-300' : 'text-zinc-500'}`}>{prefix ?? ''}</span>
+          <div key={i} className={`flex items-baseline pl-0 pr-1 py-0 leading-snug ${rowCls}`}>
+            <span className="shrink-0 text-[9px] text-zinc-600 select-none min-w-[2.5rem]">
+              <span className="inline-block w-5 text-right">{nums ? `${nums.old ?? nums.new ?? ''}` : ''}</span>
+              <span className={`inline-block w-3 text-center font-semibold ${isAdd ? 'text-zinc-400' : isDel ? 'text-zinc-300' : 'text-zinc-500'}`}>{prefix}</span>
             </span>
-            <span className="whitespace-pre-wrap break-all">{body || ' '}</span>
+            <span className="whitespace-pre-wrap break-all">{line.slice(1) || ' '}</span>
           </div>
         )
       })}
