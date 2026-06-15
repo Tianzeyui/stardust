@@ -237,7 +237,7 @@ export async function registerWorkspaceTools(tools: ToolMap) {
       const regex = globToRegex(args.pattern)
       const skip = new Set(['node_modules', '.git', '.brainplus', 'dist', 'build', '.next', '__pycache__', '.DS_Store'])
 
-      // 收集所有文件（递归遍历整个目录树）
+      // 递归收集所有文件：listDir 成功=目录，进入递归
       const allFiles: string[] = []
       async function walk(dir: string, depth: number) {
         if (depth > 20 || allFiles.length >= 500) return
@@ -249,11 +249,9 @@ export async function registerWorkspaceTools(tools: ToolMap) {
           if (skip.has(name)) continue
           const childPath = `${dir.replace(/\/+$/, '')}/${name}`
           allFiles.push(childPath)
-          // stat 仅用于判断是否递归，失败也继续
-          try {
-            const s = await api.stat(childPath)
-            if (s.success && s.stat?.isDirectory) await walk(childPath, depth + 1)
-          } catch { /* stat failed, skip recursion for this entry */ }
+          // 判断是否目录：再 listDir 一次，成功则递归
+          const sub = await api.listDir(childPath)
+          if (sub.success) await walk(childPath, depth + 1)
         }
       }
       await walk(basePath, 0)
