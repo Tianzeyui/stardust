@@ -81,9 +81,7 @@ export function ProjectsPage() {
   const browseProjectPath = async () => {
     const result = await window.electronAPI?.dialog?.openDirectory()
     if (result?.success && result.path) {
-      // 在所选目录下创建以项目名命名的子目录
-      const dir = `${result.path}/${(newName || '新项目').replace(/[^a-zA-Z0-9一-鿿_-]/g, '_')}`
-      setNewPath(dir)
+      setNewPath(result.path)
     }
   }
 
