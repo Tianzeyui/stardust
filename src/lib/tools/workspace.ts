@@ -1,8 +1,20 @@
 /**
  * 工作区工具：列出目录、读取文件、搜索文件
+ * 路径由 ChatPage 注入，跟随项目/全局工作区切换
  */
 import { jsonSchema } from 'ai'
 import type { ToolMap } from './registry'
+
+/** 当前工作区根目录（由 ChatPage 动态注入） */
+let _workspaceRoot: string | undefined
+let _workspaceOutput: string | undefined
+export function setWorkspaceRoots(root: string, output: string) {
+  _workspaceRoot = root
+  _workspaceOutput = output
+}
+
+function getRoot(): string { return _workspaceRoot || '~/BrainPlus/workspace' }
+function getOutput(): string { return _workspaceOutput || '~/BrainPlus/workspace/.brainplus/output' }
 
 async function listDirTree(dirPath: string, maxDepth: number, currentDepth: number): Promise<string> {
   const api = window.electronAPI?.fs
@@ -50,12 +62,13 @@ async function searchFiles(basePath: string, query: string, results: string[] = 
 export async function registerWorkspaceTools(tools: ToolMap) {
   if (!window.electronAPI?.workspace || !window.electronAPI?.fs) return
 
-  const wsPaths = await window.electronAPI.workspace.getPaths()
+  const root = getRoot()
+  const output = getOutput()
 
   tools['workspace_list_dir'] = {
     description:
       '列出工作区目录下的文件和子目录。depth: 递归深度(默认1, 最大3)。' +
-      `根目录: ${wsPaths.root}`,
+      `根目录: ${root}`,
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
@@ -64,7 +77,7 @@ export async function registerWorkspaceTools(tools: ToolMap) {
       },
     }),
     execute: async (args: { path?: string; depth?: number }) => {
-      const dirPath = args.path || wsPaths.output
+      const dirPath = args.path || getRoot()
       const depth = Math.min(args.depth || 1, 3)
       const result = await listDirTree(dirPath, depth, 0)
       return result || '(空目录)'
@@ -75,7 +88,7 @@ export async function registerWorkspaceTools(tools: ToolMap) {
     description:
       '读取工作区内的文件内容。自动识别文档格式并转换为文本。' +
       '支持 lines 参数分段读取（如 "1-100"/"100-end"）。' +
-      `可读目录: ${wsPaths.output}` +
+      `工作区根: ${root}` +
       'PPT/Word/Excel/PDF 等文档会自动转换为 Markdown 后返回文本内容。',
     inputSchema: jsonSchema({
       type: 'object',
@@ -122,7 +135,7 @@ export async function registerWorkspaceTools(tools: ToolMap) {
   tools['workspace_search'] = {
     description:
       '在工作区目录中搜索文件。支持通配符匹配文件名。' +
-      `搜索范围: ${wsPaths.root}`,
+      `搜索范围: ${root}`,
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
@@ -132,7 +145,7 @@ export async function registerWorkspaceTools(tools: ToolMap) {
       required: ['query'],
     }),
     execute: async (args: { query: string; path?: string }) => {
-      const basePath = args.path || wsPaths.root
+      const basePath = args.path || getRoot()
       const results = await searchFiles(basePath, args.query, [])
       return results.length > 0 ? results.join('\n') : `未找到匹配 "${args.query}" 的文件`
     },
