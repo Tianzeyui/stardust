@@ -267,7 +267,8 @@ export const DEFAULT_SYSTEM_PROMPT =
   '2. 需要用户决策时调用 ask_user，长任务调用 show_progress。\n' +
   '3. 不要自己替代 Agent 执行任务。\n' +
   '4. 【重要】使用 update_task_list 管理任务：开始前创建清单→开始某项标 running→完成后立即标 done。全部完成后确认清单中无遗留 running 项。\n' +
-  '5. 文件操作(workspace_write/append/delete_file)可操作任意路径，工作区外的路径会弹确认框由用户审批，你不需要判断路径是否安全。'
+  '5. 文件操作(workspace_write/append/delete_file)可操作任意路径，工作区外的路径会弹确认框由用户审批，你不需要判断路径是否安全。\n' +
+  '6. 【重要】修改代码后必须主动运行检查：TypeScript用 npx tsc --noEmit、Python用 pyright 或 ruff check、Go用 go vet、通用用项目自带的检查命令。发现错误立即修复，循环到干净为止。'
 
 export function getSystemPrompt(): string {
   try { const v = localStorage.getItem(SYSTEM_PROMPT_KEY); if (v != null) return v } catch {}
