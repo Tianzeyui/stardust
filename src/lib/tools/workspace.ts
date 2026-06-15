@@ -27,8 +27,8 @@ function isInsideWorkspace(filePath: string): boolean {
 
 function notifyUI(event: any) { getFileOpUIHandler()?.(event) }
 
-/** 确认流程：工作区外操作需用户确认 */
-async function confirmOutside(opType: 'write' | 'delete', absPath: string, content?: string): Promise<boolean> {
+/** 确认流程：工作区外操作需用户确认。返回 { confirmed, id }，调用方用 id 更新状态 */
+async function confirmOutside(opType: 'write' | 'delete', absPath: string, content?: string): Promise<{ confirmed: boolean; id: string }> {
   const id = 'fop_' + Math.random().toString(36).slice(2, 8)
   const op = createFileOp(id, opType, absPath, content)
   notifyUI({ type: 'fileop_created', fileOp: { ...op } })
@@ -37,7 +37,12 @@ async function confirmOutside(opType: 'write' | 'delete', absPath: string, conte
     updateFileOp(id, { status: 'rejected' })
     notifyUI({ type: 'fileop_updated', fileOp: { ...getFileOp(id)! } })
   }
-  return confirmed
+  return { confirmed, id }
+}
+
+function notifyFileOpDone(id: string, patch: Partial<{ status: string; error: string; size: number }>) {
+  updateFileOp(id, patch as any)
+  notifyUI({ type: 'fileop_updated', fileOp: { ...getFileOp(id)! } })
 }
 
 /** 解析绝对路径 */
@@ -222,15 +227,20 @@ export async function registerWorkspaceTools(tools: ToolMap) {
       const api = window.electronAPI?.fs
       if (!api) return '文件系统不可用'
       const absPath = resolvePath(args.path)
+      let fopId: string | null = null
       if (!isInsideWorkspace(absPath)) {
-        const ok = await confirmOutside('write', absPath, args.content)
-        if (!ok) return `写入 ${absPath} 已被用户拒绝。`
-        updateFileOp(absPath, { status: 'approved' })
+        const r = await confirmOutside('write', absPath, args.content)
+        if (!r.confirmed) return `写入 ${absPath} 已被用户拒绝。`
+        fopId = r.id
       }
       try {
         await api.writeFile(absPath, args.content)
+        if (fopId) notifyFileOpDone(fopId, { status: 'done', size: args.content.length })
         return `✅ 已写入 ${absPath} (${args.content.length} 字符)`
-      } catch (e: any) { return `写入失败: ${e.message}` }
+      } catch (e: any) {
+        if (fopId) notifyFileOpDone(fopId, { status: 'error', error: e.message })
+        return `写入失败: ${e.message}`
+      }
     },
   }
 
@@ -248,17 +258,23 @@ export async function registerWorkspaceTools(tools: ToolMap) {
       const api = window.electronAPI?.fs
       if (!api) return '文件系统不可用'
       const absPath = resolvePath(args.path)
+      let fopId: string | null = null
       if (!isInsideWorkspace(absPath)) {
-        const ok = await confirmOutside('write', absPath, args.content)
-        if (!ok) return `追加 ${absPath} 已被用户拒绝。`
+        const r = await confirmOutside('write', absPath, args.content)
+        if (!r.confirmed) return `追加 ${absPath} 已被用户拒绝。`
+        fopId = r.id
       }
       try {
         let existing = ''
         const readResult = await api.readFile(absPath)
         if (readResult.success && readResult.content) existing = readResult.content
         await api.writeFile(absPath, existing + args.content)
+        if (fopId) notifyFileOpDone(fopId, { status: 'done', size: args.content.length })
         return `✅ 已追加 ${args.content.length} 字符到 ${absPath}`
-      } catch (e: any) { return `追加失败: ${e.message}` }
+      } catch (e: any) {
+        if (fopId) notifyFileOpDone(fopId, { status: 'error', error: e.message })
+        return `追加失败: ${e.message}`
+      }
     },
   }
 
@@ -295,14 +311,20 @@ export async function registerWorkspaceTools(tools: ToolMap) {
       const api = window.electronAPI?.fs
       if (!api) return '文件系统不可用'
       const absPath = resolvePath(args.path)
+      let fopId: string | null = null
       if (!isInsideWorkspace(absPath)) {
-        const ok = await confirmOutside('delete', absPath)
-        if (!ok) return `删除 ${absPath} 已被用户拒绝。`
+        const r = await confirmOutside('delete', absPath)
+        if (!r.confirmed) return `删除 ${absPath} 已被用户拒绝。`
+        fopId = r.id
       }
       try {
         await api.unlink(absPath)
+        if (fopId) notifyFileOpDone(fopId, { status: 'done' })
         return `✅ 已删除 ${absPath}`
-      } catch (e: any) { return `删除失败: ${e.message}` }
+      } catch (e: any) {
+        if (fopId) notifyFileOpDone(fopId, { status: 'error', error: e.message })
+        return `删除失败: ${e.message}`
+      }
     },
   }
 }
