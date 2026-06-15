@@ -122,19 +122,22 @@ export async function registerWorkspaceTools(tools: ToolMap) {
 
   tools['workspace_read_file'] = {
     description:
-      '读取工作区内的文件内容。自动识别文档格式并转换为文本。' +
-      '支持 lines 参数分段读取（如 "1-100"/"100-end"）。' +
+      '读取工作区内的文件内容。支持分页：offset(起始字符位置) + length(读取字符数)，默认 length=3000。' +
+      '也支持 lines 行范围（如 "1-50"/"100-end"）。不传参数默认返回前 3000 字符。' +
       `工作区根: ${root}` +
+      '返回末尾附带总字符数/总行数，方便 AI 计算下一页。' +
       'PPT/Word/Excel/PDF 等文档会自动转换为 Markdown 后返回文本内容。',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
         path: { type: 'string', description: '文件路径（绝对路径）' },
-        lines: { type: 'string', description: '行范围 "1-50" 或 "100-end"，不传则全读（仅对文本文件有效）' },
+        offset: { type: 'number', description: '起始字符位置（0-based），默认 0' },
+        length: { type: 'number', description: '读取字符数，默认 3000，最大 10000' },
+        lines: { type: 'string', description: '行范围 "1-50" 或 "100-end"（与 offset/length 互斥）' },
       },
       required: ['path'],
     }),
-    execute: async (args: { path: string; lines?: string }) => {
+    execute: async (args: { path: string; offset?: number; length?: number; lines?: string }) => {
       const fsApi = window.electronAPI!.fs
       const ext = (args.path.split('.').pop() || '').toLowerCase()
       const needsConvert = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'pdf'].includes(ext)
@@ -142,29 +145,43 @@ export async function registerWorkspaceTools(tools: ToolMap) {
       if (needsConvert && window.electronAPI?.file) {
         const convertResult = await window.electronAPI.file.convert(args.path)
         if (convertResult.success && convertResult.content) {
-          return convertResult.content.length > 50000
-            ? convertResult.content.slice(0, 50000) + '\n...(内容过长已截断)'
-            : convertResult.content
+          const total = convertResult.content.length
+          const off = Math.max(0, args.offset || 0)
+          const len = Math.min(args.length || 3000, 10000)
+          const slice = convertResult.content.slice(off, off + len)
+          const tail = total > off + len ? `\n\n--- 第 ${off}-${off + len} / ${total} 字符 ---` : `\n\n--- ${total} 字符（已读完）---`
+          return slice + tail
         }
-        return `文档转换失败: ${convertResult.error || '未知错误'}。请尝试用 workspace_list_dir 确认文件存在。`
+        return `文档转换失败: ${convertResult.error || '未知错误'}。`
       }
 
       const readResult = await fsApi.readFile(args.path)
       if (!readResult.success || readResult.content == null) {
         return `读取失败: ${readResult.error || '文件不存在'}`
       }
-      if (!args.lines) {
-        if (readResult.content.length > 50000) {
-          return readResult.content.slice(0, 50000) + '\n...(内容过长已截断，请用 lines 参数分段读取)'
-        }
-        return readResult.content
+      const content = readResult.content
+      const totalChars = content.length
+      const totalLines = content.split('\n').length
+
+      // 行范围模式
+      if (args.lines) {
+        const allLines = content.split('\n')
+        const match = args.lines.match(/^(\d+)(-(\d+|end))?$/i)
+        if (!match) return `行格式错误: "${args.lines}"。例: "1-50"、"100-end"`
+        const start = Math.max(0, parseInt(match[1]) - 1)
+        const end = !match[2] ? start + 1 : match[3]?.toLowerCase() === 'end' ? allLines.length : parseInt(match[3])
+        const slice = allLines.slice(start, end).join('\n')
+        return slice + `\n\n--- L${start + 1}-${end} / ${totalLines} 行，${totalChars} 字符 ---`
       }
-      const allLines = readResult.content.split('\n')
-      const match = args.lines.match(/^(\d+)(-(\d+|end))?$/i)
-      if (!match) return `行格式错误: "${args.lines}"。例: "1-50"、"100-end"`
-      const start = Math.max(0, parseInt(match[1]) - 1)
-      const end = !match[2] ? start + 1 : match[3]?.toLowerCase() === 'end' ? allLines.length : parseInt(match[3])
-      return allLines.slice(start, end).join('\n')
+
+      // 字符分页模式（默认）
+      const off = Math.max(0, args.offset || 0)
+      const len = Math.min(args.length || 3000, 10000)
+      const slice = content.slice(off, off + len)
+      if (off + len >= totalChars) {
+        return slice + `\n\n--- ${totalChars} 字符，${totalLines} 行（已读完）---`
+      }
+      return slice + `\n\n--- 第 ${off + 1}-${off + len} / ${totalChars} 字符，${totalLines} 行 --- 用 offset=${off + len} 读下一页`
     },
   }
 
