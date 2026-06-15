@@ -15,5 +15,6 @@
 
 ## 🟢 未来
 
+- [ ] 动态模型路由：根据任务难度自动选 fast/balanced/powerful
 - [ ] diff accept/reject 逐块修改
 - [ ] 插件工坊（独立 AI 会话生成插件）
