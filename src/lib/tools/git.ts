@@ -126,4 +126,17 @@ export function registerGitTools(tools: ToolMap) {
     }),
     execute: async (args: { target: string }) => exec(['checkout', args.target]),
   }
+
+  tools['git_push'] = {
+    description: '推送当前分支到远程。可指定 remote（默认 origin）和 branch（默认当前分支）。',
+    inputSchema: jsonSchema({
+      type: 'object',
+      properties: {
+        remote: { type: 'string', description: '远程名，默认 origin' },
+        branch: { type: 'string', description: '分支名，默认当前分支' },
+      },
+      required: [],
+    }),
+    execute: async (args: { remote?: string; branch?: string }) => exec(['push', args.remote || 'origin', ...(args.branch ? [args.branch] : [])]),
+  }
 }

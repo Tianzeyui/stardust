@@ -1073,19 +1073,23 @@ ipcMain.handle('terminal:kill', async (_event, id: string) => {
 })
 
 // ====== Git 命令执行 ======
-import { execSync } from 'child_process'
+import { spawnSync } from 'child_process'
 
 ipcMain.handle('git:exec', async (_event, cwd: string, args: string[]) => {
   try {
-    const stdout = execSync(`git ${args.join(' ')}`, {
+    const result = spawnSync('git', args, {
       cwd,
       encoding: 'utf-8',
       timeout: 30000,
       maxBuffer: 500 * 1024,
     })
+    const stdout = result.stdout || ''
+    const stderr = result.stderr || ''
+    if (result.error) return { success: false, error: result.error.message }
+    if (result.status !== 0) return { success: false, error: stderr.trim() || `exit ${result.status}`, output: stdout }
     return { success: true, output: stdout.slice(0, 50000) }
   } catch (e: any) {
-    return { success: false, error: e.stderr || e.message || 'git 命令失败', output: e.stdout?.slice(0, 10000) || '' }
+    return { success: false, error: e.message }
   }
 })
 
