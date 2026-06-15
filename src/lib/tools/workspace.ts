@@ -223,14 +223,15 @@ export async function registerWorkspaceTools(tools: ToolMap) {
     if (!api) return
     const listResult = await api.listDir(dirPath)
     if (!listResult.success || !listResult.files) return
-    const skip = ['node_modules', '.git', '.brainplus', 'dist', 'build', '.next', '__pycache__', '.DS_Store']
+    const skip = new Set(['node_modules', '.git', '.brainplus', 'dist', 'build', '.next', '__pycache__', '.DS_Store'])
     for (const name of listResult.files) {
-      if (skip.includes(name)) continue
+      if (skip.has(name)) continue
       const childPath = `${dirPath}/${name}`
       const relPath = childPath.slice(rootPath.length + 1)
       if (pattern.test(relPath)) results.push(relPath)
-      const statResult = await api.stat(childPath)
-      if (statResult.success && statResult.stat?.isDirectory) {
+      // 尝试列出子目录：成功=目录→递归
+      const subList = await api.listDir(childPath)
+      if (subList.success && subList.files && subList.files.length > 0) {
         await globWalk(childPath, pattern, rootPath, results, depth + 1)
       }
     }
