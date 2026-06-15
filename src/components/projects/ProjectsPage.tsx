@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   FolderKanban, Plus, Trash2, ExternalLink, Terminal,
-  Settings2, ChevronRight,
+  Settings2, ChevronRight, FolderSearch,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -28,6 +28,7 @@ export function ProjectsPage() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [newName, setNewName] = useState('')
   const [newDesc, setNewDesc] = useState('')
+  const [newPath, setNewPath] = useState('')
 
   // Settings
   const [skills, setSkills] = useState<InstalledSkill[]>([])
@@ -70,10 +71,19 @@ export function ProjectsPage() {
 
   const handleCreate = async () => {
     if (!newName.trim()) return
-    const p = await projectStore.create(newName.trim(), newDesc.trim())
+    const p = await projectStore.create(newName.trim(), newDesc.trim(), newPath.trim() || undefined)
     if (p) {
-      setNewName(''); setNewDesc(''); setShowCreate(false)
+      setNewName(''); setNewDesc(''); setNewPath(''); setShowCreate(false)
       setSelectedId(p.id)
+    }
+  }
+
+  const browseProjectPath = async () => {
+    const result = await window.electronAPI?.dialog?.openDirectory()
+    if (result?.success && result.path) {
+      // 在所选目录下创建以项目名命名的子目录
+      const dir = `${result.path}/${(newName || '新项目').replace(/[^a-zA-Z0-9一-鿿_-]/g, '_')}`
+      setNewPath(dir)
     }
   }
 
@@ -145,6 +155,16 @@ export function ProjectsPage() {
                 <Label className="text-xs">描述（可选）</Label>
                 <Input className="h-8 text-sm" value={newDesc} onChange={e => setNewDesc(e.target.value)}
                   placeholder="项目用途说明" onKeyDown={e => e.key === 'Enter' && handleCreate()} />
+              </div>
+              <div>
+                <Label className="text-xs">工作区目录（可选，留空自动生成）</Label>
+                <div className="flex gap-2">
+                  <Input className="h-8 text-xs font-mono flex-1" value={newPath} onChange={e => setNewPath(e.target.value)}
+                    placeholder="选择已有项目目录或留空自动创建" onKeyDown={e => e.key === 'Enter' && handleCreate()} />
+                  <Button size="sm" variant="outline" className="h-8 shrink-0" onClick={browseProjectPath}>
+                    <FolderSearch className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </div>
               <div className="flex gap-2">
                 <Button size="sm" onClick={handleCreate} disabled={!newName.trim()}>创建</Button>

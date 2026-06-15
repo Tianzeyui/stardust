@@ -74,23 +74,29 @@ class ProjectStoreImpl {
 
   getById(id: string): Project | undefined { return this.projects.find(p => p.id === id) }
 
-  async create(name: string, description: string): Promise<Project | null> {
+  async create(name: string, description: string, customPath?: string): Promise<Project | null> {
     const api = (window as any).electronAPI
     if (!api?.workspace) {
       toast({ title: '仅 Electron 环境支持项目管理', variant: 'destructive' })
       return null
     }
-    const ws = await api.workspace.getPaths()
     const id = `proj_${Date.now()}`
-    // 项目放在独立目录，与全局 workspace 平级
-    const projectsRoot = ws.root.replace(/\/[^/]+$/, '') + '/projects'
-    const projectDir = `${projectsRoot}/${name.replace(/[^a-zA-Z0-9一-鿿_-]/g, '_')}`
 
-    // 创建工作区目录
-    try {
-      await api.fs.mkdir(projectDir)
-      await api.fs.mkdir(`${projectDir}/output`)
-    } catch {}
+    // 使用自定义路径或自动生成
+    let projectDir: string
+    if (customPath?.trim()) {
+      projectDir = customPath.trim()
+      // 确保目录存在
+      try { await api.fs.mkdir(projectDir) } catch {}
+    } else {
+      const ws = await api.workspace.getPaths()
+      const projectsRoot = ws.root.replace(/\/[^/]+$/, '') + '/projects'
+      projectDir = `${projectsRoot}/${name.replace(/[^a-zA-Z0-9一-鿿_-]/g, '_')}`
+      try {
+        await api.fs.mkdir(projectDir)
+      } catch {}
+    }
+    await api.fs.mkdir(`${projectDir}/output`).catch(() => {})
 
     const project: Project = {
       id, name, description,
