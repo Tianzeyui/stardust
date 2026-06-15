@@ -27,6 +27,25 @@ function isInsideWorkspace(filePath: string): boolean {
 
 function notifyUI(event: any) { getFileOpUIHandler()?.(event) }
 
+/** 确认流程：工作区外操作需用户确认 */
+async function confirmOutside(opType: 'write' | 'delete', absPath: string, content?: string): Promise<boolean> {
+  const id = 'fop_' + Math.random().toString(36).slice(2, 8)
+  const op = createFileOp(id, opType, absPath, content)
+  notifyUI({ type: 'fileop_created', fileOp: { ...op } })
+  const confirmed = await new Promise<boolean>(resolve => { setFileOpResolver(id, resolve) })
+  if (!confirmed) {
+    updateFileOp(id, { status: 'rejected' })
+    notifyUI({ type: 'fileop_updated', fileOp: { ...getFileOp(id)! } })
+  }
+  return confirmed
+}
+
+/** 解析绝对路径 */
+function resolvePath(p: string): string {
+  const root = getRoot()
+  return p.startsWith('/') ? p : `${root}/${p}`
+}
+
 async function listDirTree(dirPath: string, maxDepth: number, currentDepth: number): Promise<string> {
   const api = window.electronAPI?.fs
   if (!api) return ''
@@ -202,40 +221,64 @@ export async function registerWorkspaceTools(tools: ToolMap) {
     execute: async (args: { path: string; content: string }) => {
       const api = window.electronAPI?.fs
       if (!api) return '文件系统不可用'
-      const root = getRoot()
-      const absPath = args.path.startsWith('/') ? args.path : `${root}/${args.path}`
-      const inside = isInsideWorkspace(absPath)
-
-      if (!inside) {
-        const id = 'fop_' + Math.random().toString(36).slice(2, 8)
-        const op = createFileOp(id, 'write', absPath, args.content)
-        notifyUI({ type: 'fileop_created', fileOp: { ...op } })
-
-        const confirmed = await new Promise<boolean>(resolve => {
-          setFileOpResolver(id, resolve)
-        })
-
-        if (!confirmed) {
-          updateFileOp(id, { status: 'rejected' })
-          notifyUI({ type: 'fileop_updated', fileOp: { ...getFileOp(id)! } })
-          return `写入 ${absPath} 已被用户拒绝。`
-        }
+      const absPath = resolvePath(args.path)
+      if (!isInsideWorkspace(absPath)) {
+        const ok = await confirmOutside('write', absPath, args.content)
+        if (!ok) return `写入 ${absPath} 已被用户拒绝。`
+        updateFileOp(absPath, { status: 'approved' })
       }
-
       try {
         await api.writeFile(absPath, args.content)
-        if (!inside) {
-          updateFileOp(args.path, { status: 'done', size: args.content.length })
-          notifyUI({ type: 'fileop_updated', fileOp: { ...getFileOp(args.path)! } })
-        }
         return `✅ 已写入 ${absPath} (${args.content.length} 字符)`
-      } catch (e: any) {
-        if (!inside) {
-          updateFileOp(args.path, { status: 'error', error: e.message })
-          notifyUI({ type: 'fileop_updated', fileOp: { ...getFileOp(args.path)! } })
-        }
-        return `写入失败: ${e.message}`
+      } catch (e: any) { return `写入失败: ${e.message}` }
+    },
+  }
+
+  tools['workspace_append_file'] = {
+    description: '追加内容到文件末尾。工作区内直接操作，工作区外需确认。文件不存在则自动创建。',
+    inputSchema: jsonSchema({
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: '文件路径' },
+        content: { type: 'string', description: '要追加的内容' },
+      },
+      required: ['path', 'content'],
+    }),
+    execute: async (args: { path: string; content: string }) => {
+      const api = window.electronAPI?.fs
+      if (!api) return '文件系统不可用'
+      const absPath = resolvePath(args.path)
+      if (!isInsideWorkspace(absPath)) {
+        const ok = await confirmOutside('write', absPath, args.content)
+        if (!ok) return `追加 ${absPath} 已被用户拒绝。`
       }
+      try {
+        let existing = ''
+        const readResult = await api.readFile(absPath)
+        if (readResult.success && readResult.content) existing = readResult.content
+        await api.writeFile(absPath, existing + args.content)
+        return `✅ 已追加 ${args.content.length} 字符到 ${absPath}`
+      } catch (e: any) { return `追加失败: ${e.message}` }
+    },
+  }
+
+  tools['workspace_create_dir'] = {
+    description: '创建目录（包括父目录）。',
+    inputSchema: jsonSchema({
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: '目录路径' },
+      },
+      required: ['path'],
+    }),
+    execute: async (args: { path: string }) => {
+      const api = window.electronAPI?.fs
+      if (!api) return '文件系统不可用'
+      const absPath = resolvePath(args.path)
+      try {
+        await api.mkdir(absPath)
+        return `✅ 已创建目录 ${absPath}`
+      } catch (e: any) { return `创建目录失败: ${e.message}` }
     },
   }
 
@@ -251,40 +294,15 @@ export async function registerWorkspaceTools(tools: ToolMap) {
     execute: async (args: { path: string }) => {
       const api = window.electronAPI?.fs
       if (!api) return '文件系统不可用'
-      const root = getRoot()
-      const absPath = args.path.startsWith('/') ? args.path : `${root}/${args.path}`
-      const inside = isInsideWorkspace(absPath)
-
-      if (!inside) {
-        const id = 'fop_' + Math.random().toString(36).slice(2, 8)
-        const op = createFileOp(id, 'delete', absPath)
-        notifyUI({ type: 'fileop_created', fileOp: { ...op } })
-
-        const confirmed = await new Promise<boolean>(resolve => {
-          setFileOpResolver(id, resolve)
-        })
-
-        if (!confirmed) {
-          updateFileOp(id, { status: 'rejected' })
-          notifyUI({ type: 'fileop_updated', fileOp: { ...getFileOp(id)! } })
-          return `删除 ${absPath} 已被用户拒绝。`
-        }
+      const absPath = resolvePath(args.path)
+      if (!isInsideWorkspace(absPath)) {
+        const ok = await confirmOutside('delete', absPath)
+        if (!ok) return `删除 ${absPath} 已被用户拒绝。`
       }
-
       try {
         await api.unlink(absPath)
-        if (!inside) {
-          updateFileOp(args.path, { status: 'done' })
-          notifyUI({ type: 'fileop_updated', fileOp: { ...getFileOp(args.path)! } })
-        }
         return `✅ 已删除 ${absPath}`
-      } catch (e: any) {
-        if (!inside) {
-          updateFileOp(args.path, { status: 'error', error: e.message })
-          notifyUI({ type: 'fileop_updated', fileOp: { ...getFileOp(args.path)! } })
-        }
-        return `删除失败: ${e.message}`
-      }
+      } catch (e: any) { return `删除失败: ${e.message}` }
     },
   }
 }

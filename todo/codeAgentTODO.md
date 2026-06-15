@@ -8,8 +8,9 @@
 ## 🔴 文件写入
 
 - [x] `workspace_write_file` 工具：写入/覆盖文件 ✅
-- [ ] `workspace_append_file` 工具：追加内容到文件
+- [x] `workspace_append_file` 工具：追加内容到文件 ✅
 - [x] `workspace_delete_file` 工具：删除文件 ✅
+- [x] `workspace_create_dir` 工具：创建目录 ✅
 - [x] 工作区内直接操作，工作区外需用户确认（终端风格确认气泡）✅
 
 ## 🔴 Git 工具
