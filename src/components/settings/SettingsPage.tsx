@@ -636,7 +636,7 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
                                   <span className={`text-[9px] px-1 py-px rounded font-medium ${tierColors[tier]}`}>
                                     {tier === 'fast' ? 'Fast' : tier === 'balanced' ? 'Bal' : 'Power'}
                                   </span>
-                                  {model.selectedModel === sm.id && <Check className="h-3.5 w-3.5 text-primary" />}
+                                  <span className="w-3.5 shrink-0">{model.selectedModel === sm.id && <Check className="h-3.5 w-3.5 text-primary" />}</span>
                                 </div>
                               </div>
                             )})}
