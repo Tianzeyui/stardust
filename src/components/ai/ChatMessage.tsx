@@ -543,11 +543,20 @@ function DiffBlock({ text }: { text: string }) {
         const isAdd = line.startsWith('+') && !line.startsWith('+++')
         const isDel = line.startsWith('-') && !line.startsWith('---')
         const isHdr = line.startsWith('@@')
-        const cls = isAdd ? 'bg-zinc-100 dark:bg-zinc-800/50'
-          : isDel ? 'bg-zinc-50 dark:bg-zinc-800/30'
-          : isHdr ? 'bg-muted/50 text-muted-foreground text-[10px] font-medium'
-          : 'text-muted-foreground'
-        return <div key={i} className={`px-3 py-px whitespace-pre-wrap break-all ${cls}`}>{line || ' '}</div>
+        const prefix = isHdr ? null : line.slice(0, 1)
+        const body = isHdr ? line : line.slice(1)
+        const rowCls = isAdd ? 'bg-zinc-100'
+          : isDel ? 'bg-zinc-50'
+          : isHdr ? 'bg-muted text-muted-foreground text-[10px] font-medium'
+          : ''
+        return (
+          <div key={i} className={`flex px-3 py-px ${rowCls}`}>
+            {prefix != null && (
+              <span className={`shrink-0 w-4 select-none ${isAdd ? 'text-emerald-600' : isDel ? 'text-red-400' : 'text-zinc-400'}`}>{prefix}</span>
+            )}
+            <span className="whitespace-pre-wrap break-all text-foreground/80">{body || ' '}</span>
+          </div>
+        )
       })}
       {isLong && !expanded && (
         <div className="relative">
