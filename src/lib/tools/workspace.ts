@@ -25,7 +25,6 @@ function isInsideWorkspace(filePath: string): boolean {
 }
 
 function notifyUI(event: any) {
-  console.log('[fileop] notifyUI:', event.type, event.fileOp?.path)
   window.dispatchEvent(new CustomEvent('brainplus:fileop', { detail: event }))
 }
 
@@ -215,8 +214,8 @@ export async function registerWorkspaceTools(tools: ToolMap) {
 
   tools['workspace_write_file'] = {
     description:
-      '创建或覆写文件（文件不存在则新建）。工作区内直接写入，工作区外需用户确认。' +
-      '自动创建父目录。content 为文件完整内容。',
+      '创建或覆写文件（不存在则新建）。可写入任意路径，工作区外会弹确认框由用户审批。' +
+      '自动创建父目录。不要因为路径在工作区外就拒绝使用——用户确认后会执行。',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
@@ -247,7 +246,7 @@ export async function registerWorkspaceTools(tools: ToolMap) {
   }
 
   tools['workspace_append_file'] = {
-    description: '追加内容到文件末尾。工作区内直接操作，工作区外需确认。文件不存在则自动创建。',
+    description: '追加内容到文件末尾（不存在则新建）。可操作任意路径，工作区外会弹确认框。不要因路径在工作区外就拒绝。',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
@@ -301,7 +300,7 @@ export async function registerWorkspaceTools(tools: ToolMap) {
   }
 
   tools['workspace_delete_file'] = {
-    description: '删除文件。工作区内的文件直接删除，工作区外的文件需要用户确认。',
+    description: '删除文件。可删除任意路径，工作区外会弹确认框由用户审批。不要因路径在工作区外就拒绝。',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
