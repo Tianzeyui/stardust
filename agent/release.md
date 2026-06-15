@@ -47,7 +47,7 @@ npm run build:mac
 
 ## 5. 发布 Release Notes
 
-在 GitHub Releases 页面编辑 Draft Release，填写更新内容后发布。
+在 GitHub Releases 页面编辑 Draft Release，将 `docs/releases/vX.Y.Z.md` 内容粘贴进去后发布。
 
 ---
 
