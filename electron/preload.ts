@@ -224,6 +224,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('http:fetch', url, opts),
   },
 
+  git: {
+    exec: (cwd: string, args: string[]) => ipcRenderer.invoke('git:exec', cwd, args),
+  },
+
   terminal: {
     execute: (id: string, command: string, cwd: string) =>
       ipcRenderer.invoke('terminal:execute', id, command, cwd),

@@ -1072,6 +1072,23 @@ ipcMain.handle('terminal:kill', async (_event, id: string) => {
   return { success: true }
 })
 
+// ====== Git 命令执行 ======
+import { execSync } from 'child_process'
+
+ipcMain.handle('git:exec', async (_event, cwd: string, args: string[]) => {
+  try {
+    const stdout = execSync(`git ${args.join(' ')}`, {
+      cwd,
+      encoding: 'utf-8',
+      timeout: 30000,
+      maxBuffer: 500 * 1024,
+    })
+    return { success: true, output: stdout.slice(0, 50000) }
+  } catch (e: any) {
+    return { success: false, error: e.stderr || e.message || 'git 命令失败', output: e.stdout?.slice(0, 10000) || '' }
+  }
+})
+
 app.on('before-quit', async () => {
   await mcpService.cleanup()
   closeGraphDriver()

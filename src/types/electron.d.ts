@@ -159,6 +159,9 @@ export interface ElectronAPI {
     cloneRepo: (url: string) => Promise<{ success: boolean; error?: string; repoDir?: string; plugins?: any[] }>
     pullRepo: (repoDir: string) => Promise<{ success: boolean; error?: string; plugins?: any[] }>
   }
+  git: {
+    exec: (cwd: string, args: string[]) => Promise<{ success: boolean; output?: string; error?: string }>
+  }
   search: {
     fetch: (url: string, timeout: number) => Promise<{ success: boolean; error?: string; data?: string }>
   }
