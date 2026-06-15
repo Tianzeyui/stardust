@@ -235,30 +235,37 @@ export async function registerWorkspaceTools(tools: ToolMap) {
       const root = getRoot()
       const basePath = args.path ? (args.path.startsWith('/') ? args.path : `${root}/${args.path}`) : root
       const regex = globToRegex(args.pattern)
-      const results: string[] = []
       const skip = new Set(['node_modules', '.git', '.brainplus', 'dist', 'build', '.next', '__pycache__', '.DS_Store'])
 
+      // 收集所有文件（递归遍历整个目录树）
+      const allFiles: string[] = []
       async function walk(dir: string, depth: number) {
-        if (depth > 15 || results.length >= 200) return
+        if (depth > 20 || allFiles.length >= 500) return
         const api = window.electronAPI?.fs
         if (!api) return
         const listResult = await api.listDir(dir)
         if (!listResult.success || !listResult.files) return
         for (const name of listResult.files) {
           if (skip.has(name)) continue
-          const childPath = `${dir}/${name}`
-          const relPath = childPath.slice(basePath.length + 1)
-          if (regex.test(relPath)) results.push(relPath)
-          // 用 stat 判断目录（与 searchFiles 一致）
-          const statResult = await api.stat(childPath)
-          if (statResult.success && statResult.stat?.isDirectory) {
-            await walk(childPath, depth + 1)
-          }
+          const childPath = `${dir.replace(/\/+$/, '')}/${name}`
+          allFiles.push(childPath)
+          // stat 仅用于判断是否递归，失败也继续
+          try {
+            const s = await api.stat(childPath)
+            if (s.success && s.stat?.isDirectory) await walk(childPath, depth + 1)
+          } catch { /* stat failed, skip recursion for this entry */ }
         }
       }
-
       await walk(basePath, 0)
-      return results.length > 0 ? results.sort().join('\n') : `未找到匹配 "${args.pattern}" 的文件`
+
+      // 转为相对路径，用 glob 过滤
+      const plen = basePath.length + 1
+      const results = allFiles
+        .map(f => f.slice(plen))
+        .filter(f => regex.test(f))
+        .sort()
+        .slice(0, 200)
+      return results.length > 0 ? results.join('\n') : `未找到匹配 "${args.pattern}" 的文件`
     },
   }
 
