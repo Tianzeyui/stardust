@@ -206,15 +206,12 @@ export async function registerWorkspaceTools(tools: ToolMap) {
 
   // glob 转正则
   function globToRegex(pattern: string): RegExp {
-    // 用不含 * 的字符串占位，防止被后续 *→[^/]* 替换误伤
-    const PH = '\x00DEEP\x00'
     let p = pattern
       .replace(/\./g, '\\.')
-      // 先处理 **/ 再处理 *（顺序关键）
-      .replace(/\*\*\//g, PH)               // **/ → 占位符
-      .replace(/\*/g, '[^/]*')               // * → 非斜杠
-      .replace(/\x00DEEP\x00/g, '(?:.+/)*')  // 占位符 → 任意深度
-      .replace(/\?/g, '[^/]')
+      .replace(/\?/g, '[^/]')           // ? → 单字符（必须在 ** 展开前）
+      .replace(/\*\*\//g, 'ZWKZWK')     // **/ → 占位
+      .replace(/\*/g, '[^/]*')           // * → 非斜杠
+      .replace(/ZWKZWK/g, '(?:.+/)*')    // 占位 → 任意深度目录
     p = p.replace(/\{([^}]+)\}/g, (_, alts) => `(${alts.split(',').join('|')})`)
     return new RegExp(`^${p}$`, 'i')
   }
@@ -235,8 +232,10 @@ export async function registerWorkspaceTools(tools: ToolMap) {
     }),
     execute: async (args: { pattern: string; path?: string }) => {
       const root = getRoot()
+      // 去掉 ./ 前缀
+      let pat = args.pattern.replace(/^\.\//, '')
       const basePath = args.path ? (args.path.startsWith('/') ? args.path : `${root}/${args.path}`) : root
-      const regex = globToRegex(args.pattern)
+      const regex = globToRegex(pat)
 
       // 用系统命令收集文件列表（跨平台）
       const fsApi = window.electronAPI?.fs
