@@ -10,7 +10,6 @@
 - [x] Git 工具：`git_add` / `git_reset` / `git_commit` / `git_branch` / `git_checkout`
 - [x] `git_commit` 需用户确认
 
-## 🟢 diff 可视化
+## ✅ 已完成
 
-- [ ] AI 修改代码后，聊天中展示 diff
-- [ ] 支持 accept/reject 逐块修改
+- [x] diff 可视化：暗灰新增 + 浅灰删除 + DiffBlock 组件 ✅

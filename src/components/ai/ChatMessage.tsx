@@ -133,7 +133,7 @@ export function ChatMessage({ msg }: ChatMessageProps) {
                 </div>
               ) : (
                 (!msg.streaming || msg.content) && (
-                  <MarkdownPreview
+                  <ContentBlock
                     source={msg.content || ''}
                     style={{ fontSize: 14, backgroundColor: 'transparent', overflowWrap: 'break-word', wordBreak: 'break-word' }}
                   />
@@ -166,9 +166,9 @@ export function ChatMessage({ msg }: ChatMessageProps) {
                       loading={!!(msg.streaming && isLast)}
                     />
                   ) : (
-                    <MarkdownPreview
+                    <ContentBlock
                       key={i}
-                      source={stripHtml(item.content)}
+                      source={item.content}
                       style={{ fontSize: 14, backgroundColor: 'transparent', overflowWrap: 'break-word', wordBreak: 'break-word' }}
                     />
                   )
@@ -184,8 +184,8 @@ export function ChatMessage({ msg }: ChatMessageProps) {
                   </p>
                 )}
                 {(!msg.streaming || msg.content) && (
-                  <MarkdownPreview
-                    source={stripHtml(msg.content || '')}
+                  <ContentBlock
+                    source={msg.content || ''}
                     style={{ fontSize: 14, backgroundColor: 'transparent', overflowWrap: 'break-word', wordBreak: 'break-word' }}
                   />
                 )}
@@ -521,6 +521,56 @@ function FileOpBubble({ fo }: { fo: FileOpRequest }) {
         </div>
       </div>
     </div>
+  )
+}
+
+/** 检测文本是否包含 unified diff */
+const DIFF_HEADER_RE = /^(diff --git|---\+\+\+|@@\s+-)/m
+function isDiffContent(text: string): boolean {
+  return DIFF_HEADER_RE.test(text) && text.split('\n').some(l => l.startsWith('+') || l.startsWith('-'))
+}
+
+/** Diff 内容块：暗灰新增行 + 浅灰删除行 */
+function DiffBlock({ text }: { text: string }) {
+  const lines = text.split('\n')
+  return (
+    <div className="my-1.5 rounded-md overflow-hidden border border-border/50 font-mono text-xs leading-relaxed">
+      {lines.map((line, i) => {
+        const cls = line.startsWith('+') && !line.startsWith('+++') ? 'bg-emerald-950/50 text-emerald-200'
+          : line.startsWith('-') && !line.startsWith('---') ? 'bg-red-950/30 text-red-300'
+          : line.startsWith('@@') ? 'bg-blue-950/30 text-blue-200'
+          : 'text-zinc-400'
+        return <div key={i} className={`px-3 py-px whitespace-pre-wrap break-all ${cls}`}>{line || ' '}</div>
+      })}
+    </div>
+  )
+}
+
+/** 智能渲染：diff 文本用 DiffBlock，其余用 Markdown */
+function ContentBlock({ source, style }: { source: string; style?: any }) {
+  const blocks: { type: 'md' | 'diff'; content: string }[] = []
+  // 按 \`\`\`diff ... \`\`\` 拆分
+  const parts = source.split(/(```diff[\s\S]*?```)/g)
+  for (const part of parts) {
+    if (part.startsWith('```diff')) {
+      const inner = part.slice(7, -3).trim()
+      blocks.push({ type: 'diff', content: inner })
+    } else if (part.trim()) {
+      blocks.push({ type: 'md', content: part })
+    }
+  }
+  // 如果没有 diff 代码块，检查是否纯 diff 文本
+  if (blocks.length === 0 && isDiffContent(source)) {
+    return <DiffBlock text={source} />
+  }
+  return (
+    <>
+      {blocks.map((b, i) =>
+        b.type === 'diff'
+          ? <DiffBlock key={i} text={b.content} />
+          : <MarkdownPreview key={i} source={stripHtml(b.content)} style={style} />
+      )}
+    </>
   )
 }
 
