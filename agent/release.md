@@ -30,22 +30,7 @@ git push origin vX.Y.Z
 
 构建产物在 Actions → Artifacts 中下载，或自动创建 Draft Release。
 
-## 4. 手动构建（本地）
-
-```bash
-npm run build:mac      # macOS
-npm run build:win      # Windows
-npm run build:linux    # Linux
-```
-
-国内网络问题设镜像：
-
-```bash
-export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
-npm run build:mac
-```
-
-## 5. 发布 Release Notes
+## 4. 发布 Release Notes
 
 在 GitHub Releases 页面编辑 Draft Release，将 `docs/releases/vX.Y.Z.md` 内容粘贴进去后发布。
 
