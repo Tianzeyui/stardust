@@ -158,7 +158,7 @@ export function ProjectsPage() {
                 <Label className="text-xs">工作区目录（可选，留空自动生成）</Label>
                 <div className="flex gap-2">
                   <Input className="h-8 text-xs font-mono flex-1" value={newPath} onChange={e => setNewPath(e.target.value)}
-                    placeholder="选择已有项目目录或留空自动创建" onKeyDown={e => e.key === 'Enter' && handleCreate()} />
+                    placeholder="留空自动创建到 ~/BrainPlus/projects/ 下" onKeyDown={e => e.key === 'Enter' && handleCreate()} />
                   <Button size="sm" variant="outline" className="h-8 shrink-0" onClick={browseProjectPath}>
                     <FolderSearch className="h-3.5 w-3.5" />
                   </Button>
