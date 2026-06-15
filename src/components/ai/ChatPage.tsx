@@ -60,7 +60,7 @@ export function ChatPage() {
   const [loading, setLoading] = useState(false)
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null)
   const { configuredModels, activeModel, setActiveModel, refreshModels } = useModelLoader()
-  const workspace = useWorkspace(currentProjectId)
+  const workspace = useWorkspace()
   const projectSettings = currentProjectId ? projectStore.getById(currentProjectId)?.settings : null
   // 插件工具列表
   const pluginToolEntries = (() => {
@@ -1049,11 +1049,42 @@ export function ChatPage() {
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowWorkspace(false)} />
                 <div className="absolute bottom-full right-0 mb-2 z-50 w-80 rounded-lg border border-border bg-card shadow-lg">
-                  <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border">
+                  {/* 工作区根目录 + 操作 */}
+                  <div className="px-3 py-2 border-b border-border space-y-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <FolderOpen className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      <span className="text-[10px] text-muted-foreground/60 truncate flex-1" title={workspace.root}>{workspace.root}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                        onClick={async () => { await workspace.pickAndSetRoot(); setShowWorkspace(false) }}
+                      >
+                        选择目录
+                      </button>
+                      {workspace.isCustom && (
+                        <button
+                          className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-muted transition-colors"
+                          onClick={async () => { await workspace.resetRoot(); setShowWorkspace(false) }}
+                        >
+                          恢复默认
+                        </button>
+                      )}
+                      <div className="flex-1" />
+                      <button
+                        className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
+                        onClick={() => window.electronAPI?.workspace?.openFile(workspace.root)}
+                        title="在文件管理器中打开"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                      </button>
+                    </div>
+                  </div>
+                  {/* 浏览导航栏 */}
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border/50">
                     <button
                       className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
                       onClick={async () => {
-                        const ws = await window.electronAPI?.workspace?.getPaths()
                         const parent = workspacePath.split('/').slice(0, -1).join('/') || '/'
                         if (parent && parent.length >= workspace.root.length) loadWorkspaceDir(parent)
                       }}
@@ -1061,16 +1092,7 @@ export function ChatPage() {
                     >
                       <ArrowLeft className="h-3.5 w-3.5" />
                     </button>
-                    <FolderOpen className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                     <span className="text-[10px] text-muted-foreground/50 truncate">{workspacePath.replace(/\/+$/, '')}/</span>
-                    <div className="flex-1" />
-                    <button
-                      className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
-                      onClick={() => window.electronAPI?.workspace?.openFile(workspacePath)}
-                      title="在文件管理器中打开"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                    </button>
                   </div>
                   <div className="max-h-64 overflow-auto p-1">
                     {workspaceEntries.length === 0 ? (

@@ -46,6 +46,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   workspace: {
     getPaths: () => ipcRenderer.invoke('workspace:getPaths'),
+    info: () => ipcRenderer.invoke('workspace:info'),
+    setRoot: (newRoot: string) => ipcRenderer.invoke('workspace:setRoot', newRoot),
+    pickRoot: () => ipcRenderer.invoke('workspace:pickRoot'),
+    resetRoot: () => ipcRenderer.invoke('workspace:resetRoot'),
     listOutputs: () => ipcRenderer.invoke('workspace:listOutputs'),
     openFile: (filePath: string) => ipcRenderer.invoke('workspace:openFile', filePath),
     deleteFile: (filePath: string) => ipcRenderer.invoke('workspace:deleteFile', filePath),

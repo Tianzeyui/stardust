@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url'
 import { mcpService, type MCPServer } from './main/mcp/MCPService.js'
 import { startA2AServer, stopA2AServer, completeA2ATask, getA2ATask, syncAgents, setA2AToken } from './main/a2aServer.js'
 import { executeJS, executePython, preInit } from './main/sandboxService.js'
-import { initWorkspace, getWorkspacePaths, listOutputFiles, openFile, deleteFile, clearOutputFiles } from './main/workspace.js'
+import { initWorkspace, getWorkspacePaths, getWorkspaceInfo, listOutputFiles, openFile, deleteFile, clearOutputFiles, setWorkspaceRoot, pickWorkspaceRoot, resetWorkspaceRoot } from './main/workspace.js'
 import { writeSkillFiles, readSkillFile, deleteSkillFiles } from './main/skillDiskStore.js'
 import { downloadPluginFiles } from './main/pluginDownloader.js'
 import { cloneRepo, pullRepo, readRepoPluginsJson, parseGitHubUrl, cloneToTemp, removeTempDir } from './main/pluginRepoManager.js'
@@ -314,6 +314,14 @@ ipcMain.handle('sandbox:executePython', async (_event, code: string, packages?: 
 // ==================== Workspace IPC ====================
 
 ipcMain.handle('workspace:getPaths', () => getWorkspacePaths())
+ipcMain.handle('workspace:info', () => getWorkspaceInfo())
+ipcMain.handle('workspace:setRoot', async (_event, newRoot: string) => setWorkspaceRoot(newRoot))
+ipcMain.handle('workspace:pickRoot', async () => {
+  const win = BrowserWindow.getFocusedWindow()
+  if (!win) return null
+  return pickWorkspaceRoot(win)
+})
+ipcMain.handle('workspace:resetRoot', () => { resetWorkspaceRoot(); return getWorkspaceInfo() })
 ipcMain.handle('workspace:listOutputs', () => listOutputFiles())
 ipcMain.handle('workspace:openFile', (_event, filePath: string) => openFile(filePath))
 ipcMain.handle('workspace:deleteFile', (_event, filePath: string) => deleteFile(filePath))
