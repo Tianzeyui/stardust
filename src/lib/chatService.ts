@@ -277,13 +277,9 @@ export async function chat(
     }
   }
 
-  // Agent 行为规则（始终注入）
-  const agentRules =
-    '你是用户的工作助手。\n' +
-    '1. 调用 delegate_task 委托 Agent 后等待返回，把 Agent 返回的结果呈现给用户，不要重复执行。\n' +
-    '2. 需要用户决策时调用 ask_user，长任务调用 show_progress。\n' +
-    '3. 不要自己替代 Agent 执行任务。\n' +
-    '4. 【重要】使用 update_task_list 管理任务：开始前创建清单→开始某项标 running→完成后立即标 done。全部完成后确认清单中无遗留 running 项。'
+  // Agent 行为规则（从配置读取，用户可在设置→Agent 中自定义）
+  const { getSystemPrompt } = await import('@/lib/config')
+  const agentRules = getSystemPrompt()
 
   // 渐进式披露：只筛选 MCP 业务工具（含 __ 分隔符），内建工具始终全部预加载
   const threshold = getDisclosureThreshold()

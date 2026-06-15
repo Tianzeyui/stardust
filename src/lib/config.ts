@@ -257,6 +257,23 @@ export function saveTokenLimit(limit: number): void {
   localStorage.setItem(TOKEN_LIMIT_KEY, String(limit))
 }
 
+// ========== 系统提示词 ==========
+
+const SYSTEM_PROMPT_KEY = 'brainplus_system_prompt'
+
+export const DEFAULT_SYSTEM_PROMPT =
+  '你是用户的工作助手。\n' +
+  '1. 调用 delegate_task 委托 Agent 后等待返回，把 Agent 返回的结果呈现给用户，不要重复执行。\n' +
+  '2. 需要用户决策时调用 ask_user，长任务调用 show_progress。\n' +
+  '3. 不要自己替代 Agent 执行任务。\n' +
+  '4. 【重要】使用 update_task_list 管理任务：开始前创建清单→开始某项标 running→完成后立即标 done。全部完成后确认清单中无遗留 running 项。'
+
+export function getSystemPrompt(): string {
+  try { const v = localStorage.getItem(SYSTEM_PROMPT_KEY); if (v != null) return v } catch {}
+  return DEFAULT_SYSTEM_PROMPT
+}
+export function saveSystemPrompt(v: string): void { localStorage.setItem(SYSTEM_PROMPT_KEY, v) }
+
 // ========== 终端开关 ==========
 
 const TERMINAL_KEY = 'brainplus_terminal_enabled'

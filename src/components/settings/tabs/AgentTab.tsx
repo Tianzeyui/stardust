@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { getMemoryEnabled, saveMemoryEnabled, getAgentMaxSteps, saveAgentMaxSteps, getCompressThreshold, saveCompressThreshold, getTokenLimit, saveTokenLimit } from '@/lib/config'
+import { getMemoryEnabled, saveMemoryEnabled, getAgentMaxSteps, saveAgentMaxSteps, getCompressThreshold, saveCompressThreshold, getTokenLimit, saveTokenLimit, getSystemPrompt, saveSystemPrompt, DEFAULT_SYSTEM_PROMPT } from '@/lib/config'
 import { MemoryPanel } from '../MemoryPanel'
 import { MemoryManager } from '@/lib/memory/manager'
 import { createLocalMemoryStore } from '@/lib/memory/store-local'
@@ -15,10 +15,31 @@ export function AgentTab() {
   const [maxSteps, setMaxSteps] = useState(getAgentMaxSteps)
   const [compressThreshold, setCompressThreshold] = useState(getCompressThreshold)
   const [tokenLimit, setTokenLimit] = useState(getTokenLimit)
+  const [systemPrompt, setSystemPrompt] = useState(getSystemPrompt)
   const manager = new MemoryManager(createLocalMemoryStore('settings'), createSupabaseMemoryStore(() => user?.id ?? null))
 
   return (
     <div className="w-full space-y-6">
+      <fieldset className="rounded-lg border border-border p-4">
+        <legend className="px-2 text-sm font-semibold">系统提示词</legend>
+        <p className="text-xs text-muted-foreground leading-relaxed mb-2">定义 AI 的基础行为规则。留空则使用默认值。</p>
+        <textarea
+          className="w-full h-32 resize-y rounded-md border border-border bg-muted/30 px-3 py-2 text-xs font-mono leading-relaxed outline-none focus:ring-1 focus:ring-ring custom-scrollbar"
+          value={systemPrompt}
+          onChange={e => { setSystemPrompt(e.target.value); saveSystemPrompt(e.target.value) }}
+          placeholder={DEFAULT_SYSTEM_PROMPT}
+          spellCheck={false}
+        />
+        <div className="flex items-center justify-between mt-1.5">
+          <span className="text-[10px] text-muted-foreground/50">{systemPrompt.length} 字符</span>
+          {systemPrompt !== DEFAULT_SYSTEM_PROMPT && (
+            <button className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => { setSystemPrompt(DEFAULT_SYSTEM_PROMPT); saveSystemPrompt(DEFAULT_SYSTEM_PROMPT) }}>
+              恢复默认
+            </button>
+          )}
+        </div>
+      </fieldset>
       <fieldset className="rounded-lg border border-border p-4">
         <legend className="px-2 text-sm font-semibold">记忆功能</legend>
         <p className="text-xs text-muted-foreground leading-relaxed mb-3">开启后 AI 自动从对话中提取关键信息，下次对话时记住。</p>

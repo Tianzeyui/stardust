@@ -65,13 +65,13 @@ export function ConversationBar({
         {/* 项目选择器 */}
         <div className="relative shrink-0">
           <button
-            className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-muted-foreground/60 hover:bg-muted hover:text-muted-foreground transition-colors"
+            className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             onClick={() => setShowProjectPicker(!showProjectPicker)}
             title="选择项目"
           >
-            <FolderKanban className="h-3 w-3" />
-            <span className="max-w-[80px] truncate">{currentProject?.name || '全局'}</span>
-            <ChevronDown className="h-2.5 w-2.5 opacity-50" />
+            <FolderKanban className="h-3.5 w-3.5 shrink-0" />
+            <span className="max-w-[120px] truncate">{currentProject?.name || '全局'}</span>
+            <ChevronDown className="h-3 w-3 opacity-50" />
           </button>
           {showProjectPicker && (
             <>
