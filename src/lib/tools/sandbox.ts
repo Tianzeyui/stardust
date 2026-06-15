@@ -15,7 +15,7 @@ export async function registerSandboxTools(tools: ToolMap) {
 
   if (getJSSandboxEnabled()) {
     tools['sandbox_execute_js'] = {
-      description: `在安全沙箱执行 JS。可传 packages 参数安装 npm 包 (如 ["pptxgenjs"])。无需包时用 Worker 线程快速执行。输出到工作区 output/ 目录。`,
+      description: `在安全沙箱执行 JS。可传 packages 参数安装 npm 包 (如 ["pptxgenjs"])。无需包时用 Worker 线程快速执行。输出到工作区 .brainplus/output/ 目录。`,
       inputSchema: jsonSchema({
         type: 'object',
         properties: {
@@ -33,7 +33,7 @@ export async function registerSandboxTools(tools: ToolMap) {
 
   if (getPythonSandboxEnabled()) {
     tools['sandbox_execute_python'] = {
-      description: `使用 Python 3/uv 执行。可传 packages 自动 pip install。输出到工作区 output/ 目录。有第三方库需求时优先用此工具。`,
+      description: `使用 Python 3/uv 执行。可传 packages 自动 pip install。输出到工作区 .brainplus/output/ 目录。有第三方库需求时优先用此工具。`,
       inputSchema: jsonSchema({
         type: 'object',
         properties: {

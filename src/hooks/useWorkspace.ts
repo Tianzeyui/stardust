@@ -39,7 +39,7 @@ export function useWorkspace(projectId?: string | null): WorkspacePaths & { refr
       const ws = await api.getPaths()
       setPaths({ root: ws.root, output: ws.output })
     } else {
-      setPaths({ root: '~/BrainPlus/workspace', output: '~/BrainPlus/workspace/output' })
+      setPaths({ root: '~/BrainPlus/workspace', output: '~/BrainPlus/workspace/.brainplus/output' })
     }
   }, [projectId])
 

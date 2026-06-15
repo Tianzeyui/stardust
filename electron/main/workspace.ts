@@ -83,12 +83,11 @@ export function resetWorkspaceRoot(): void {
 
 export function getWorkspaceInfo(): { root: string; output: string; brainplusDir: string; isCustom: boolean } {
   const root = getRoot()
-  return {
-    root,
-    brainplusDir: path.join(root, '.brainplus'),
-    output: path.join(root, '.brainplus', 'output'),
-    isCustom: root !== DEFAULT_ROOT,
-  }
+  const brainplusDir = path.join(root, '.brainplus')
+  const output = path.join(brainplusDir, 'output')
+  // 懒创建：确保目录存在
+  fs.mkdirSync(output, { recursive: true })
+  return { root, brainplusDir, output, isCustom: root !== DEFAULT_ROOT }
 }
 
 export function getWorkspacePaths() {

@@ -233,7 +233,7 @@ class PluginSystemImpl {
       },
       workspace: {
         getPaths: async () => {
-          if (!ea?.workspace) return { root: '~/BrainPlus/workspace', output: '~/BrainPlus/workspace/output' }
+          if (!ea?.workspace) return { root: '~/BrainPlus/workspace', output: '~/BrainPlus/workspace/.brainplus/output' }
           return ea.workspace.getPaths()
         },
         openFile: async (filePath: string) => {

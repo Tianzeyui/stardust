@@ -144,7 +144,7 @@ class ProjectStoreImpl {
     try {
       // 确保新目录存在
       await api.fs.mkdir(newPath).catch(() => {})
-      await api.fs.mkdir(`${newPath}/output`).catch(() => {})
+      await api.fs.mkdir(`${newPath}/.brainplus/output`).catch(() => {})
       // 复制文件
       if (copyFiles && oldPath !== newPath) {
         await api.fs.copyDir(oldPath, newPath)
