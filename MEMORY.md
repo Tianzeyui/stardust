@@ -1,3 +1,0 @@
-- [项目进度与未完成工作](memory/project-status.md) — 各 Phase 完成状态、缺失功能、优先级排序
-- [分层架构设计](memory/architecture-design.md) — AI_ARCHITECTURE.md 9 个 Phase 概述
-- [关键技术选型与实际差异](memory/key-tech-choices.md) — 设计 vs 实际实现的差异清单
