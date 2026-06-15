@@ -555,6 +555,17 @@ function DiffFileBlock({ lines: allLines }: { lines: string[] }) {
   const isLong = renderLines.length > 20
   const display = isLong && !expanded ? renderLines.slice(0, 15) : renderLines
 
+  // 计算行号
+  let oldNum = 0, newNum = 0
+  const lineNums: Array<{ old: number | null; new: number | null }> = []
+  for (const line of renderLines) {
+    const m = line.match(/^@@\s+-(\d+)(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s+@@/)
+    if (m) { oldNum = parseInt(m[1]); newNum = parseInt(m[2]); lineNums.push({ old: null, new: null }); continue }
+    const isAdd = line.startsWith('+') && !line.startsWith('+++')
+    const isDel = line.startsWith('-') && !line.startsWith('---')
+    lineNums.push({ old: isAdd ? null : oldNum++, new: isDel ? null : newNum++ })
+  }
+
   return (
     <div className="border-b border-border/50 last:border-b-0">
       {/* 文件名标题栏 */}
@@ -570,16 +581,22 @@ function DiffFileBlock({ lines: allLines }: { lines: string[] }) {
         const isAdd = line.startsWith('+') && !line.startsWith('+++')
         const isDel = line.startsWith('-') && !line.startsWith('---')
         const isHdr = line.startsWith('@@')
+        const nums = lineNums[i]
         const prefix = isHdr ? null : line.slice(0, 1)
-        const body = isHdr ? line.replace(/^@@\s+-\d+,\d+\s+\+(\d+),\d+\s+@@/, 'L$1') : line.slice(1)
+        const body = isHdr ? line.replace(/^@@\s+-\d+(?:,\d+)?\s+\+\d+(?:,\d+)?\s+@@/, '') : line.slice(1)
         const rowCls = isAdd ? 'bg-zinc-800 text-zinc-200'
           : isDel ? 'bg-zinc-100 text-zinc-400 line-through'
           : isHdr ? 'bg-muted/50 text-muted-foreground text-[10px]'
           : ''
         return (
           <div key={i} className={`flex px-3 py-px ${rowCls}`}>
+            {/* 行号列 */}
+            <span className="shrink-0 w-14 text-right select-none text-zinc-600 text-[10px] mr-2">
+              {isHdr ? '' : nums ? `${nums.old ?? ''}` : ''}
+            </span>
+            {/* 符号列 */}
             {prefix != null && (
-              <span className={`shrink-0 w-4 select-none font-semibold ${isAdd ? 'text-zinc-400' : isDel ? 'text-zinc-300' : 'text-zinc-500'}`}>{prefix}</span>
+              <span className={`shrink-0 w-3 select-none font-semibold ${isAdd ? 'text-zinc-400' : isDel ? 'text-zinc-300' : 'text-zinc-500'}`}>{prefix}</span>
             )}
             <span className="whitespace-pre-wrap break-all">{body || ' '}</span>
           </div>
