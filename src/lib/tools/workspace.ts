@@ -25,6 +25,7 @@ function isInsideWorkspace(filePath: string): boolean {
 }
 
 function notifyUI(event: any) {
+  console.log('[fileop] notifyUI:', event.type, event.fileOp?.path)
   window.dispatchEvent(new CustomEvent('brainplus:fileop', { detail: event }))
 }
 
