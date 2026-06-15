@@ -496,7 +496,7 @@ function FileOpBubble({ fo }: { fo: FileOpRequest }) {
             </span>
             <span className="text-[10px] text-muted-foreground shrink-0">
               {fo.status === 'pending_confirm' ? '待确认'
-                : fo.status === 'done' ? (fo.size != null ? `${fo.size} 字符` : '已删除')
+                : fo.status === 'done' ? (fo.size != null ? `${fo.size} 字符` : fo.type === 'delete' ? '已删除' : '已完成')
                 : fo.status === 'error' ? '失败'
                 : '已拒绝'}
             </span>
@@ -506,7 +506,7 @@ function FileOpBubble({ fo }: { fo: FileOpRequest }) {
             <div className="flex items-center gap-2 mt-2">
               <button className="flex items-center gap-1 rounded bg-primary px-2.5 py-1 text-[10px] text-primary-foreground hover:bg-primary/90 transition-colors"
                 onClick={async () => { const { confirmFileOp } = await import('@/lib/fileOpManager'); confirmFileOp(fo.id) }}>
-                <Check className="h-3 w-3" />确认{fo.type === 'write' ? '写入' : '删除'}
+                <Check className="h-3 w-3" />确认
               </button>
               <button className="flex items-center gap-1 rounded bg-muted px-2.5 py-1 text-[10px] text-muted-foreground hover:bg-muted/80 transition-colors"
                 onClick={async () => { const { rejectFileOp } = await import('@/lib/fileOpManager'); rejectFileOp(fo.id) }}>
