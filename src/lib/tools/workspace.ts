@@ -206,13 +206,13 @@ export async function registerWorkspaceTools(tools: ToolMap) {
 
   // glob 转正则
   function globToRegex(pattern: string): RegExp {
+    // 先保护 **，避免被 * 替换误伤
     let p = pattern
       .replace(/\./g, '\\.')
-      .replace(/\*\*\//g, '<<<STARSTAR>>>')
-      .replace(/\*/g, '[^/]*')
-      .replace(/<<<STARSTAR>>>/g, '(?:.+/)*')
+      .replace(/\*\*\//g, '\x00DEEP\x00')  // **/ → 占位符
+      .replace(/\*/g, '[^/]*')               // * → 匹配非斜杠字符
+      .replace(/\x00DEEP\x00/g, '(?:.+/)*') // 占位符 → 任意深度目录
       .replace(/\?/g, '[^/]')
-    // {a,b} 展开
     p = p.replace(/\{([^}]+)\}/g, (_, alts) => `(${alts.split(',').join('|')})`)
     return new RegExp(`^${p}$`, 'i')
   }
@@ -232,7 +232,8 @@ export async function registerWorkspaceTools(tools: ToolMap) {
       const isDir = statResult.success && statResult.stat?.isDirectory === true
       if (isDir) {
         await globWalk(childPath, pattern, rootPath, results, depth + 1)
-      } else if (pattern.test(relPath)) {
+      }
+      if (pattern.test(relPath)) {
         results.push(relPath)
       }
     }
