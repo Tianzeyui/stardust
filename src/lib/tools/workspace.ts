@@ -217,26 +217,6 @@ export async function registerWorkspaceTools(tools: ToolMap) {
     return new RegExp(`^${p}$`, 'i')
   }
 
-  async function globWalk(dirPath: string, pattern: RegExp, rootPath: string, results: string[], depth: number): Promise<void> {
-    if (depth > 15 || results.length >= 200) return
-    const api = window.electronAPI?.fs
-    if (!api) return
-    const listResult = await api.listDir(dirPath)
-    if (!listResult.success || !listResult.files) return
-    const skip = new Set(['node_modules', '.git', '.brainplus', 'dist', 'build', '.next', '__pycache__', '.DS_Store'])
-    for (const name of listResult.files) {
-      if (skip.has(name)) continue
-      const childPath = `${dirPath}/${name}`
-      const relPath = childPath.slice(rootPath.length + 1)
-      if (pattern.test(relPath)) results.push(relPath)
-      // 尝试列出子目录：成功=目录→递归
-      const subList = await api.listDir(childPath)
-      if (subList.success && subList.files && subList.files.length > 0) {
-        await globWalk(childPath, pattern, rootPath, results, depth + 1)
-      }
-    }
-  }
-
   tools['workspace_glob'] = {
     description:
       '用 glob 模式匹配工作区中的文件。支持 ** (任意深度)、* (任意字符)、? (单字符)、{a,b} (选项)。' +
@@ -256,8 +236,29 @@ export async function registerWorkspaceTools(tools: ToolMap) {
       const basePath = args.path ? (args.path.startsWith('/') ? args.path : `${root}/${args.path}`) : root
       const regex = globToRegex(args.pattern)
       const results: string[] = []
-      await globWalk(basePath, regex, basePath, results, 0)
-      return results.length > 0 ? results.join('\n') : `未找到匹配 "${args.pattern}" 的文件`
+      const skip = new Set(['node_modules', '.git', '.brainplus', 'dist', 'build', '.next', '__pycache__', '.DS_Store'])
+
+      async function walk(dir: string, depth: number) {
+        if (depth > 15 || results.length >= 200) return
+        const api = window.electronAPI?.fs
+        if (!api) return
+        const listResult = await api.listDir(dir)
+        if (!listResult.success || !listResult.files) return
+        for (const name of listResult.files) {
+          if (skip.has(name)) continue
+          const childPath = `${dir}/${name}`
+          const relPath = childPath.slice(basePath.length + 1)
+          if (regex.test(relPath)) results.push(relPath)
+          // 尝试递归：用 listDir 判断是否是目录
+          const sub = await api.listDir(childPath)
+          if (sub.success && sub.files && sub.files.length > 0) {
+            await walk(childPath, depth + 1)
+          }
+        }
+      }
+
+      await walk(basePath, 0)
+      return results.length > 0 ? results.sort().join('\n') : `未找到匹配 "${args.pattern}" 的文件`
     },
   }
 
