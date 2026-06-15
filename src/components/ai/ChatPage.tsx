@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { chat, setAgentUIHandler, setTerminalUIHandler, type ChatStreamEvent, type AskUserEvent } from '@/lib/chatService'
+import { chat, setAgentUIHandler, setTerminalUIHandler, setFileOpUIHandler, type ChatStreamEvent, type AskUserEvent } from '@/lib/chatService'
 import type { ModelMessage } from 'ai'
 import { formatDuration, estimateTokens } from '@/lib/observability'
 import { ContextWindowManager } from '@/lib/contextWindowManager'
@@ -337,6 +337,23 @@ export function ChatPage() {
       }
     })
     return () => { setTerminalUIHandler(() => {}) }
+  }, [])
+
+  // 文件操作 UI 事件
+  useEffect(() => {
+    setFileOpUIHandler((event: any) => {
+      if (event.type === 'fileop_created') {
+        setMessages(prev => [...prev, { role: 'assistant', content: '', fileOp: event.fileOp, streaming: false } as any])
+      } else if (event.type === 'fileop_updated') {
+        setMessages(prev => prev.map(m => {
+          if ((m as any).fileOp?.id === event.fileOp.id) {
+            return { ...m, fileOp: { ...event.fileOp } }
+          }
+          return m
+        }))
+      }
+    })
+    return () => { setFileOpUIHandler(null) }
   }, [])
 
   // 新对话

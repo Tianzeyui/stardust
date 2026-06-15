@@ -47,6 +47,7 @@ export interface UIMessage {
   agentTimeline?: AgentTimelineItem[]    // 时间线：文字+工具调用按顺序穿插
   mainTimeline?: MainTimelineItem[]     // 主对话时间线：thinking+text 按实际发生顺序
   terminal?: TerminalStatus             // 终端命令状态
+  fileOp?: FileOpRequest               // 文件操作请求
 }
 
 export interface ConsoleLine {
@@ -79,6 +80,8 @@ export interface CompressionEventData {
   limit: number
   summary?: string
 }
+
+import type { FileOpRequest } from '@/lib/fileOpManager'
 
 export function detectToolType(name: string): ToolType {
   if (name.startsWith('sandbox_')) return 'sandbox'

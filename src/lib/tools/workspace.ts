@@ -1,9 +1,11 @@
 /**
- * 工作区工具：列出目录、读取文件、搜索文件
+ * 工作区工具：列出目录、读取文件、搜索文件、写入/删除文件
  * 路径由 ChatPage 注入，跟随项目/全局工作区切换
  */
 import { jsonSchema } from 'ai'
 import type { ToolMap } from './registry'
+import { createFileOp, updateFileOp, getFileOp, setFileOpResolver } from '@/lib/fileOpManager'
+import { getFileOpUIHandler } from '@/lib/chatService'
 
 /** 当前工作区根目录（由 ChatPage 动态注入） */
 let _workspaceRoot: string | undefined
@@ -15,6 +17,15 @@ export function setWorkspaceRoots(root: string, output: string) {
 
 function getRoot(): string { return _workspaceRoot || '~/BrainPlus/workspace' }
 function getOutput(): string { return _workspaceOutput || '~/BrainPlus/workspace/.brainplus/output' }
+
+/** 检查路径是否在工作区内 */
+function isInsideWorkspace(filePath: string): boolean {
+  const root = getRoot()
+  const absPath = filePath.startsWith('/') ? filePath : `${root}/${filePath}`
+  return absPath.startsWith(root)
+}
+
+function notifyUI(event: any) { getFileOpUIHandler()?.(event) }
 
 async function listDirTree(dirPath: string, maxDepth: number, currentDepth: number): Promise<string> {
   const api = window.electronAPI?.fs
@@ -173,6 +184,107 @@ export async function registerWorkspaceTools(tools: ToolMap) {
       const result = await api.grep(basePath, args.pattern, args.file)
       if (!result.success) return `grep 失败: ${result.error}`
       return result.output || '(无匹配)'
+    },
+  }
+
+  tools['workspace_write_file'] = {
+    description:
+      '写入文件。工作区内的文件直接写入，工作区外的文件需要用户确认。' +
+      '会自动创建父目录。content 为文件完整内容。',
+    inputSchema: jsonSchema({
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: '文件路径（绝对路径，或相对于工作区根）' },
+        content: { type: 'string', description: '要写入的完整文件内容' },
+      },
+      required: ['path', 'content'],
+    }),
+    execute: async (args: { path: string; content: string }) => {
+      const api = window.electronAPI?.fs
+      if (!api) return '文件系统不可用'
+      const root = getRoot()
+      const absPath = args.path.startsWith('/') ? args.path : `${root}/${args.path}`
+      const inside = isInsideWorkspace(absPath)
+
+      if (!inside) {
+        const id = 'fop_' + Math.random().toString(36).slice(2, 8)
+        const op = createFileOp(id, 'write', absPath, args.content)
+        notifyUI({ type: 'fileop_created', fileOp: { ...op } })
+
+        const confirmed = await new Promise<boolean>(resolve => {
+          setFileOpResolver(id, resolve)
+        })
+
+        if (!confirmed) {
+          updateFileOp(id, { status: 'rejected' })
+          notifyUI({ type: 'fileop_updated', fileOp: { ...getFileOp(id)! } })
+          return `写入 ${absPath} 已被用户拒绝。`
+        }
+      }
+
+      try {
+        await api.writeFile(absPath, args.content)
+        if (!inside) {
+          updateFileOp(args.path, { status: 'done', size: args.content.length })
+          notifyUI({ type: 'fileop_updated', fileOp: { ...getFileOp(args.path)! } })
+        }
+        return `✅ 已写入 ${absPath} (${args.content.length} 字符)`
+      } catch (e: any) {
+        if (!inside) {
+          updateFileOp(args.path, { status: 'error', error: e.message })
+          notifyUI({ type: 'fileop_updated', fileOp: { ...getFileOp(args.path)! } })
+        }
+        return `写入失败: ${e.message}`
+      }
+    },
+  }
+
+  tools['workspace_delete_file'] = {
+    description: '删除文件。工作区内的文件直接删除，工作区外的文件需要用户确认。',
+    inputSchema: jsonSchema({
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: '要删除的文件路径' },
+      },
+      required: ['path'],
+    }),
+    execute: async (args: { path: string }) => {
+      const api = window.electronAPI?.fs
+      if (!api) return '文件系统不可用'
+      const root = getRoot()
+      const absPath = args.path.startsWith('/') ? args.path : `${root}/${args.path}`
+      const inside = isInsideWorkspace(absPath)
+
+      if (!inside) {
+        const id = 'fop_' + Math.random().toString(36).slice(2, 8)
+        const op = createFileOp(id, 'delete', absPath)
+        notifyUI({ type: 'fileop_created', fileOp: { ...op } })
+
+        const confirmed = await new Promise<boolean>(resolve => {
+          setFileOpResolver(id, resolve)
+        })
+
+        if (!confirmed) {
+          updateFileOp(id, { status: 'rejected' })
+          notifyUI({ type: 'fileop_updated', fileOp: { ...getFileOp(id)! } })
+          return `删除 ${absPath} 已被用户拒绝。`
+        }
+      }
+
+      try {
+        await api.unlink(absPath)
+        if (!inside) {
+          updateFileOp(args.path, { status: 'done' })
+          notifyUI({ type: 'fileop_updated', fileOp: { ...getFileOp(args.path)! } })
+        }
+        return `✅ 已删除 ${absPath}`
+      } catch (e: any) {
+        if (!inside) {
+          updateFileOp(args.path, { status: 'error', error: e.message })
+          notifyUI({ type: 'fileop_updated', fileOp: { ...getFileOp(args.path)! } })
+        }
+        return `删除失败: ${e.message}`
+      }
     },
   }
 }

@@ -4,6 +4,7 @@ import MarkdownPreview from '@uiw/react-markdown-preview'
 import type { UIMessage, ToolCallStatus, MessageAttachment, AgentToolCallEntry, AgentTimelineItem, TerminalStatus } from '@/types/chat'
 import { useAuth } from '@/contexts/AuthContext'
 import { listAgents, type Agent } from '@/lib/agentStore'
+import type { FileOpRequest } from '@/lib/fileOpManager'
 
 /** 工具结果格式化：JSON 结果包进代码块，纯文本保持原样 */
 function formatToolResult(result: string, type: string): string {
@@ -59,9 +60,15 @@ export function ChatMessage({ msg }: ChatMessageProps) {
     )
   }
 
+  if (msg.fileOp) {
+    return (
+      <FileOpBubble fo={msg.fileOp} />
+    )
+  }
+
   if (msg.role === 'tool' && msg.toolCall) {
-    // run_terminal 有独立的自定义 TerminalBubble，不显示通用工具气泡
-    if (msg.toolCall.name === 'run_terminal') return null
+    // run_terminal / workspace_write_file / workspace_delete_file 有独立气泡，不显示通用工具气泡
+    if (msg.toolCall.name === 'run_terminal' || msg.toolCall.name === 'workspace_write_file' || msg.toolCall.name === 'workspace_delete_file') return null
     return msg.parentAgent ? (
       <div className="ml-4 border-l-2 border-primary/20 pl-3 my-1">
         <ToolBubble tc={msg.toolCall} />
@@ -467,6 +474,52 @@ function AgentCardButton({ agentName }: { agentName: string }) {
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+/** 文件操作气泡（确认/结果展示，样式参考终端） */
+function FileOpBubble({ fo }: { fo: FileOpRequest }) {
+  const icon = fo.status === 'done' ? <Check className="h-3.5 w-3.5 text-green-400 shrink-0" />
+    : fo.status === 'error' ? <X className="h-3.5 w-3.5 text-red-400 shrink-0" />
+    : fo.status === 'rejected' ? <X className="h-3.5 w-3.5 text-zinc-500 shrink-0" />
+    : <FileText className="h-3.5 w-3.5 text-yellow-400 animate-pulse shrink-0" />
+
+  return (
+    <div className="flex gap-3 max-w-full">
+      <div className="min-w-0 flex-1">
+        <div className="rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-xs overflow-hidden">
+          <div className="flex items-center gap-2">
+            {icon}
+            <span className="text-zinc-200 font-mono text-[11px] truncate">
+              {fo.type === 'write' ? '✎' : '✕'} {fo.path}
+            </span>
+            <span className="text-[10px] text-zinc-500 shrink-0">
+              {fo.status === 'pending_confirm' ? '待确认'
+                : fo.status === 'done' ? (fo.size != null ? `${fo.size} 字符` : '已删除')
+                : fo.status === 'error' ? '失败'
+                : '已拒绝'}
+            </span>
+          </div>
+
+          {fo.status === 'pending_confirm' && (
+            <div className="flex items-center gap-2 mt-2">
+              <button className="flex items-center gap-1 rounded bg-green-700 px-2.5 py-1 text-[10px] text-green-100 hover:bg-green-600 transition-colors"
+                onClick={async () => { const { confirmFileOp } = await import('@/lib/fileOpManager'); confirmFileOp(fo.id) }}>
+                <Check className="h-3 w-3" />确认{fo.type === 'write' ? '写入' : '删除'}
+              </button>
+              <button className="flex items-center gap-1 rounded bg-zinc-700 px-2.5 py-1 text-[10px] text-zinc-300 hover:bg-zinc-600 transition-colors"
+                onClick={async () => { const { rejectFileOp } = await import('@/lib/fileOpManager'); rejectFileOp(fo.id) }}>
+                <X className="h-3 w-3" />拒绝
+              </button>
+            </div>
+          )}
+
+          {fo.status === 'error' && fo.error && (
+            <div className="mt-1 text-[10px] text-red-400 font-mono">{fo.error}</div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

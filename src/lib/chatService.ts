@@ -201,6 +201,19 @@ export function setTerminalUIHandler(handler: ((event: TerminalUIEvent) => void)
 }
 export function getTerminalUIHandler() { return terminalUIHandler }
 
+import type { FileOpRequest } from './fileOpManager'
+
+export interface FileOpUIEvent {
+  type: 'fileop_created' | 'fileop_updated'
+  fileOp: FileOpRequest
+}
+
+let fileOpUIHandler: ((event: FileOpUIEvent) => void) | null = null
+export function setFileOpUIHandler(handler: ((event: FileOpUIEvent) => void) | null) {
+  fileOpUIHandler = handler
+}
+export function getFileOpUIHandler() { return fileOpUIHandler }
+
 export interface ChatStreamEvent {
   type: 'text-delta' | 'tool-call' | 'tool-result' | 'done' | 'compression' | 'disclosure' | 'system-log' | 'agent-tool-call' | 'agent-tool-result' | 'agent-text-delta' | 'agent-done' | 'task-status' | 'reasoning-delta' | 'agent-reasoning-delta'
   text?: string
