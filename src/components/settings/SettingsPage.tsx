@@ -268,21 +268,23 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
     updateModel(modelId, { modelsFetched: false })
     try {
       let url = ''
-      const id = model.id
-      const tpl = PROVIDER_TEMPLATES.find(t => model.name === t.name || model.id.includes(t.id))
-      if (id.startsWith('model_')) {
-        url = `${model.baseUrl}/models`
-      } else if (id === 'openai') {
-        url = `${model.baseUrl || 'https://api.openai.com/v1'}/models`
-      } else if (id === 'anthropic') {
+      const providerName = (model.name || model.id).toLowerCase()
+      const isAnthropic = providerName === 'anthropic' || providerName === 'claude'
+      const isOpenAI = providerName === 'openai'
+
+      // 用 model.name 判断 provider 类型，兼容新旧 ID 格式
+      if (isAnthropic) {
         url = `${model.baseUrl || 'https://api.anthropic.com/v1'}/models`
+      } else if (isOpenAI) {
+        url = `${model.baseUrl || 'https://api.openai.com/v1'}/models`
       } else {
         url = `${model.baseUrl}/models`
       }
 
       const headers: Record<string, string> = {}
-      if (model.name === 'Claude' || id === 'anthropic') {
+      if (isAnthropic) {
         headers['x-api-key'] = model.apiKey
+        headers['anthropic-version'] = '2023-06-01'
       } else {
         headers['Authorization'] = `Bearer ${model.apiKey}`
       }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { ChevronDown, Code, Search, Check, RefreshCw } from 'lucide-react'
+import { ChevronDown, Code, Search, Check, RefreshCw, Terminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -11,6 +11,7 @@ import {
   getBingEnabled, saveBingEnabled,
   getBingResultCount, saveBingResultCount, getBingTimeout, saveBingTimeout,
   getGraphEnabled, saveGraphEnabled,
+  getTerminalEnabled, saveTerminalEnabled,
 } from '@/lib/config'
 
 function Toggle({ enabled, onToggle }: { enabled: boolean; onToggle: () => void }) {
@@ -38,7 +39,7 @@ function NumberField({ label, value, setValue, min, max, unit }: {
 }
 
 export function CapabilitiesTab() {
-  const [capExpanded, setCapExpanded] = useState<Record<string, boolean>>({ sandbox: true, search: true, graph: true })
+  const [capExpanded, setCapExpanded] = useState<Record<string, boolean>>({ sandbox: true, search: true, graph: true, terminal: true })
   const [sandboxJS, setSandboxJS] = useState(getJSSandboxEnabled)
   const [sandboxPython, setSandboxPython] = useState(getPythonSandboxEnabled)
   const [ddgEnabled, setDdgEnabled] = useState(getDuckDuckGoEnabled)
@@ -47,6 +48,9 @@ export function CapabilitiesTab() {
   const [bingEnabled, setBingEnabled] = useState(getBingEnabled)
   const [bingResultCount, setBingResultCount] = useState(getBingResultCount)
   const [bingTimeout, setBingTimeout] = useState(getBingTimeout)
+
+  // 终端
+  const [terminalEnabled, setTerminalEnabled] = useState(getTerminalEnabled)
 
   // 图数据库
   const [graphEnabled, setGraphEnabled] = useState(getGraphEnabled)
@@ -135,6 +139,22 @@ export function CapabilitiesTab() {
                 <Toggle enabled={ddgEnabled} onToggle={() => { setDdgEnabled(v => { const nv = !v; saveDuckDuckGoEnabled(nv); return nv }) }} />
               </div>
               {ddgEnabled && <div className="grid grid-cols-2 gap-3"><NumberField label="搜索结果数" value={ddgResultCount} setValue={n => { setDdgResultCount(n); saveDDGResultCount(n) }} min={1} max={20} unit="条" /><NumberField label="超时" value={ddgTimeout} setValue={n => { setDdgTimeout(n); saveDDGTimeout(n) }} min={3} max={60} unit="秒" /></div>}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 终端 */}
+      <div className="rounded-lg border border-border">
+        <div className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => setCapExpanded(p => ({ ...p, terminal: !p.terminal }))}>
+          <div className="flex items-center gap-3"><Terminal className="h-4 w-4 text-muted-foreground" /><div><p className="text-sm font-medium text-foreground">终端</p><p className="text-[10px] text-muted-foreground">允许助手执行终端命令</p></div></div>
+          <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${capExpanded.terminal ? '' : '-rotate-90'}`} />
+        </div>
+        {capExpanded.terminal && (
+          <div className="border-t border-border px-4 py-3">
+            <div className="rounded-md border border-border bg-muted/20 px-3 py-2.5 flex items-center justify-between">
+              <div><p className="text-xs font-medium text-foreground">run_terminal</p><p className="text-[10px] text-muted-foreground">助手可执行终端命令，执行前需用户确认</p></div>
+              <Toggle enabled={terminalEnabled} onToggle={() => { setTerminalEnabled(v => { const nv = !v; saveTerminalEnabled(nv); return nv }) }} />
             </div>
           </div>
         )}

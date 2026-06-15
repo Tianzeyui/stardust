@@ -27,10 +27,17 @@ export type AgentTimelineItem =
   | { type: 'text'; content: string }
   | { type: 'tool'; name: string; brief: string; status: 'running' | 'ok' | 'error'; output?: string }
 
+/** 主对话时间线项：按实际发生顺序记录 thinking 和 text */
+export type MainTimelineItem =
+  | { type: 'thinking'; content: string }
+  | { type: 'text'; content: string }
+
 export interface UIMessage {
   role: 'user' | 'assistant' | 'tool'
   content: string
   streaming?: boolean
+  thinking?: string  // AI 思考过程（reasoning/thinking），流式累积
+  thinkingLoading?: boolean  // 思考进行中（reasoning-start 后，reasoning-end 前）
   toolCall?: ToolCallStatus
   attachments?: MessageAttachment[]
   modelName?: string
@@ -38,6 +45,8 @@ export interface UIMessage {
   parentAgent?: string  // 子 Agent 标签，工具消息渲染到 Agent 容器内
   agentToolCalls?: AgentToolCallEntry[]  // 保留兼容
   agentTimeline?: AgentTimelineItem[]    // 时间线：文字+工具调用按顺序穿插
+  mainTimeline?: MainTimelineItem[]     // 主对话时间线：thinking+text 按实际发生顺序
+  terminal?: TerminalStatus             // 终端命令状态
 }
 
 export interface ConsoleLine {
@@ -46,6 +55,20 @@ export interface ConsoleLine {
   icon: string
   msg: string
   status: 'ok' | 'running' | 'error' | 'info'
+}
+
+/** 终端命令状态 */
+export interface TerminalStatus {
+  id: string
+  command: string
+  cwd?: string
+  status: 'pending_confirm' | 'running' | 'done' | 'error' | 'cancelled'
+  async?: boolean
+  stdout: string
+  stderr: string
+  exitCode?: number
+  startTime: number
+  endTime?: number
 }
 
 /** 压缩事件数据 */

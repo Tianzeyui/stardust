@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Loader2, FileText, List, Code } from 'lucide-react'
+import { Loader2, FileText, List, Code, ChevronDown } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { loadSkillFile } from '@/lib/skillStore'
 import type { InstalledSkill } from '@/types/skill'
@@ -17,13 +17,14 @@ export function SkillDetailDialog({ skill, open, onOpenChange }: SkillDetailDial
   const [selectedFile, setSelectedFile] = useState('SKILL.md')
   const [fileContent, setFileContent] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [fileExpanded, setFileExpanded] = useState(false)
 
   useEffect(() => {
     if (!skill || !open) return
-    // 默认选中 SKILL.md
     const defaultFile = skill.fileList.includes('SKILL.md') ? 'SKILL.md' : skill.fileList[0]
     setSelectedFile(defaultFile || '')
     setActiveTab('files')
+    setFileExpanded(false)
   }, [skill, open])
 
   useEffect(() => {
@@ -32,6 +33,7 @@ export function SkillDetailDialog({ skill, open, onOpenChange }: SkillDetailDial
       return
     }
     setLoading(true)
+    setFileExpanded(false)
     loadSkillFile(skill.id, selectedFile)
       .then(content => setFileContent(content))
       .catch(() => setFileContent(null))
@@ -106,11 +108,28 @@ export function SkillDetailDialog({ skill, open, onOpenChange }: SkillDetailDial
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 </div>
               ) : fileContent != null ? (
-                <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap break-all p-2 bg-muted/30 rounded min-h-full">
-                  {fileContent.length > 10000
-                    ? fileContent.slice(0, 10000) + '\n\n... (内容过长，已截断)'
-                    : fileContent}
-                </pre>
+                <div>
+                  {fileContent.length > 300 ? (
+                    <>
+                      {fileExpanded && (
+                        <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap break-words p-2 bg-muted/30 rounded">
+                          {fileContent}
+                        </pre>
+                      )}
+                      <button
+                        className="flex items-center gap-1 mt-1 text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                        onClick={() => setFileExpanded(!fileExpanded)}
+                      >
+                        <ChevronDown className={`h-3 w-3 transition-transform ${fileExpanded ? 'rotate-180' : ''}`} />
+                        {fileExpanded ? '收起' : `展开全部（${(fileContent.length / 1000).toFixed(1)}k 字符）`}
+                      </button>
+                    </>
+                  ) : (
+                    <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap break-words p-2 bg-muted/30 rounded">
+                      {fileContent}
+                    </pre>
+                  )}
+                </div>
               ) : (
                 <p className="text-xs text-muted-foreground p-4">无法读取文件内容</p>
               )}
@@ -165,7 +184,7 @@ export function SkillDetailDialog({ skill, open, onOpenChange }: SkillDetailDial
                         </span>
                       )}
                     </div>
-                    <pre className="text-[11px] font-mono text-muted-foreground p-2 whitespace-pre-wrap break-all overflow-auto max-h-32">
+                    <pre className="text-[11px] font-mono text-muted-foreground p-2 whitespace-pre-wrap break-words overflow-auto max-h-60">
                       {block.code}
                     </pre>
                   </div>

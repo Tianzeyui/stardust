@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   ArrowRight, Loader2, Bot, X, ListTodo, Circle, CheckCircle2, File,
-  Paperclip, FileText, Image, FolderOpen, ExternalLink, ArrowLeft,
+  Paperclip, FileText, Image, FolderOpen, ExternalLink, ArrowLeft, ArrowDown,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { chat, setAgentUIHandler, type ChatStreamEvent, type AskUserEvent } from '@/lib/chatService'
+import { chat, setAgentUIHandler, setTerminalUIHandler, type ChatStreamEvent, type AskUserEvent } from '@/lib/chatService'
 import type { ModelMessage } from 'ai'
 import { formatDuration, estimateTokens } from '@/lib/observability'
 import { ContextWindowManager } from '@/lib/contextWindowManager'
@@ -111,6 +111,10 @@ export function ChatPage() {
   const messagesRef = useRef<UIMessage[]>([])
   // enable_tool 代理映射：AI SDK 工具名 → 实际显示名
   const toolNameProxyRef = useRef<Map<string, string>>(new Map())
+  // 思考过程累积
+  const thinkingRef = useRef('')
+  const mainTimelineRef = useRef<Array<{ type: 'thinking'; content: string } | { type: 'text'; content: string }>>([])
+  const agentThinkingRef = useRef('')
   // Agent 流式输出跟踪 + 累计消耗
   const agentActiveRef = useRef<string | null>(null)
   const agentStreamedRef = useRef('')
@@ -128,33 +132,76 @@ export function ChatPage() {
   const logId = useRef(0)
   const endRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const userScrolledUpRef = useRef(false)
-
-  const isNearBottom = useCallback(() => {
-    const el = scrollRef.current
-    if (!el) return true
-    return el.scrollHeight - el.scrollTop - el.clientHeight < 80
-  }, [])
+  const userPausedRef = useRef(false)
+  const [showScrollBtn, setShowScrollBtn] = useState(false)
 
   useEffect(() => { messagesRef.current = messages }, [messages])
+
+  // 渲染同步，确保事件回调里读到最新 streaming 状态
+  const streamingRef = useRef(false)
+  streamingRef.current = messages.some(m => m.streaming)
+
+  // wheel 事件：在浏览器实际滚动之前触发，提前设暂停标记，避免竞态
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      if (!streamingRef.current) return
+      // 向上滚（离开底部）：立即暂停
+      if (e.deltaY < 0) {
+        userPausedRef.current = true
+        setShowScrollBtn(true)
+      }
+    }
+    el.addEventListener('wheel', onWheel, { passive: true })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+
+  // scroll 事件：检测用户回到底部以恢复跟底
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    let resumeTimer: ReturnType<typeof setTimeout> | null = null
     const onScroll = () => {
-      userScrolledUpRef.current = !isNearBottom()
+      if (!streamingRef.current) return
+      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+      if (nearBottom && userPausedRef.current) {
+        // 触控板惯性滚动在底部附近抖动，延迟确认
+        if (resumeTimer) clearTimeout(resumeTimer)
+        resumeTimer = setTimeout(() => {
+          userPausedRef.current = false
+          setShowScrollBtn(false)
+        }, 150)
+      }
     }
     el.addEventListener('scroll', onScroll, { passive: true })
-    return () => el.removeEventListener('scroll', onScroll)
-  }, [isNearBottom])
+    return () => {
+      el.removeEventListener('scroll', onScroll)
+      if (resumeTimer) clearTimeout(resumeTimer)
+    }
+  }, [])
 
+  // 自动跟底：未暂停时始终跟底
   useEffect(() => {
-    // 流式更新中：用户没手动滚上去才跟底，用 instant 避免动画累积
-    const streaming = messages.some(m => m.streaming)
-    if (userScrolledUpRef.current && streaming) return
-    endRef.current?.scrollIntoView({ behavior: streaming ? 'instant' : 'smooth' })
-    // streaming 消息结束时重置标记
-    if (!streaming) userScrolledUpRef.current = false
+    if (userPausedRef.current) return
+    const el = scrollRef.current
+    if (el) el.scrollTop = el.scrollHeight
   }, [messages])
+
+  // 流式结束时重置
+  useEffect(() => {
+    if (!messages.some(m => m.streaming) && messages.length > 0) {
+      userPausedRef.current = false
+      setShowScrollBtn(false)
+    }
+  }, [messages])
+
+  // 点击按钮：恢复跟底并滚到底部
+  const scrollToBottom = useCallback(() => {
+    userPausedRef.current = false
+    setShowScrollBtn(false)
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'instant' })
+  }, [])
 
   const pushLog = (icon: string, msg: string, status: ConsoleLine['status'] = 'info') => {
     const id = ++logId.current
@@ -271,6 +318,23 @@ export function ChatPage() {
       }
     })
     return () => setAgentUIHandler(null)
+  }, [])
+
+  // 终端 UI 事件
+  useEffect(() => {
+    setTerminalUIHandler((event: any) => {
+      if (event.type === 'terminal_created') {
+        setMessages(prev => [...prev, { role: 'assistant', content: '', terminal: event.terminal, streaming: false } as any])
+      } else if (event.type === 'terminal_updated') {
+        setMessages(prev => prev.map(m => {
+          if ((m as any).terminal?.id === event.terminal.id) {
+            return { ...m, terminal: { ...event.terminal } }
+          }
+          return m
+        }))
+      }
+    })
+    return () => { setTerminalUIHandler(() => {}) }
   }, [])
 
   // 新对话
@@ -484,6 +548,9 @@ export function ChatPage() {
 
       let streamed = ''
       setConsoleLog([]); setTaskList([]); setActivatedToolNames(new Set())
+      thinkingRef.current = ''
+      mainTimelineRef.current = []
+      agentThinkingRef.current = ''
       agentStreamedRef.current = ''
       agentTimelineRef.current = []
       agentTotalTokensRef.current = 0
@@ -502,6 +569,7 @@ export function ChatPage() {
           if (agentTimelineRef.current.length === 0) return
           const timeline = [...agentTimelineRef.current]
           const content = agentStreamedRef.current
+          const thinking = agentThinkingRef.current
           setMessages(prev => {
             const n = [...prev]
             const l = n[n.length - 1]
@@ -509,9 +577,10 @@ export function ChatPage() {
             if (hasContainer) {
               l.content = content
               l.agentTimeline = timeline as any
+              l.thinking = thinking
             } else {
               if (l?.role === 'assistant' && l.streaming) { l.streaming = false }
-              n.push({ role: 'assistant', content, streaming: true, modelName: label, agentTimeline: timeline as any })
+              n.push({ role: 'assistant', content, streaming: true, modelName: label, agentTimeline: timeline as any, thinking })
             }
             return [...n]
           })
@@ -534,6 +603,22 @@ export function ChatPage() {
             }
           }
           ensureAgentContainer(event.agentName ? `Agent: ${event.agentName}` : 'Agent')
+        } else if (event.type === 'agent-reasoning-delta') {
+          agentThinkingRef.current += event.text || ''
+          const agentLabel = event.agentName ? `Agent: ${event.agentName}` : 'Agent'
+          // 确保 Agent 容器存在并更新 thinking 字段
+          setMessages(prev => {
+            const n = prev.map(m => ({ ...m }))
+            const l = n[n.length - 1]
+            const hasContainer = l?.role === 'assistant' && l.modelName === agentLabel
+            if (hasContainer) {
+              n[n.length - 1] = { ...l, thinking: agentThinkingRef.current, thinkingLoading: true }
+            } else {
+              if (l?.role === 'assistant' && l.streaming) { n[n.length - 1] = { ...l, streaming: false } }
+              n.push({ role: 'assistant', content: '', streaming: true, modelName: agentLabel, agentTimeline: [...agentTimelineRef.current] as any, thinking: agentThinkingRef.current, thinkingLoading: true })
+            }
+            return n
+          })
         } else if (event.type === 'agent-text-delta') {
           const agentLabel = event.agentName ? `Agent: ${event.agentName}` : 'Agent'
           agentStreamedRef.current += event.text || ''
@@ -550,9 +635,9 @@ export function ChatPage() {
             const l = n[n.length - 1]
             if (!l || l.role !== 'assistant' || l.modelName !== agentLabel) {
               if (l?.role === 'assistant' && l.streaming) { n[n.length - 1] = { ...l, streaming: false } }
-              n.push({ role: 'assistant', content: agentStreamedRef.current, streaming: true, modelName: agentLabel, agentTimeline: timeline as any })
+              n.push({ role: 'assistant', content: agentStreamedRef.current, streaming: true, modelName: agentLabel, agentTimeline: timeline as any, thinking: agentThinkingRef.current, thinkingLoading: false })
             } else {
-              n[n.length - 1] = { ...l, content: agentStreamedRef.current, agentTimeline: timeline as any }
+              n[n.length - 1] = { ...l, content: agentStreamedRef.current, agentTimeline: timeline as any, thinking: agentThinkingRef.current, thinkingLoading: false }
             }
             return n
           })
@@ -566,25 +651,55 @@ export function ChatPage() {
             const hasContainer = l?.role === 'assistant' && l.modelName?.startsWith('Agent:')
             if (!hasContainer && (agentStreamedRef.current.trim() || timeline.length > 0)) {
               if (l?.role === 'assistant' && l.streaming) { l.streaming = false }
-              n.push({ role: 'assistant', content: agentStreamedRef.current, streaming: false, modelName: agentLabel, agentTimeline: timeline as any })
+              n.push({ role: 'assistant', content: agentStreamedRef.current, streaming: false, modelName: agentLabel, agentTimeline: timeline as any, thinking: agentThinkingRef.current })
             } else if (hasContainer) {
-              n[n.length - 1] = { ...l, streaming: false, agentTimeline: timeline as any }
+              n[n.length - 1] = { ...l, streaming: false, agentTimeline: timeline as any, thinking: agentThinkingRef.current }
             } else {
               n.forEach(m => { if (m.role === 'assistant' && m.streaming && m.modelName?.startsWith('Agent:')) m.streaming = false })
             }
             return [...n]
           })
           agentStreamedRef.current = ''
-        } else if (event.type === 'text-delta') {
-          streamed += event.text || ''
+          agentThinkingRef.current = ''
+        } else if (event.type === 'reasoning-delta') {
+          thinkingRef.current += event.text || ''
+          // 推入时间线：合并连续 thinking
+          const tLast = mainTimelineRef.current[mainTimelineRef.current.length - 1]
+          if (tLast?.type === 'thinking') {
+            tLast.content += event.text || ''
+          } else {
+            mainTimelineRef.current.push({ type: 'thinking', content: event.text || '' })
+          }
+          const tl = mainTimelineRef.current.map(t => ({ ...t }))
           setMessages(prev => {
             const n = prev.map(m => ({ ...m }))
             const l = n[n.length - 1]
             if (l?.role === 'assistant' && l.streaming) {
-              n[n.length - 1] = { ...l, content: streamed }
+              n[n.length - 1] = { ...l, thinking: thinkingRef.current, thinkingLoading: true, mainTimeline: tl }
             } else {
               if (l?.role === 'assistant') n[n.length - 1] = { ...l, streaming: false }
-              n.push({ role: 'assistant', content: streamed, streaming: true, modelName })
+              n.push({ role: 'assistant', content: '', streaming: true, modelName, thinking: thinkingRef.current, thinkingLoading: true, mainTimeline: tl })
+            }
+            return n
+          })
+        } else if (event.type === 'text-delta') {
+          streamed += event.text || ''
+          // 推入时间线：合并连续 text
+          const tLast = mainTimelineRef.current[mainTimelineRef.current.length - 1]
+          if (tLast?.type === 'text') {
+            tLast.content += event.text || ''
+          } else {
+            mainTimelineRef.current.push({ type: 'text', content: event.text || '' })
+          }
+          const tl = mainTimelineRef.current.map(t => ({ ...t }))
+          setMessages(prev => {
+            const n = prev.map(m => ({ ...m }))
+            const l = n[n.length - 1]
+            if (l?.role === 'assistant' && l.streaming) {
+              n[n.length - 1] = { ...l, content: streamed, thinking: thinkingRef.current, thinkingLoading: false, mainTimeline: tl }
+            } else {
+              if (l?.role === 'assistant') n[n.length - 1] = { ...l, streaming: false }
+              n.push({ role: 'assistant', content: streamed, streaming: true, modelName, thinking: thinkingRef.current, thinkingLoading: false, mainTimeline: tl })
             }
             return n
           })
@@ -611,10 +726,12 @@ export function ChatPage() {
           setActivatedToolNames(prev => { const next = new Set(prev); next.add(toolName); return next })
           pushLog('>', `[${tc.type}] ${tc.name}`, 'running')
           const textBeforeTool = streamed; streamed = ''
+          // 新 assistant 段：重置时间线
+          mainTimelineRef.current = []
           setMessages(prev => {
             const n = [...prev]; const l = n[n.length - 1]
             if (l?.role === 'assistant' && l.streaming) { if (textBeforeTool) { l.content = textBeforeTool; l.streaming = false } else n.pop() }
-            n.push({ role: 'tool', content: '', toolCall: tc }, { role: 'assistant', content: '', streaming: true, modelName })
+            n.push({ role: 'tool', content: '', toolCall: tc }, { role: 'assistant', content: '', streaming: true, modelName, mainTimeline: [] })
             return [...n]
           })
         } else if (event.type === 'tool-result') {
@@ -628,7 +745,7 @@ export function ChatPage() {
             const tokMatch = String(event.toolOutput ?? '').match(/(\d+)\s*tok/)
             if (tokMatch) agentTotalTokensRef.current += parseInt(tokMatch[1])
           }
-          setMessages(prev => prev.map(m => m.role === 'tool' && (m.toolCall?.name === matchName || m.toolCall?.name === sdkName) && m.toolCall?.status === 'running' ? { ...m, content: String(event.toolOutput ?? '').slice(0, 2000), toolCall: { ...m.toolCall, status: ok ? 'done' as const : 'error' as const, result: String(event.toolOutput ?? '').slice(0, 8000) } } : m))
+          setMessages(prev => prev.map(m => m.role === 'tool' && (m.toolCall?.name === matchName || m.toolCall?.name === sdkName) && m.toolCall?.status === 'running' ? { ...m, content: String(event.toolOutput ?? ''), toolCall: { ...m.toolCall, status: ok ? 'done' as const : 'error' as const, result: String(event.toolOutput ?? '') } } : m))
           pushLog(ok ? 'OK' : 'ERR', `${matchName} ${ok ? 'done' : 'fail'}`, ok ? 'ok' : 'error')
           // cleanup proxy mapping
           if (proxyName) toolNameProxyRef.current.delete(sdkName)
@@ -653,6 +770,7 @@ export function ChatPage() {
           })
         } else if (event.type === 'done') {
           pushLog('DONE', `回复 (${streamed.length}字)`, streamed ? 'ok' : 'info')
+          mainTimelineRef.current = []
           // AI 回复结束，未完成的任务自动标记为完成
           setTaskList(prev => prev.map(t => t.status === 'running' ? { ...t, status: 'done' } : t))
           if (event.trace) {
@@ -865,7 +983,7 @@ export function ChatPage() {
         <textarea
           className="w-full resize-none bg-transparent px-3 pt-2 pb-0 text-sm leading-relaxed placeholder:text-muted-foreground outline-none disabled:cursor-not-allowed disabled:opacity-50 custom-scrollbar"
           rows={3}
-          placeholder={askUser ? '请在上方回答 AI 的问题...' : activeModel ? `向 ${activeModel.name} 提问...` : '请先配置模型'}
+          placeholder={askUser ? '请在上方回答 AI 的问题...' : activeModel ? `向 ${activeModel.selectedModel} 提问...` : '请先配置模型'}
           value={input}
           onChange={e => handleInputChange(e.target.value)}
           onKeyDown={e => {
@@ -1032,7 +1150,7 @@ export function ChatPage() {
           <div className="flex flex-col items-center gap-3 text-muted-foreground">
             <Bot className="h-16 w-16 opacity-20" />
             <p className="text-lg font-medium">AI 助手</p>
-            <p className="text-sm">{configuredModels.length === 0 ? '请先在设置中配置模型' : activeModel ? `当前模型: ${activeModel.displayName}` : '选择一个模型'}</p>
+            <p className="text-sm">{configuredModels.length === 0 ? '请先在设置中配置模型' : activeModel ? `当前模型: ${activeModel.selectedModel}` : '选择一个模型'}</p>
           </div>
           <div className="w-full max-w-2xl">
             {inputArea}
@@ -1041,12 +1159,22 @@ export function ChatPage() {
       ) : (
         /* 有消息：消息区 + 底部输入框 */
         <>
-          <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar">
+          <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar relative">
             <div className="chat-messages w-full px-4 py-4 space-y-4">
               {messages.map((msg, i) => <ChatMessage key={i} msg={msg} />)}
               {taskList.length > 0 && <TaskListCard tasks={taskList} />}
               <div ref={endRef} />
             </div>
+            {/* 回到底部按钮 */}
+            {showScrollBtn && (
+              <button
+                className="absolute bottom-4 right-4 z-10 rounded-full bg-primary text-primary-foreground shadow-lg p-2 hover:bg-primary/90 transition-all"
+                onClick={scrollToBottom}
+                title="回到底部"
+              >
+                <ArrowDown className="h-4 w-4" />
+              </button>
+            )}
           </div>
 
           {askUser && <AskUserBar askUser={askUser} answer={askUserAnswer} onAnswerChange={setAskUserAnswer} onAnswer={handleAskAnswer} />}

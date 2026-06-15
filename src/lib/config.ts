@@ -257,6 +257,16 @@ export function saveTokenLimit(limit: number): void {
   localStorage.setItem(TOKEN_LIMIT_KEY, String(limit))
 }
 
+// ========== 终端开关 ==========
+
+const TERMINAL_KEY = 'brainplus_terminal_enabled'
+
+export function getTerminalEnabled(): boolean {
+  try { const v = localStorage.getItem(TERMINAL_KEY); if (v !== null) return v === 'true' } catch {}
+  return false
+}
+export function saveTerminalEnabled(v: boolean): void { localStorage.setItem(TERMINAL_KEY, String(v)) }
+
 // ========== 沙箱开关（JS / Python 独立） ==========
 
 const SANDBOX_JS_KEY = 'brainplus_sandbox_js'

@@ -72,19 +72,30 @@ function getProvider(model: AIModelConfig) {
   const apiKey = model.apiKey || 'dummy'
   const baseURL = model.baseUrl || undefined
 
-  switch (model.id) {
-    case 'openai':
-      return createOpenAI({ apiKey, baseURL })
-    case 'anthropic':
-      return createAnthropic({ apiKey, baseURL })
-    case 'google':
-    case 'gemini':
-      return createGoogleGenerativeAI({ apiKey, baseURL })
-    case 'deepseek':
-      return createDeepSeek({ apiKey, baseURL })
-    default:
-      return createOpenAI({ apiKey, baseURL: baseURL || undefined })
+  // model.name 存的是 Provider 名称（如 'OpenAI', 'DeepSeek'），model.id 是唯一生成 ID
+  const providerName = (model.name || model.id).toLowerCase()
+
+  if (providerName === 'openai') {
+    return createOpenAI({ apiKey, baseURL })
   }
+  if (providerName === 'anthropic' || providerName === 'claude') {
+    return createAnthropic({ apiKey, baseURL })
+  }
+  if (providerName === 'google' || providerName === 'gemini') {
+    return createGoogleGenerativeAI({ apiKey, baseURL })
+  }
+  if (providerName === 'deepseek' || providerName === '深度求索') {
+    return createDeepSeek({ apiKey, baseURL })
+  }
+
+  // 兼容旧的 model.id 直接等于 provider 名称的情况
+  const legacyId = model.id.toLowerCase()
+  if (legacyId === 'deepseek') return createDeepSeek({ apiKey, baseURL })
+  if (legacyId === 'anthropic') return createAnthropic({ apiKey, baseURL })
+  if (legacyId === 'google' || legacyId === 'gemini') return createGoogleGenerativeAI({ apiKey, baseURL })
+
+  // 其他 OpenAI 兼容的 provider（qwen, openrouter, groq, together, mistral 等）
+  return createOpenAI({ apiKey, baseURL })
 }
 
 export function getChatModel() {
@@ -156,6 +167,7 @@ export async function getMCPSdkTools(autoMode?: boolean, userId?: string): Promi
     const { registerSandboxTools } = await import('./tools/sandbox')
     const { registerWorkspaceTools } = await import('./tools/workspace')
     const { registerSearchTools } = await import('./tools/search')
+    const { registerTerminalTool } = await import('./tools/terminal')
     const { registerAgentTools: registerAgentDefs } = await import('./tools/agentRegistry')
 
     await registerMCPBusinessTools(tools)
@@ -165,6 +177,7 @@ export async function getMCPSdkTools(autoMode?: boolean, userId?: string): Promi
     await registerSandboxTools(tools)
     await registerWorkspaceTools(tools)
     registerSearchTools(tools)
+    registerTerminalTool(tools)
     if (userId) await registerAgentDefs(tools, userId)
     // 注入插件 AI 工具
     const { pluginSystem } = await import('./pluginSystem')
@@ -175,8 +188,21 @@ export async function getMCPSdkTools(autoMode?: boolean, userId?: string): Promi
   return tools
 }
 
+import type { TerminalStatus } from '@/types/chat'
+
+export interface TerminalUIEvent {
+  type: 'terminal_created' | 'terminal_confirm' | 'terminal_updated'
+  terminal: TerminalStatus
+}
+
+let terminalUIHandler: ((event: TerminalUIEvent) => void) | null = null
+export function setTerminalUIHandler(handler: ((event: TerminalUIEvent) => void) | null) {
+  terminalUIHandler = handler
+}
+export function getTerminalUIHandler() { return terminalUIHandler }
+
 export interface ChatStreamEvent {
-  type: 'text-delta' | 'tool-call' | 'tool-result' | 'done' | 'compression' | 'disclosure' | 'system-log' | 'agent-tool-call' | 'agent-tool-result' | 'agent-text-delta' | 'agent-done' | 'task-status'
+  type: 'text-delta' | 'tool-call' | 'tool-result' | 'done' | 'compression' | 'disclosure' | 'system-log' | 'agent-tool-call' | 'agent-tool-result' | 'agent-text-delta' | 'agent-done' | 'task-status' | 'reasoning-delta' | 'agent-reasoning-delta'
   text?: string
   toolName?: string
   toolInput?: unknown
@@ -193,6 +219,8 @@ export interface ChatStreamEvent {
   taskStatus?: string; taskId?: string; taskAgentName?: string
   // disclosure 事件字段
   disclosureResult?: DisclosureResult
+  // reasoning 事件字段
+  reasoningId?: string
 }
 
 export async function chat(
@@ -430,7 +458,9 @@ export async function chat(
       onEvent?.({ type: 'done' })
       break
     }
-    if (chunk.type === 'text-delta') {
+    if (chunk.type === 'reasoning-delta') {
+      onEvent?.({ type: 'reasoning-delta', text: (chunk as any).text || (chunk as any).delta || '', reasoningId: (chunk as any).id })
+    } else if (chunk.type === 'text-delta') {
       fullText += chunk.text
       trace.addOutput(chunk.text)
       onEvent?.({ type: 'text-delta', text: chunk.text })

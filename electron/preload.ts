@@ -217,4 +217,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     fetch: (url: string, opts?: { method?: string; headers?: Record<string, string>; body?: string; timeout?: number }) =>
       ipcRenderer.invoke('http:fetch', url, opts),
   },
+
+  terminal: {
+    execute: (id: string, command: string, cwd: string) =>
+      ipcRenderer.invoke('terminal:execute', id, command, cwd),
+    spawn: (id: string, command: string, cwd: string) =>
+      ipcRenderer.invoke('terminal:spawn', id, command, cwd),
+    check: (id: string) => ipcRenderer.invoke('terminal:check', id),
+    kill: (id: string) => ipcRenderer.invoke('terminal:kill', id),
+    onOutput: (cb: (data: { id: string; stdout: string; stderr: string; done: boolean; exitCode?: number }) => void) => {
+      const handler = (_event: any, data: any) => cb(data)
+      ipcRenderer.on('terminal:output', handler)
+      return () => { ipcRenderer.removeListener('terminal:output', handler) }
+    },
+  },
 })

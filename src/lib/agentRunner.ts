@@ -49,7 +49,9 @@ export async function runAgent(
     const toolOutputs: string[] = []
     for await (const chunk of result.fullStream) {
       if (opts?.abortSignal?.aborted) break
-      if (chunk.type === 'text-delta') {
+      if (chunk.type === 'reasoning-delta') {
+        opts?.onEvent?.({ type: 'agent-reasoning-delta', text: (chunk as any).text || (chunk as any).delta || '', agentName })
+      } else if (chunk.type === 'text-delta') {
         fullText += chunk.text
         opts?.onEvent?.({ type: 'agent-text-delta', text: chunk.text, agentName })
       } else if (chunk.type === 'tool-call') {

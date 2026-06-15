@@ -58,7 +58,7 @@ export function parseCodeBlocks(content: string): CodeBlock[] {
       code = []
     } else if (lines[i] === '```' && inBlock) {
       inBlock = false
-      blocks.push({ language: lang, startLine: start, endLine: i, code: code.join('\n').slice(0, 200) })
+      blocks.push({ language: lang, startLine: start, endLine: i, code: code.join('\n') })
     } else if (inBlock) {
       code.push(lines[i])
     }

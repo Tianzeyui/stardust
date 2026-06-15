@@ -907,6 +907,94 @@ ipcMain.handle('http:fetch', async (_e, url: string, opts?: { method?: string; h
   }
 })
 
+// ====== 终端命令执行 ======
+import { spawn, type ChildProcess } from 'child_process'
+
+const terminalProcesses = new Map<string, { child: ChildProcess; stdout: string; stderr: string; done: boolean; exitCode?: number }>()
+
+ipcMain.handle('terminal:execute', async (_event, id: string, command: string, cwd: string) => {
+  try {
+    const shell = process.platform === 'win32' ? 'cmd.exe' : '/bin/sh'
+    const shellArgs = process.platform === 'win32' ? ['/c', command] : ['-c', command]
+    const workDir = cwd || app.getPath('home')
+
+    return await new Promise((resolve) => {
+      const child = spawn(shell, shellArgs, {
+        cwd: workDir,
+        env: { ...process.env },
+        shell: false,
+      })
+
+      let stdout = ''
+      let stderr = ''
+
+      child.stdout.on('data', (data: Buffer) => { stdout += data.toString() })
+      child.stderr.on('data', (data: Buffer) => { stderr += data.toString() })
+
+      child.on('close', (code: number | null) => {
+        resolve({ success: code === 0, stdout, stderr, exitCode: code })
+      })
+      child.on('error', (err: Error) => {
+        resolve({ success: false, stdout, stderr: err.message, exitCode: -1 })
+      })
+    })
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+// 异步执行：立刻返回，通过 terminal:output 事件推送输出
+ipcMain.handle('terminal:spawn', async (_event, id: string, command: string, cwd: string) => {
+  try {
+    const shell = process.platform === 'win32' ? 'cmd.exe' : '/bin/sh'
+    const shellArgs = process.platform === 'win32' ? ['/c', command] : ['-c', command]
+    const workDir = cwd || app.getPath('home')
+
+    const child = spawn(shell, shellArgs, {
+      cwd: workDir,
+      env: { ...process.env },
+      shell: false,
+    })
+
+    let stdout = ''
+    let stderr = ''
+
+    const send = (done: boolean, exitCode?: number) => {
+      mainWindow?.webContents.send('terminal:output', { id, stdout, stderr, done, exitCode })
+    }
+
+    child.stdout.on('data', (data: Buffer) => { stdout += data.toString(); send(false) })
+    child.stderr.on('data', (data: Buffer) => { stderr += data.toString(); send(false) })
+
+    child.on('close', (code: number | null) => {
+      terminalProcesses.set(id, { child, stdout, stderr, done: true, exitCode: code ?? undefined })
+      send(true, code ?? undefined)
+    })
+    child.on('error', (err: Error) => {
+      stderr = err.message
+      terminalProcesses.set(id, { child, stdout, stderr, done: true, exitCode: -1 })
+      send(true, -1)
+    })
+
+    terminalProcesses.set(id, { child, stdout, stderr, done: false })
+    return { success: true }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+ipcMain.handle('terminal:check', async (_event, id: string) => {
+  const p = terminalProcesses.get(id)
+  if (!p) return { found: false }
+  return { found: true, stdout: p.stdout, stderr: p.stderr, done: p.done, exitCode: p.exitCode }
+})
+
+ipcMain.handle('terminal:kill', async (_event, id: string) => {
+  const p = terminalProcesses.get(id)
+  if (p && !p.done) { p.child.kill(); p.done = true }
+  return { success: true }
+})
+
 app.on('before-quit', async () => {
   await mcpService.cleanup()
   closeGraphDriver()

@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react'
-import { Check, X, Shield, ShieldCheck, Cable, BookOpen, MessageSquare, FileText, Image, Zap, FolderOpen, Loader2, ChevronDown, IdCard, ExternalLink } from 'lucide-react'
+import { Check, X, Shield, ShieldCheck, Cable, BookOpen, MessageSquare, FileText, Image, Zap, FolderOpen, Loader2, ChevronDown, IdCard, ExternalLink, Brain, Terminal } from 'lucide-react'
 import MarkdownPreview from '@uiw/react-markdown-preview'
-import type { UIMessage, ToolCallStatus, MessageAttachment, AgentToolCallEntry, AgentTimelineItem } from '@/types/chat'
+import type { UIMessage, ToolCallStatus, MessageAttachment, AgentToolCallEntry, AgentTimelineItem, TerminalStatus } from '@/types/chat'
 import { useAuth } from '@/contexts/AuthContext'
 import { listAgents, type Agent } from '@/lib/agentStore'
 
 /** 工具结果格式化：JSON 结果包进代码块，纯文本保持原样 */
 function formatToolResult(result: string, type: string): string {
-  const text = stripHtml(String(result).slice(0, 2000))
+  const text = stripHtml(String(result))
   // 沙箱代码已经格式化好了，直接返回
   if (type === 'sandbox') return text
   // 尝试解析为 JSON，成功则包进代码块，失败则原样返回
@@ -43,7 +43,25 @@ const TOOL_STYLE: Record<string, {
 }
 
 export function ChatMessage({ msg }: ChatMessageProps) {
+  if (msg.terminal) {
+    return (
+      <TerminalBubble
+        ts={msg.terminal}
+        onConfirm={async (id) => {
+          const { confirm } = await import('@/lib/terminalManager')
+          confirm(id)
+        }}
+        onReject={async (id) => {
+          const { reject } = await import('@/lib/terminalManager')
+          reject(id)
+        }}
+      />
+    )
+  }
+
   if (msg.role === 'tool' && msg.toolCall) {
+    // run_terminal 有独立的自定义 TerminalBubble，不显示通用工具气泡
+    if (msg.toolCall.name === 'run_terminal') return null
     return msg.parentAgent ? (
       <div className="ml-4 border-l-2 border-primary/20 pl-3 my-1">
         <ToolBubble tc={msg.toolCall} />
@@ -86,7 +104,8 @@ export function ChatMessage({ msg }: ChatMessageProps) {
               <AgentCardButton agentName={msg.modelName?.replace('Agent: ', '') || ''} />
             </div>
             <div className="px-3 py-2">
-              {msg.streaming && !msg.content && !msg.agentTimeline?.length && (
+              <ThinkingBlock thinking={msg.thinking || ''} loading={msg.thinkingLoading} />
+              {msg.streaming && !msg.content && !msg.agentTimeline?.length && !msg.thinking && (
                 <p className="text-sm text-muted-foreground/40 py-2 select-none">
                   <span className="animate-dots"><span>.</span><span>.</span><span>.</span></span>
                 </p>
@@ -128,16 +147,42 @@ export function ChatMessage({ msg }: ChatMessageProps) {
               }
             }}
           >
-            {msg.streaming && !msg.content && (
-              <p className="text-sm text-muted-foreground/40 py-2 select-none">
-                <span className="animate-dots"><span>.</span><span>.</span><span>.</span></span>
-              </p>
-            )}
-            {(!msg.streaming || msg.content) && (
-              <MarkdownPreview
-                source={stripHtml(msg.content || '')}
-                style={{ fontSize: 14, backgroundColor: 'transparent', overflowWrap: 'break-word', wordBreak: 'break-word' }}
-              />
+            {/* 时间线模式：thinking + text 按实际发生顺序渲染 */}
+            {msg.mainTimeline && msg.mainTimeline.length > 0 ? (
+              <div className="space-y-1">
+                {msg.mainTimeline.map((item, i) => {
+                  const isLast = i === msg.mainTimeline!.length - 1
+                  return item.type === 'thinking' ? (
+                    <ThinkingBlock
+                      key={i}
+                      thinking={item.content}
+                      loading={!!(msg.streaming && isLast)}
+                    />
+                  ) : (
+                    <MarkdownPreview
+                      key={i}
+                      source={stripHtml(item.content)}
+                      style={{ fontSize: 14, backgroundColor: 'transparent', overflowWrap: 'break-word', wordBreak: 'break-word' }}
+                    />
+                  )
+                })}
+              </div>
+            ) : (
+              /* 兼容旧消息：无时间线时用 thinking + content 字段 */
+              <>
+                <ThinkingBlock thinking={msg.thinking || ''} loading={msg.thinkingLoading} />
+                {msg.streaming && !msg.content && !msg.thinking && (
+                  <p className="text-sm text-muted-foreground/40 py-2 select-none">
+                    <span className="animate-dots"><span>.</span><span>.</span><span>.</span></span>
+                  </p>
+                )}
+                {(!msg.streaming || msg.content) && (
+                  <MarkdownPreview
+                    source={stripHtml(msg.content || '')}
+                    style={{ fontSize: 14, backgroundColor: 'transparent', overflowWrap: 'break-word', wordBreak: 'break-word' }}
+                  />
+                )}
+              </>
             )}
             {msg.trace && !msg.streaming && (
               <p className="mt-0.5 text-[10px] text-muted-foreground/40 select-none">{msg.trace}</p>
@@ -153,24 +198,33 @@ export function ChatMessage({ msg }: ChatMessageProps) {
 function ToolBubble({ tc }: { tc: ToolCallStatus }) {
   const style = TOOL_STYLE[tc.type] ?? TOOL_STYLE.mcp
   const isError = tc.status === 'error'
+  const [expanded, setExpanded] = useState(false)
+  const [sandboxExpanded, setSandboxExpanded] = useState(false)
+  const hasResult = !!tc.result && tc.result.length > 0
+
+  // 工具完成时默认收起
+  useEffect(() => {
+    if (tc.status === 'done') setExpanded(false)
+  }, [tc.status])
 
   return (
     <div className="flex gap-3 max-w-full">
-      <div className="min-w-0 flex-1">
+      <div className={`min-w-0 ${expanded || tc.status === 'running' ? 'flex-1' : ''}`}>
         <div
-          className={`inline-flex items-start gap-2 rounded-lg border px-3 py-2 text-xs max-w-full overflow-hidden ${
+          className={`rounded-lg border px-3 py-2 text-xs overflow-hidden ${
             isError
               ? 'border-destructive/30 bg-destructive/5'
               : 'border-border bg-card'
-          }`}
+          } ${expanded || tc.status === 'running' ? 'w-full' : 'inline-block'}`}
         >
-          {isError ? (
-            <X className="h-4 w-4 shrink-0 text-destructive mt-0.5" />
-          ) : (
-            <style.icon className="h-4 w-4 shrink-0 text-muted-foreground mt-0.5" />
-          )}
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
+          {/* 头部：icon + 标签/名称/状态 */}
+          <div className="flex items-start gap-2">
+            {isError ? (
+              <X className="h-4 w-4 shrink-0 text-destructive mt-0.5" />
+            ) : (
+              <style.icon className="h-4 w-4 shrink-0 text-muted-foreground mt-0.5" />
+            )}
+            <div className="min-w-0 flex items-center gap-2 flex-wrap">
               <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                 <style.labelIcon className="h-3 w-3" />
                 {style.label}
@@ -180,26 +234,53 @@ function ToolBubble({ tc }: { tc: ToolCallStatus }) {
                 {isError ? '失败' : tc.status === 'running' ? '执行中' : '完成'}
               </span>
             </div>
-            {/* 沙箱入参 */}
-            {tc.type === 'sandbox' && tc.input != null && (
-              <pre className="mt-1.5 max-h-32 overflow-auto custom-scrollbar rounded border border-border px-2 py-1 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-all bg-muted/30 text-muted-foreground">
-                {String(
-                  typeof tc.input === 'object' && (tc.input as any).code
-                    ? (tc.input as any).code
-                    : JSON.stringify(tc.input)
-                ).slice(0, 600)}
-              </pre>
-            )}
-            {/* 工具结果 */}
-            {tc.result && (
-              <div className="mt-1.5 max-h-40 overflow-auto custom-scrollbar rounded border border-border max-w-full">
-                <MarkdownPreview
-                  source={formatToolResult(tc.result, tc.type)}
-                  style={{ fontSize: 12, padding: '4px 8px', backgroundColor: 'transparent' }}
-                />
-              </div>
-            )}
           </div>
+
+          {/* 沙箱入参：默认收起 */}
+          {tc.type === 'sandbox' && tc.input != null && (() => {
+            const code = String(
+              typeof tc.input === 'object' && (tc.input as any).code
+                ? (tc.input as any).code
+                : JSON.stringify(tc.input)
+            )
+            return (
+              <>
+                <button
+                  className="flex items-center gap-1 mt-1.5 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                  onClick={() => setSandboxExpanded(!sandboxExpanded)}
+                >
+                  <ChevronDown className={`h-3 w-3 transition-transform ${sandboxExpanded ? 'rotate-180' : ''}`} />
+                  {sandboxExpanded ? '收起代码' : `展开代码（${code.length} 字符）`}
+                </button>
+                {sandboxExpanded && (
+                  <pre className="mt-1 max-h-60 overflow-auto custom-scrollbar rounded border border-border px-2 py-1 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-all bg-muted/30 text-muted-foreground">
+                    {code}
+                  </pre>
+                )}
+              </>
+            )
+          })()}
+
+          {/* 工具结果：默认收起，点击展开 */}
+          {hasResult && (
+            <>
+              <button
+                className="flex items-center gap-1 mt-1.5 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                onClick={() => setExpanded(!expanded)}
+              >
+                <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                {expanded ? '收起' : `展开结果（${(tc.result!.length / 1000).toFixed(1)}k 字符）`}
+              </button>
+              {expanded && (
+                <div className="mt-1 max-h-60 overflow-auto custom-scrollbar rounded border border-border max-w-full">
+                  <MarkdownPreview
+                    source={formatToolResult(tc.result!, tc.type)}
+                    style={{ fontSize: 12, padding: '4px 8px', backgroundColor: 'transparent' }}
+                  />
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -268,6 +349,48 @@ function AgentToolCallItem({ tc }: { tc: AgentToolCallEntry }) {
           <pre className="max-h-32 overflow-auto custom-scrollbar px-3 py-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-all text-muted-foreground bg-muted/20">
             {tc.output}
           </pre>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** 思考过程区块：可折叠，默认展开（流式时）/ 默认折叠（完成后） */
+function ThinkingBlock({ thinking, loading }: { thinking: string; loading?: boolean }) {
+  const [expanded, setExpanded] = useState(loading ?? true)
+
+  // 思考内容变化时自动展开（流式跟随），完成后默认折叠
+  useEffect(() => {
+    if (loading) {
+      setExpanded(true)
+    }
+  }, [thinking, loading])
+
+  if (!thinking) return null
+
+  return (
+    <div className="mb-2 rounded-md border border-border/50 bg-muted/30 overflow-hidden">
+      <button
+        className="flex items-center gap-1.5 w-full px-2.5 py-1.5 text-left hover:bg-muted/50 transition-colors"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <Brain className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
+        <span className="text-[11px] font-medium text-muted-foreground/60">思考过程</span>
+        {loading && (
+          <>
+            <Loader2 className="h-3 w-3 text-muted-foreground/40 animate-spin shrink-0" />
+            <span className="text-[10px] text-muted-foreground/40">思考中...</span>
+          </>
+        )}
+        <div className="flex-1" />
+        <ChevronDown className={`h-3 w-3 text-muted-foreground/30 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+      </button>
+      {expanded && (
+        <div className="border-t border-border/30 px-3 py-2 max-h-64 overflow-auto custom-scrollbar">
+          <MarkdownPreview
+            source={thinking}
+            style={{ fontSize: 12, backgroundColor: 'transparent', color: 'var(--muted-foreground)', opacity: loading ? 0.7 : 0.5 }}
+          />
         </div>
       )}
     </div>
@@ -344,6 +467,64 @@ function AgentCardButton({ agentName }: { agentName: string }) {
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+/** 终端命令气泡 */
+export function TerminalBubble({ ts, onConfirm, onReject }: {
+  ts: TerminalStatus
+  onConfirm: (id: string) => void
+  onReject: (id: string) => void
+}) {
+  const iconCls = ts.status === 'done' ? 'text-green-400'
+    : ts.status === 'error' ? 'text-red-400'
+    : ts.status === 'running' ? 'text-yellow-400 animate-pulse'
+    : ts.status === 'cancelled' ? 'text-zinc-500'
+    : 'text-zinc-400'
+
+  return (
+    <div className="flex gap-3 max-w-full">
+      <div className="min-w-0 flex-1">
+        <div className="rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-xs overflow-hidden">
+          {/* 头部 */}
+          <div className="flex items-center gap-2">
+            <Terminal className={`h-3.5 w-3.5 shrink-0 ${iconCls}`} />
+            <span className="text-zinc-200 font-mono text-[11px] font-medium truncate">
+              <span className="text-green-400 select-none">$ </span>{ts.command}
+            </span>
+            {ts.async && <span className="text-[9px] rounded bg-yellow-500/20 text-yellow-500 px-1 py-px font-medium shrink-0">异步</span>}
+            <span className="text-[10px] text-zinc-500 shrink-0">
+              {ts.status === 'pending_confirm' ? '待确认'
+                : ts.status === 'running' ? '执行中…'
+                : ts.status === 'done' ? `完成 (exit ${ts.exitCode ?? 0})`
+                : ts.status === 'error' ? '失败'
+                : '已取消'}
+            </span>
+          </div>
+
+          {/* 确认按钮 */}
+          {ts.status === 'pending_confirm' && (
+            <div className="flex items-center gap-2 mt-2">
+              <button className="flex items-center gap-1 rounded bg-green-700 px-2.5 py-1 text-[10px] text-green-100 hover:bg-green-600 transition-colors"
+                onClick={() => onConfirm(ts.id)}>
+                <Check className="h-3 w-3" />确认执行
+              </button>
+              <button className="flex items-center gap-1 rounded bg-zinc-700 px-2.5 py-1 text-[10px] text-zinc-300 hover:bg-zinc-600 transition-colors"
+                onClick={() => onReject(ts.id)}>
+                <X className="h-3 w-3" />拒绝
+              </button>
+            </div>
+          )}
+
+          {/* 输出 */}
+          {(ts.stdout || ts.stderr) && (
+            <pre className="mt-2 max-h-40 overflow-auto custom-scrollbar rounded bg-zinc-950 px-2 py-1.5 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-all text-zinc-300">
+              {ts.stdout}{ts.stderr && `\n\x1b[31m${ts.stderr}\x1b[0m`}
+            </pre>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
