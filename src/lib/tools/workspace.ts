@@ -228,13 +228,10 @@ export async function registerWorkspaceTools(tools: ToolMap) {
       if (skip.includes(name)) continue
       const childPath = `${dirPath}/${name}`
       const relPath = childPath.slice(rootPath.length + 1)
+      if (pattern.test(relPath)) results.push(relPath)
       const statResult = await api.stat(childPath)
-      const isDir = statResult.success && statResult.stat?.isDirectory === true
-      if (isDir) {
+      if (statResult.success && statResult.stat?.isDirectory) {
         await globWalk(childPath, pattern, rootPath, results, depth + 1)
-      }
-      if (pattern.test(relPath)) {
-        results.push(relPath)
       }
     }
   }
