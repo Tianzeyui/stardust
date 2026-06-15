@@ -17,6 +17,8 @@ import {
   getAIModels, saveAIModels, deleteAIModel, generateModelId, PROVIDER_TEMPLATES,
   type AIModelConfig, type MCPServerConfig,
   getDisclosureThreshold, saveDisclosureThreshold,
+  getTierFast, saveTierFast, getTierPowerful, saveTierPowerful,
+  DEFAULT_TIER_FAST, DEFAULT_TIER_POWERFUL,
   getAgentMaxSteps, saveAgentMaxSteps,
   getMemoryEnabled, saveMemoryEnabled,
   getCompressThreshold, saveCompressThreshold, getTokenLimit, saveTokenLimit,
@@ -91,6 +93,8 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
   const [callResult, setCallResult] = useState<string | null>(null)
   const [callLoading, setCallLoading] = useState(false)
   const [disclosureThreshold, setDisclosureThreshold] = useState(getDisclosureThreshold)
+  const [tierFast, setTierFast] = useState(getTierFast)
+  const [tierPowerful, setTierPowerful] = useState(getTierPowerful)
   const [maxSteps, setMaxSteps] = useState(getAgentMaxSteps)
   const [memoryEnabled, setMemoryEnabled] = useState(getMemoryEnabled)
   const [compressThreshold, setCompressThreshold] = useState(getCompressThreshold)
@@ -626,6 +630,28 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
                   )}
                 </div>
               ))
+            )}
+
+            {/* 智能路由配置 */}
+            {models.length > 0 && (
+              <fieldset className="rounded-lg border border-border p-4">
+                <legend className="px-2 text-sm font-semibold">智能路由</legend>
+                <p className="text-xs text-muted-foreground leading-relaxed mb-3">
+                  Auto 模式下根据任务复杂度自动选择模型层级。输入关键词（逗号分隔），匹配模型名包含任一关键词的模型。
+                </p>
+                <div className="space-y-2">
+                  <div>
+                    <label className="text-[11px] font-medium">快速层 (Fast)</label>
+                    <p className="text-[10px] text-muted-foreground/50 mb-1">简单任务优先匹配此层级。</p>
+                    <Input className="h-8 text-xs font-mono" value={tierFast} onChange={e => { setTierFast(e.target.value); saveTierFast(e.target.value) }} placeholder={DEFAULT_TIER_FAST} />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-medium">强力层 (Powerful)</label>
+                    <p className="text-[10px] text-muted-foreground/50 mb-1">复杂任务优先匹配此层级。</p>
+                    <Input className="h-8 text-xs font-mono" value={tierPowerful} onChange={e => { setTierPowerful(e.target.value); saveTierPowerful(e.target.value) }} placeholder={DEFAULT_TIER_POWERFUL} />
+                  </div>
+                </div>
+              </fieldset>
             )}
           </div>
         )}

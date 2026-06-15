@@ -257,6 +257,26 @@ export function saveTokenLimit(limit: number): void {
   localStorage.setItem(TOKEN_LIMIT_KEY, String(limit))
 }
 
+// ========== 智能路由层级配置 ==========
+
+const TIER_FAST_KEY = 'brainplus_tier_fast'
+const TIER_POWERFUL_KEY = 'brainplus_tier_powerful'
+
+export const DEFAULT_TIER_FAST = 'haiku,gpt-4o-mini,gemini-flash,deepseek-chat,flash,mini'
+export const DEFAULT_TIER_POWERFUL = 'opus,gpt-4,gpt-4-turbo,gemini-pro,deepseek-v3,deepseek-v4,pro,ultra'
+
+export function getTierFast(): string {
+  try { const v = localStorage.getItem(TIER_FAST_KEY); if (v) return v } catch {}
+  return DEFAULT_TIER_FAST
+}
+export function saveTierFast(v: string): void { localStorage.setItem(TIER_FAST_KEY, v) }
+
+export function getTierPowerful(): string {
+  try { const v = localStorage.getItem(TIER_POWERFUL_KEY); if (v) return v } catch {}
+  return DEFAULT_TIER_POWERFUL
+}
+export function saveTierPowerful(v: string): void { localStorage.setItem(TIER_POWERFUL_KEY, v) }
+
 // ========== 系统提示词 ==========
 
 const SYSTEM_PROMPT_KEY = 'brainplus_system_prompt'

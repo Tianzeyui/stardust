@@ -110,25 +110,23 @@ export function getChatModel() {
 
 // ====== 模型委托 ======
 
-const TIER_FAST = ['haiku', 'gpt-4o-mini', 'gemini-flash', 'deepseek-chat', 'flash', 'mini']
-const TIER_POWERFUL = ['opus', 'gpt-4', 'gpt-4-turbo', 'gemini-pro', 'deepseek-v3', 'deepseek-v4', 'pro', 'ultra']
+function getTierFast(): string[] { return (await import('@/lib/config')).getTierFast().split(',').map(s => s.trim()).filter(Boolean) }
+function getTierPowerful(): string[] { return (await import('@/lib/config')).getTierPowerful().split(',').map(s => s.trim()).filter(Boolean) }
 
-function pickModelByTier(
+async function pickModelByTier(
   provider: AIModelConfig,
   tier: 'fast' | 'balanced' | 'powerful',
-): string {
+): Promise<string> {
   const models = provider.availableModels || []
   if (models.length === 0) return provider.selectedModel || ''
 
   if (tier === 'balanced') return provider.selectedModel || models[0]?.id || ''
 
-  const checks = tier === 'fast' ? TIER_FAST : TIER_POWERFUL
-  // 精确匹配
-  for (const ck of checks) {
+  const tierList = tier === 'fast' ? await getTierFast() : await getTierPowerful()
+  for (const ck of tierList) {
     const m = models.find(m => m.id === ck || m.id.includes(ck))
     if (m) return m.id
   }
-  // 回退：fast 取第一个，powerful 取最后一个
   return tier === 'fast' ? models[0]?.id || '' : models[models.length - 1]?.id || ''
 }
 
