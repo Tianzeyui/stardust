@@ -68,7 +68,7 @@ export function ChatMessage({ msg }: ChatMessageProps) {
 
   if (msg.role === 'tool' && msg.toolCall) {
     // run_terminal / workspace_write_file / workspace_delete_file 有独立气泡，不显示通用工具气泡
-    if (['run_terminal', 'workspace_write_file', 'workspace_append_file', 'workspace_delete_file', 'workspace_create_dir'].includes(msg.toolCall.name)) return null
+    if (msg.toolCall.name === 'run_terminal') return null
     return msg.parentAgent ? (
       <div className="ml-4 border-l-2 border-primary/20 pl-3 my-1">
         <ToolBubble tc={msg.toolCall} />
