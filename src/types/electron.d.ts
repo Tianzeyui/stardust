@@ -81,6 +81,7 @@ export interface ElectronAPI {
     stat: (filePath: string) => Promise<{ success: boolean; stat?: { isFile: boolean; isDirectory: boolean; size: number; mtime: string }; error?: string }>
     writeFile: (filePath: string, content: string) => Promise<{ success: boolean; error?: string }>
     mkdir: (dirPath: string) => Promise<{ success: boolean; error?: string }>
+    copyDir: (src: string, dest: string) => Promise<{ success: boolean; error?: string }>
     unlink: (filePath: string) => Promise<{ success: boolean; error?: string }>
   }
   config: {

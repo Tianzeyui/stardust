@@ -136,6 +136,30 @@ class ProjectStoreImpl {
     this.bump()
   }
 
+  async migratePath(id: string, newPath: string, copyFiles: boolean): Promise<boolean> {
+    const p = this.projects.find(p => p.id === id)
+    if (!p) return false
+    const api = (window as any).electronAPI
+    const oldPath = p.path
+    try {
+      // 确保新目录存在
+      await api.fs.mkdir(newPath).catch(() => {})
+      await api.fs.mkdir(`${newPath}/output`).catch(() => {})
+      // 复制文件
+      if (copyFiles && oldPath !== newPath) {
+        await api.fs.copyDir(oldPath, newPath)
+      }
+      p.path = newPath
+      p.updatedAt = new Date().toISOString()
+      await this.persist()
+      this.bump()
+      return true
+    } catch (e: any) {
+      console.error('[projectStore] migratePath failed:', e.message)
+      return false
+    }
+  }
+
   private async persist() {
     saveToLocal(this.projects)
     await syncToFs(this.projects)

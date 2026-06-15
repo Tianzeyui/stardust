@@ -75,6 +75,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     stat: (filePath: string) => ipcRenderer.invoke('fs:stat', filePath),
     writeFile: (filePath: string, content: string) => ipcRenderer.invoke('fs:writeFile', filePath, content),
     mkdir: (dirPath: string) => ipcRenderer.invoke('fs:mkdir', dirPath),
+    copyDir: (src: string, dest: string) => ipcRenderer.invoke('fs:copyDir', src, dest),
     unlink: (filePath: string) => ipcRenderer.invoke('fs:unlink', filePath),
   },
 

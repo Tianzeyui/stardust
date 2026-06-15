@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   FolderKanban, Plus, Trash2, ExternalLink, Terminal,
-  Settings2, ChevronRight, FolderSearch,
+  Settings2, ChevronRight, FolderSearch, ArrowRight, Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,6 +29,10 @@ export function ProjectsPage() {
   const [newName, setNewName] = useState('')
   const [newDesc, setNewDesc] = useState('')
   const [newPath, setNewPath] = useState('')
+  const [migrateTarget, setMigrateTarget] = useState<Project | null>(null)
+  const [migratePath, setMigratePath] = useState('')
+  const [migrateCopy, setMigrateCopy] = useState(true)
+  const [migrating, setMigrating] = useState(false)
 
   // Settings
   const [skills, setSkills] = useState<InstalledSkill[]>([])
@@ -82,6 +86,24 @@ export function ProjectsPage() {
     const result = await window.electronAPI?.dialog?.openDirectory()
     if (result?.success && result.path) {
       setNewPath(result.path)
+    }
+  }
+
+  const browseMigratePath = async () => {
+    const result = await window.electronAPI?.dialog?.openDirectory()
+    if (result?.success && result.path) {
+      setMigratePath(result.path)
+    }
+  }
+
+  const handleMigrate = async () => {
+    if (!migrateTarget || !migratePath.trim()) return
+    setMigrating(true)
+    const ok = await projectStore.migratePath(migrateTarget.id, migratePath.trim(), migrateCopy)
+    setMigrating(false)
+    if (ok) {
+      setMigrateTarget(null); setMigratePath(''); setMigrateCopy(true)
+      refresh()
     }
   }
 
@@ -180,10 +202,59 @@ export function ProjectsPage() {
                 {selected.description && (
                   <p className="text-sm text-muted-foreground mb-2">{selected.description}</p>
                 )}
-                <p className="text-xs text-muted-foreground/50 font-mono truncate">{selected.path}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-xs text-muted-foreground/50 font-mono truncate flex-1">{selected.path}</p>
+                  <button
+                    className="shrink-0 text-[10px] text-muted-foreground/50 hover:text-primary transition-colors"
+                    onClick={() => { setMigrateTarget(selected); setMigratePath(''); setMigrateCopy(true) }}
+                  >
+                    更换
+                  </button>
+                </div>
                 <p className="text-[10px] text-muted-foreground/40 mt-1">
                   创建于 {new Date(selected.createdAt).toLocaleDateString('zh-CN')}
                 </p>
+
+                {/* 迁移面板 */}
+                {migrateTarget && migrateTarget.id === selected.id && (
+                  <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+                    <div className="flex items-center gap-1.5 text-xs font-medium">
+                      <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+                      更换工作区目录
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        className="h-7 text-xs font-mono flex-1"
+                        value={migratePath}
+                        onChange={e => setMigratePath(e.target.value)}
+                        placeholder="选择或输入新目录路径"
+                      />
+                      <Button size="sm" variant="outline" className="h-7 shrink-0" onClick={browseMigratePath}>
+                        <FolderSearch className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${migrateCopy ? 'bg-primary' : 'bg-muted'}`}
+                        onClick={() => setMigrateCopy(!migrateCopy)}
+                      >
+                        <span className={`inline-block h-3 w-3 rounded-full bg-white transition-transform ${migrateCopy ? 'translate-x-3' : 'translate-x-0.5'}`} />
+                      </button>
+                      <span className="text-[10px] text-muted-foreground">将现有文件复制到新目录</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" className="h-7 text-xs" onClick={handleMigrate}
+                        disabled={!migratePath.trim() || migrating}>
+                        {migrating ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                        确认迁移
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 text-xs"
+                        onClick={() => { setMigrateTarget(null); setMigratePath('') }}>
+                        取消
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* 快捷操作 */}

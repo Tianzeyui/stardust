@@ -271,6 +271,26 @@ ipcMain.handle('fs:mkdir', async (_event, dirPath: string) => {
   }
 })
 
+ipcMain.handle('fs:copyDir', async (_event, src: string, dest: string) => {
+  try {
+    if (!fs.existsSync(src)) return { success: false, error: '源目录不存在' }
+    fs.mkdirSync(dest, { recursive: true })
+    const entries = fs.readdirSync(src, { withFileTypes: true })
+    for (const entry of entries) {
+      const srcPath = path.join(src, entry.name)
+      const destPath = path.join(dest, entry.name)
+      if (entry.isDirectory()) {
+        fs.cpSync(srcPath, destPath, { recursive: true })
+      } else {
+        fs.copyFileSync(srcPath, destPath)
+      }
+    }
+    return { success: true }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
 ipcMain.handle('fs:unlink', async (_event, filePath: string) => {
   try {
     if (fs.existsSync(filePath)) {
