@@ -530,24 +530,51 @@ function isDiffContent(text: string): boolean {
   return DIFF_HEADER_RE.test(text) && text.split('\n').some(l => l.startsWith('+') || l.startsWith('-'))
 }
 
-/** Diff 内容块：黑白风格，默认收起 */
-function DiffBlock({ text }: { text: string }) {
+/** 单个文件 diff 块 */
+function DiffFileBlock({ lines: allLines }: { lines: string[] }) {
   const [expanded, setExpanded] = useState(false)
-  const lines = text.split('\n')
-  const isLong = lines.length > 20
-  const display = isLong && !expanded ? lines.slice(0, 15) : lines
+  // 提取文件名
+  const diffLine = allLines.find(l => l.startsWith('diff --git '))
+  const bFile = diffLine?.match(/b\/(\S+)/)?.[1] || ''
+  const aFile = diffLine?.match(/a\/(\S+)/)?.[1] || ''
+  const filename = bFile || aFile
+
+  // 统计 +/- 行数（排除元数据行）
+  const contentLines = allLines.filter(l => !l.startsWith('diff ') && !l.startsWith('index ') && !l.startsWith('---') && !l.startsWith('+++') && l !== '')
+  const adds = contentLines.filter(l => l.startsWith('+') && !l.startsWith('+++')).length
+  const dels = contentLines.filter(l => l.startsWith('-') && !l.startsWith('---')).length
+
+  // 渲染行：去掉 git 元数据
+  const renderLines = allLines.filter(l => {
+    if (l.startsWith('diff --git ')) return false
+    if (l.startsWith('index ')) return false
+    if (l.startsWith('--- ') || l.startsWith('+++ ')) return false
+    return true
+  })
+
+  const isLong = renderLines.length > 20
+  const display = isLong && !expanded ? renderLines.slice(0, 15) : renderLines
 
   return (
-    <div className="my-1.5 rounded-lg overflow-hidden border border-border font-mono text-xs leading-relaxed bg-card">
+    <div className="border-b border-border/50 last:border-b-0">
+      {/* 文件名标题栏 */}
+      {filename && (
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/30 text-[10px] font-medium text-muted-foreground">
+          <FileText className="h-3 w-3 shrink-0" />
+          <span className="font-mono truncate">{filename}</span>
+          <span className="text-emerald-600 ml-auto">+{adds}</span>
+          <span className="text-red-400">−{dels}</span>
+        </div>
+      )}
       {display.map((line, i) => {
         const isAdd = line.startsWith('+') && !line.startsWith('+++')
         const isDel = line.startsWith('-') && !line.startsWith('---')
         const isHdr = line.startsWith('@@')
         const prefix = isHdr ? null : line.slice(0, 1)
-        const body = isHdr ? line : line.slice(1)
+        const body = isHdr ? line.replace(/^@@\s+-\d+,\d+\s+\+(\d+),\d+\s+@@/, 'L$1') : line.slice(1)
         const rowCls = isAdd ? 'bg-zinc-800 text-zinc-200'
           : isDel ? 'bg-zinc-100 text-zinc-400 line-through'
-          : isHdr ? 'bg-muted text-muted-foreground text-[10px] font-medium'
+          : isHdr ? 'bg-muted/50 text-muted-foreground text-[10px]'
           : ''
         return (
           <div key={i} className={`flex px-3 py-px ${rowCls}`}>
@@ -559,19 +586,35 @@ function DiffBlock({ text }: { text: string }) {
         )
       })}
       {isLong && !expanded && (
-        <div className="relative">
-          <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-card to-transparent pointer-events-none" />
-        </div>
+        <div className="relative"><div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-card to-transparent pointer-events-none" /></div>
       )}
       {isLong && (
-        <button
-          className="flex items-center gap-1 w-full px-3 py-1.5 text-[10px] text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/30 transition-colors border-t border-border/50"
-          onClick={() => setExpanded(!expanded)}
-        >
+        <button className="flex items-center gap-1 w-full px-3 py-1.5 text-[10px] text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/30 transition-colors"
+          onClick={() => setExpanded(!expanded)}>
           <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-          {expanded ? '收起' : `展开全部（${lines.length} 行）`}
+          {expanded ? '收起' : `展开全部（${renderLines.length} 行）`}
         </button>
       )}
+    </div>
+  )
+}
+
+/** Diff 内容块：支持多文件，每个文件独立折叠 */
+function DiffBlock({ text }: { text: string }) {
+  // 按 diff --git 拆分为多个文件
+  const sections = text.split(/(?=^diff --git )/m).filter(Boolean)
+  if (sections.length <= 1) {
+    return (
+      <div className="my-1.5 rounded-lg overflow-hidden border border-border font-mono text-xs leading-relaxed bg-card">
+        <DiffFileBlock lines={text.split('\n')} />
+      </div>
+    )
+  }
+  return (
+    <div className="my-1.5 rounded-lg overflow-hidden border border-border font-mono text-xs leading-relaxed bg-card">
+      {sections.map((sec, i) => (
+        <DiffFileBlock key={i} lines={sec.trim().split('\n')} />
+      ))}
     </div>
   )
 }
