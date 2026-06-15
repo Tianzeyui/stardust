@@ -235,28 +235,12 @@ export async function registerWorkspaceTools(tools: ToolMap) {
       const root = getRoot()
       const basePath = args.path ? (args.path.startsWith('/') ? args.path : `${root}/${args.path}`) : root
       const regex = globToRegex(args.pattern)
-      const skip = new Set(['node_modules', '.git', '.brainplus', 'dist', 'build', '.next', '__pycache__', '.DS_Store'])
 
-      // 递归收集所有文件：listDir 成功=目录，进入递归
-      const allFiles: string[] = []
-      async function walk(dir: string, depth: number) {
-        if (depth > 20 || allFiles.length >= 500) return
-        const api = window.electronAPI?.fs
-        if (!api) return
-        const listResult = await api.listDir(dir)
-        if (!listResult.success || !listResult.files) return
-        for (const name of listResult.files) {
-          if (skip.has(name)) continue
-          const childPath = `${dir.replace(/\/+$/, '')}/${name}`
-          allFiles.push(childPath)
-          // 判断是否目录：再 listDir 一次，成功则递归
-          const sub = await api.listDir(childPath)
-          if (sub.success) await walk(childPath, depth + 1)
-        }
-      }
-      await walk(basePath, 0)
+      // 用系统 find 收集文件列表
+      const fsApi = window.electronAPI?.fs
+      const findResult = fsApi?.find ? await fsApi.find(basePath) : null
+      const allFiles: string[] = findResult?.success ? findResult.files! : []
 
-      // 转为相对路径，用 glob 过滤
       const plen = basePath.length + 1
       const results = allFiles
         .map(f => f.slice(plen))

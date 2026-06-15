@@ -271,6 +271,18 @@ ipcMain.handle('fs:mkdir', async (_event, dirPath: string) => {
   }
 })
 
+ipcMain.handle('fs:find', async (_event, dirPath: string) => {
+  try {
+    const { execSync } = await import('child_process')
+    const excludes = ['node_modules', '.git', '.brainplus', 'dist', 'build', '.next', '__pycache__', '.DS_Store']
+    const args = excludes.map(d => `-not -path '*/${d}/*'`).join(' ')
+    const stdout = execSync(`find '${dirPath}' -type f ${args}`, { encoding: 'utf-8', timeout: 10000, maxBuffer: 1024 * 1024 })
+    return { success: true, files: stdout.trim().split('\n').filter(Boolean) }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
 ipcMain.handle('fs:grep', async (_event, dirPath: string, pattern: string, fileGlob?: string) => {
   try {
     const { execFileSync } = await import('child_process')

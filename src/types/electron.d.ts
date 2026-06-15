@@ -83,6 +83,7 @@ export interface ElectronAPI {
     mkdir: (dirPath: string) => Promise<{ success: boolean; error?: string }>
     copyDir: (src: string, dest: string) => Promise<{ success: boolean; error?: string }>
     grep: (dirPath: string, pattern: string, fileGlob?: string) => Promise<{ success: boolean; output?: string; error?: string }>
+    find: (dirPath: string) => Promise<{ success: boolean; files?: string[]; error?: string }>
     unlink: (filePath: string) => Promise<{ success: boolean; error?: string }>
   }
   config: {
