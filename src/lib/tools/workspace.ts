@@ -208,8 +208,8 @@ export async function registerWorkspaceTools(tools: ToolMap) {
 
   tools['workspace_write_file'] = {
     description:
-      '写入文件。工作区内的文件直接写入，工作区外的文件需要用户确认。' +
-      '会自动创建父目录。content 为文件完整内容。',
+      '创建或覆写文件（文件不存在则新建）。工作区内直接写入，工作区外需用户确认。' +
+      '自动创建父目录。content 为文件完整内容。',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
