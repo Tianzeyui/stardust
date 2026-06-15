@@ -530,37 +530,33 @@ function isDiffContent(text: string): boolean {
   return DIFF_HEADER_RE.test(text) && text.split('\n').some(l => l.startsWith('+') || l.startsWith('-'))
 }
 
-/** Diff 内容块：暗灰新增行 + 浅灰删除行，默认收起 */
+/** Diff 内容块：黑白风格，默认收起 */
 function DiffBlock({ text }: { text: string }) {
   const [expanded, setExpanded] = useState(false)
   const lines = text.split('\n')
-  const short = lines.length > 20
+  const isLong = lines.length > 20
+  const display = isLong && !expanded ? lines.slice(0, 15) : lines
 
   return (
-    <div className="my-1.5 rounded-md overflow-hidden border border-border/50 font-mono text-xs leading-relaxed">
-      {short && !expanded ? (
-        <div className="max-h-60 overflow-hidden relative">
-          {lines.slice(0, 15).map((line, i) => {
-            const cls = line.startsWith('+') && !line.startsWith('+++') ? 'bg-emerald-950/50 text-emerald-200'
-              : line.startsWith('-') && !line.startsWith('---') ? 'bg-red-950/30 text-red-300'
-              : line.startsWith('@@') ? 'bg-blue-950/30 text-blue-200'
-              : 'text-zinc-400'
-            return <div key={i} className={`px-3 py-px whitespace-pre-wrap break-all ${cls}`}>{line || ' '}</div>
-          })}
-          <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-background to-transparent pointer-events-none" />
+    <div className="my-1.5 rounded-lg overflow-hidden border border-border font-mono text-xs leading-relaxed bg-card">
+      {display.map((line, i) => {
+        const isAdd = line.startsWith('+') && !line.startsWith('+++')
+        const isDel = line.startsWith('-') && !line.startsWith('---')
+        const isHdr = line.startsWith('@@')
+        const cls = isAdd ? 'bg-zinc-100 dark:bg-zinc-800/50'
+          : isDel ? 'bg-zinc-50 dark:bg-zinc-800/30'
+          : isHdr ? 'bg-muted/50 text-muted-foreground text-[10px] font-medium'
+          : 'text-muted-foreground'
+        return <div key={i} className={`px-3 py-px whitespace-pre-wrap break-all ${cls}`}>{line || ' '}</div>
+      })}
+      {isLong && !expanded && (
+        <div className="relative">
+          <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-card to-transparent pointer-events-none" />
         </div>
-      ) : (
-        lines.map((line, i) => {
-          const cls = line.startsWith('+') && !line.startsWith('+++') ? 'bg-emerald-950/50 text-emerald-200'
-            : line.startsWith('-') && !line.startsWith('---') ? 'bg-red-950/30 text-red-300'
-            : line.startsWith('@@') ? 'bg-blue-950/30 text-blue-200'
-            : 'text-zinc-400'
-          return <div key={i} className={`px-3 py-px whitespace-pre-wrap break-all ${cls}`}>{line || ' '}</div>
-        })
       )}
-      {short && (
+      {isLong && (
         <button
-          className="flex items-center gap-1 w-full px-3 py-1 text-[10px] text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/30 transition-colors border-t border-border/30"
+          className="flex items-center gap-1 w-full px-3 py-1.5 text-[10px] text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/30 transition-colors border-t border-border/50"
           onClick={() => setExpanded(!expanded)}
         >
           <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
