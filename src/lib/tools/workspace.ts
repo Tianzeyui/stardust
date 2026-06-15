@@ -187,7 +187,7 @@ export async function registerWorkspaceTools(tools: ToolMap) {
 
   tools['workspace_search'] = {
     description:
-      '在工作区目录中搜索文件。支持通配符匹配文件名。' +
+      '在工作区目录中搜索文件。支持通配符匹配文件名。如需 glob 模式匹配（**/*.ts），使用 workspace_glob。' +
       `搜索范围: ${root}`,
     inputSchema: jsonSchema({
       type: 'object',
@@ -201,6 +201,63 @@ export async function registerWorkspaceTools(tools: ToolMap) {
       const basePath = args.path || getRoot()
       const results = await searchFiles(basePath, args.query, [])
       return results.length > 0 ? results.join('\n') : `未找到匹配 "${args.query}" 的文件`
+    },
+  }
+
+  // glob 转正则
+  function globToRegex(pattern: string): RegExp {
+    let p = pattern
+      .replace(/\./g, '\\.')
+      .replace(/\*\*\//g, '<<<STARSTAR>>>')
+      .replace(/\*/g, '[^/]*')
+      .replace(/<<<STARSTAR>>>/g, '(?:.+/)?')
+      .replace(/\?/g, '[^/]')
+    // {a,b} 展开
+    p = p.replace(/\{([^}]+)\}/g, (_, alts) => `(${alts.split(',').join('|')})`)
+    return new RegExp(`^${p}$`, 'i')
+  }
+
+  async function globWalk(dirPath: string, pattern: RegExp, rootPath: string, results: string[], depth: number): Promise<void> {
+    if (depth > 15 || results.length >= 200) return
+    const api = window.electronAPI?.fs
+    if (!api) return
+    const listResult = await api.listDir(dirPath)
+    if (!listResult.success || !listResult.files) return
+    const skip = ['node_modules', '.git', '.brainplus', 'dist', 'build', '.next', '__pycache__', '.DS_Store']
+    for (const name of listResult.files) {
+      if (skip.includes(name) || name.startsWith('.')) continue
+      const childPath = `${dirPath}/${name}`
+      const relPath = childPath.slice(rootPath.length + 1)
+      const statResult = await api.stat(childPath)
+      const isDir = statResult.success && statResult.stat?.isDirectory === true
+      if (isDir) {
+        await globWalk(childPath, pattern, rootPath, results, depth + 1)
+      } else if (pattern.test(relPath)) {
+        results.push(relPath)
+      }
+    }
+  }
+
+  tools['workspace_glob'] = {
+    description:
+      '用 glob 模式匹配工作区中的文件。支持 ** (任意深度)、* (任意字符)、? (单字符)、{a,b} (选项)。' +
+      '如 "src/**/*.ts"、"*.md"、"**/*.{ts,tsx}"。' +
+      `搜索范围: ${root}` +
+      '自动排除 node_modules/.git 等。返回匹配的相对路径列表，最多 200 条。',
+    inputSchema: jsonSchema({
+      type: 'object',
+      properties: {
+        pattern: { type: 'string', description: 'glob 模式，如 "src/**/*.ts"、"*.md"' },
+        path: { type: 'string', description: '搜索起始路径，默认工作区根' },
+      },
+      required: ['pattern'],
+    }),
+    execute: async (args: { pattern: string; path?: string }) => {
+      const basePath = args.path || getRoot()
+      const regex = globToRegex(args.pattern)
+      const results: string[] = []
+      await globWalk(basePath, regex, basePath, results, 0)
+      return results.length > 0 ? results.join('\n') : `未找到匹配 "${args.pattern}" 的文件`
     },
   }
 

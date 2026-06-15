@@ -21,10 +21,9 @@
 
 ## 🟡 文件匹配改进（对标 Claude Code Glob）
 
-- [ ] `workspace_glob(pattern)` 用 glob 模式匹配文件
-  - 如 `src/**/*.ts`、`*.md`
-  - 返回匹配的文件路径列表
-  - 改进现有 `workspace_search`（只能按文件名关键词搜索）
+- [x] `workspace_glob(pattern)` 用 glob 模式匹配文件 ✅
+  - 支持 ** (任意深度)、*、?、{a,b}
+  - 自动排除 node_modules/.git 等
 
 ## 🟡 WebFetch
 
