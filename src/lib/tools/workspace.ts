@@ -150,4 +150,29 @@ export async function registerWorkspaceTools(tools: ToolMap) {
       return results.length > 0 ? results.join('\n') : `未找到匹配 "${args.query}" 的文件`
     },
   }
+
+  tools['workspace_grep'] = {
+    description:
+      '在工作区中按内容搜索代码。支持正则表达式。' +
+      'file 参数可按文件类型过滤（如 "*.ts"、"*.py"、"*.tsx"）。' +
+      `搜索范围: ${root}` +
+      '自动排除 node_modules/.git/.brainplus/dist 等目录。返回匹配行的文件路径+行号+内容。',
+    inputSchema: jsonSchema({
+      type: 'object',
+      properties: {
+        pattern: { type: 'string', description: '搜索的正则表达式或关键词' },
+        file: { type: 'string', description: '文件类型过滤，如 "*.ts"、"*.md"，默认搜索所有文件' },
+        path: { type: 'string', description: '搜索起始路径，默认整个工作区' },
+      },
+      required: ['pattern'],
+    }),
+    execute: async (args: { pattern: string; file?: string; path?: string }) => {
+      const api = window.electronAPI?.fs
+      if (!api?.grep) return 'grep 不可用'
+      const basePath = args.path || getRoot()
+      const result = await api.grep(basePath, args.pattern, args.file)
+      if (!result.success) return `grep 失败: ${result.error}`
+      return result.output || '(无匹配)'
+    },
+  }
 }

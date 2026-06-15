@@ -2,8 +2,8 @@
 
 ## 🟡 代码搜索 (grep/ripgrep)
 
-- [ ] `workspace_grep` 工具：按内容搜索代码，支持正则
-- [ ] 替代当前的 `workspace_search`（只能按文件名搜）
+- [x] `workspace_grep` 工具：按内容搜索代码，支持正则 ✅
+- [x] 按文件类型过滤 + 自动排除 node_modules/.git 等 ✅
 
 ## 🔴 文件写入
 

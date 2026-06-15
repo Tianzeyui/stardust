@@ -271,6 +271,54 @@ ipcMain.handle('fs:mkdir', async (_event, dirPath: string) => {
   }
 })
 
+ipcMain.handle('fs:grep', async (_event, dirPath: string, pattern: string, fileGlob?: string) => {
+  try {
+    const { execFileSync } = await import('child_process')
+    const args = ['-rni', '--include=' + (fileGlob || '*')]
+    // 排除 node_modules .git .brainplus dist
+    const excludes = ['node_modules', '.git', '.brainplus', 'dist', 'build', '.next', '__pycache__']
+    for (const e of excludes) args.push('--exclude-dir=' + e)
+    args.push(pattern, dirPath)
+    const stdout = execFileSync('grep', args, { encoding: 'utf-8', timeout: 15000, maxBuffer: 500 * 1024 })
+    return { success: true, output: stdout.slice(0, 50000) || '(无匹配)' }
+  } catch (e: any) {
+    if (e.status === 1) return { success: true, output: '(无匹配)' } // grep returns 1 for no matches
+    // 系统没有 grep，回退 Node.js 实现
+    if (e.code === 'ENOENT') {
+      try {
+        const fs = await import('fs')
+        const path = await import('path')
+        const results: string[] = []
+        function walk(dir: string) {
+          const skip = ['node_modules', '.git', '.brainplus', 'dist', 'build', '.next', '__pycache__']
+          try {
+            for (const entry of fs.readdirSync(dir)) {
+              if (skip.includes(entry)) continue
+              const full = path.join(dir, entry)
+              const stat = fs.statSync(full)
+              if (stat.isDirectory()) { walk(full); continue }
+              if (fileGlob && !entry.match(fileGlob.replace(/\*/g, '.*'))) continue
+              try {
+                const content = fs.readFileSync(full, 'utf-8')
+                const lines = content.split('\n')
+                const re = new RegExp(pattern, 'gi')
+                for (let i = 0; i < lines.length; i++) {
+                  if (re.test(lines[i])) results.push(`${full}:${i + 1}:${lines[i].slice(0, 200)}`)
+                }
+              } catch {}
+            }
+          } catch {}
+        }
+        walk(dirPath)
+        return { success: true, output: results.slice(0, 200).join('\n') || '(无匹配)' }
+      } catch (e2: any) {
+        return { success: false, error: e2.message }
+      }
+    }
+    return { success: false, error: e.message }
+  }
+})
+
 ipcMain.handle('fs:copyDir', async (_event, src: string, dest: string) => {
   try {
     if (!fs.existsSync(src)) return { success: false, error: '源目录不存在' }
