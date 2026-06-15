@@ -210,7 +210,7 @@ export async function registerWorkspaceTools(tools: ToolMap) {
       .replace(/\./g, '\\.')
       .replace(/\*\*\//g, '<<<STARSTAR>>>')
       .replace(/\*/g, '[^/]*')
-      .replace(/<<<STARSTAR>>>/g, '(?:.+/)?')
+      .replace(/<<<STARSTAR>>>/g, '(?:.+/)*')
       .replace(/\?/g, '[^/]')
     // {a,b} 展开
     p = p.replace(/\{([^}]+)\}/g, (_, alts) => `(${alts.split(',').join('|')})`)
@@ -225,7 +225,7 @@ export async function registerWorkspaceTools(tools: ToolMap) {
     if (!listResult.success || !listResult.files) return
     const skip = ['node_modules', '.git', '.brainplus', 'dist', 'build', '.next', '__pycache__', '.DS_Store']
     for (const name of listResult.files) {
-      if (skip.includes(name) || name.startsWith('.')) continue
+      if (skip.includes(name)) continue
       const childPath = `${dirPath}/${name}`
       const relPath = childPath.slice(rootPath.length + 1)
       const statResult = await api.stat(childPath)
