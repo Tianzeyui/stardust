@@ -259,23 +259,41 @@ export function saveTokenLimit(limit: number): void {
 
 // ========== 智能路由层级配置 ==========
 
-const TIER_FAST_KEY = 'brainplus_tier_fast'
-const TIER_POWERFUL_KEY = 'brainplus_tier_powerful'
+const TIER_MAP_KEY = 'brainplus_tier_map'
 
-export const DEFAULT_TIER_FAST = 'haiku,gpt-4o-mini,gemini-flash,deepseek-chat,flash,mini'
-export const DEFAULT_TIER_POWERFUL = 'opus,gpt-4,gpt-4-turbo,gemini-pro,deepseek-v3,deepseek-v4,pro,ultra'
+export type ModelTier = 'fast' | 'balanced' | 'powerful'
 
-export function getTierFast(): string {
-  try { const v = localStorage.getItem(TIER_FAST_KEY); if (v) return v } catch {}
-  return DEFAULT_TIER_FAST
+/** 默认层级映射：根据模型名关键词推断 */
+export function getDefaultTier(modelId: string): ModelTier {
+  const fast = ['haiku', 'gpt-4o-mini', 'gemini-flash', 'deepseek-chat', 'flash', 'mini', 'lite']
+  const powerful = ['opus', 'gpt-4o', 'gpt-4-turbo', 'gpt-5', 'gemini-pro', 'deepseek-v3', 'pro', 'ultra', 'preview']
+  for (const kw of fast) if (modelId.toLowerCase().includes(kw)) return 'fast'
+  for (const kw of powerful) if (modelId.toLowerCase().includes(kw)) return 'powerful'
+  return 'balanced'
 }
-export function saveTierFast(v: string): void { localStorage.setItem(TIER_FAST_KEY, v) }
 
-export function getTierPowerful(): string {
-  try { const v = localStorage.getItem(TIER_POWERFUL_KEY); if (v) return v } catch {}
-  return DEFAULT_TIER_POWERFUL
+/** 获取用户自定义的层级映射 */
+export function getTierMap(): Record<string, ModelTier> {
+  try {
+    const v = localStorage.getItem(TIER_MAP_KEY)
+    if (v) return JSON.parse(v)
+  } catch {}
+  return {}
 }
-export function saveTierPowerful(v: string): void { localStorage.setItem(TIER_POWERFUL_KEY, v) }
+export function saveTierMap(map: Record<string, ModelTier>): void {
+  localStorage.setItem(TIER_MAP_KEY, JSON.stringify(map))
+}
+
+/** 获取某个模型的层级（用户设定优先，否则默认推断） */
+export function getModelTier(modelId: string): ModelTier {
+  const map = getTierMap()
+  return map[modelId] || getDefaultTier(modelId)
+}
+export function setModelTier(modelId: string, tier: ModelTier): void {
+  const map = getTierMap()
+  map[modelId] = tier
+  saveTierMap(map)
+}
 
 // ========== 系统提示词 ==========
 

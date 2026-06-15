@@ -110,22 +110,18 @@ export function getChatModel() {
 
 // ====== 模型委托 ======
 
-function getTierFast(): string[] { return (await import('@/lib/config')).getTierFast().split(',').map(s => s.trim()).filter(Boolean) }
-function getTierPowerful(): string[] { return (await import('@/lib/config')).getTierPowerful().split(',').map(s => s.trim()).filter(Boolean) }
-
 async function pickModelByTier(
   provider: AIModelConfig,
   tier: 'fast' | 'balanced' | 'powerful',
 ): Promise<string> {
   const models = provider.availableModels || []
   if (models.length === 0) return provider.selectedModel || ''
-
   if (tier === 'balanced') return provider.selectedModel || models[0]?.id || ''
 
-  const tierList = tier === 'fast' ? await getTierFast() : await getTierPowerful()
-  for (const ck of tierList) {
-    const m = models.find(m => m.id === ck || m.id.includes(ck))
-    if (m) return m.id
+  const { getModelTier } = await import('@/lib/config')
+  const matched = models.filter(m => getModelTier(m.id) === tier)
+  if (matched.length > 0) {
+    return tier === 'fast' ? matched[0].id : matched[matched.length - 1].id
   }
   return tier === 'fast' ? models[0]?.id || '' : models[models.length - 1]?.id || ''
 }

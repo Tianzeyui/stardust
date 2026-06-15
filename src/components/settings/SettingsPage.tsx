@@ -17,8 +17,7 @@ import {
   getAIModels, saveAIModels, deleteAIModel, generateModelId, PROVIDER_TEMPLATES,
   type AIModelConfig, type MCPServerConfig,
   getDisclosureThreshold, saveDisclosureThreshold,
-  getTierFast, saveTierFast, getTierPowerful, saveTierPowerful,
-  DEFAULT_TIER_FAST, DEFAULT_TIER_POWERFUL,
+  getModelTier, setModelTier,
   getAgentMaxSteps, saveAgentMaxSteps,
   getMemoryEnabled, saveMemoryEnabled,
   getCompressThreshold, saveCompressThreshold, getTokenLimit, saveTokenLimit,
@@ -93,8 +92,6 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
   const [callResult, setCallResult] = useState<string | null>(null)
   const [callLoading, setCallLoading] = useState(false)
   const [disclosureThreshold, setDisclosureThreshold] = useState(getDisclosureThreshold)
-  const [tierFast, setTierFast] = useState(getTierFast)
-  const [tierPowerful, setTierPowerful] = useState(getTierPowerful)
   const [maxSteps, setMaxSteps] = useState(getAgentMaxSteps)
   const [memoryEnabled, setMemoryEnabled] = useState(getMemoryEnabled)
   const [compressThreshold, setCompressThreshold] = useState(getCompressThreshold)
@@ -610,16 +607,39 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
                             <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-180" />
                           </summary>
                           <div className="max-h-48 overflow-auto space-y-1 rounded border border-border p-2 mt-2">
-                            {model.availableModels.map((sm) => (
+                            {model.availableModels.map((sm) => {
+                              const tier = getModelTier(sm.id)
+                              const tierColors: Record<string, string> = { fast: 'bg-emerald-100 text-emerald-700', balanced: 'bg-blue-100 text-blue-700', powerful: 'bg-purple-100 text-purple-700' }
+                              return (
                               <div
                                 key={sm.id}
                                 className={`flex cursor-pointer items-center justify-between rounded px-2 py-1.5 text-xs transition-colors ${model.selectedModel === sm.id ? 'bg-accent font-medium' : 'hover:bg-muted'}`}
                                 onClick={() => updateModel(model.id, { selectedModel: sm.id })}
                               >
-                                <span className="font-mono">{sm.id}</span>
-                                {model.selectedModel === sm.id && <Check className="h-3.5 w-3.5 text-primary" />}
+                                <span className="font-mono truncate">{sm.id}</span>
+                                <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                                  <select
+                                    className="h-5 rounded border border-border bg-background text-[10px] px-1 cursor-pointer"
+                                    value={tier}
+                                    onClick={e => e.stopPropagation()}
+                                    onChange={e => {
+                                      e.stopPropagation()
+                                      setModelTier(sm.id, e.target.value as any)
+                                      // 强制刷新
+                                      setModels(prev => [...prev])
+                                    }}
+                                  >
+                                    <option value="fast">⚡ 快</option>
+                                    <option value="balanced">⚖ 均</option>
+                                    <option value="powerful">💪 强</option>
+                                  </select>
+                                  <span className={`text-[9px] px-1 py-px rounded font-medium ${tierColors[tier]}`}>
+                                    {tier === 'fast' ? '快' : tier === 'balanced' ? '均' : '强'}
+                                  </span>
+                                  {model.selectedModel === sm.id && <Check className="h-3.5 w-3.5 text-primary" />}
+                                </div>
                               </div>
-                            ))}
+                            )})}
                           </div>
                         </details>
                       )}
@@ -632,24 +652,17 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
               ))
             )}
 
-            {/* 智能路由配置 */}
-            {models.length > 0 && (
+            {/* 智能路由说明 */}
+            {models.length > 0 && models.some(m => m.modelsFetched && m.availableModels.length > 0) && (
               <fieldset className="rounded-lg border border-border p-4">
                 <legend className="px-2 text-sm font-semibold">智能路由</legend>
-                <p className="text-xs text-muted-foreground leading-relaxed mb-3">
-                  Auto 模式下根据任务复杂度自动选择模型层级。输入关键词（逗号分隔），匹配模型名包含任一关键词的模型。
+                <p className="text-xs text-muted-foreground leading-relaxed mb-2">
+                  Auto 模式下，系统根据任务复杂度自动选择模型层级。每个模型已根据名称自动标记默认层级，可直接在上方模型列表中调整。
                 </p>
-                <div className="space-y-2">
-                  <div>
-                    <label className="text-[11px] font-medium">快速层 (Fast)</label>
-                    <p className="text-[10px] text-muted-foreground/50 mb-1">简单任务优先匹配此层级。</p>
-                    <Input className="h-8 text-xs font-mono" value={tierFast} onChange={e => { setTierFast(e.target.value); saveTierFast(e.target.value) }} placeholder={DEFAULT_TIER_FAST} />
-                  </div>
-                  <div>
-                    <label className="text-[11px] font-medium">强力层 (Powerful)</label>
-                    <p className="text-[10px] text-muted-foreground/50 mb-1">复杂任务优先匹配此层级。</p>
-                    <Input className="h-8 text-xs font-mono" value={tierPowerful} onChange={e => { setTierPowerful(e.target.value); saveTierPowerful(e.target.value) }} placeholder={DEFAULT_TIER_POWERFUL} />
-                  </div>
+                <div className="flex gap-3 text-[10px]">
+                  <span className="flex items-center gap-1"><span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-medium">快</span> 简单任务优先</span>
+                  <span className="flex items-center gap-1"><span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">均</span> 默认使用</span>
+                  <span className="flex items-center gap-1"><span className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-medium">强</span> 复杂任务优先</span>
                 </div>
               </fieldset>
             )}
