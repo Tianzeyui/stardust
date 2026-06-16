@@ -388,6 +388,9 @@ export function ChatPage() {
 
   // 新对话
   const handleNewConv = useCallback(async () => {
+    abortRef.current?.abort()  // 中止当前输出
+    abortRef.current = null
+    setLoading(false)
     const api = window.electronAPI?.conv
     if (!api) return
     const project = currentProjectId ? projectStore.getById(currentProjectId) : null
@@ -398,6 +401,9 @@ export function ChatPage() {
 
   // 切换对话
   const handleSwitchConv = useCallback(async (id: string) => {
+    abortRef.current?.abort()
+    abortRef.current = null
+    setLoading(false)
     const api = window.electronAPI?.conv
     if (!api) return
     const c = await api.get(id)
