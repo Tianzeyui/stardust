@@ -297,6 +297,14 @@ export function setModelTier(modelId: string, tier: ModelTier): void {
 
 // ========== 搜索引擎配置 ==========
 
+const SEARCH_COUNT_KEY = 'brainplus_search_count'
+
+export function getSearchCount(): number {
+  try { const v = localStorage.getItem(SEARCH_COUNT_KEY); if (v) return parseInt(v) } catch {}
+  return 5
+}
+export function saveSearchCount(v: number): void { localStorage.setItem(SEARCH_COUNT_KEY, String(v)) }
+
 const SEARCH_ENGINE_KEY = 'brainplus_search_engine'
 const GOOGLE_API_KEY = 'brainplus_google_api_key'
 const GOOGLE_CX_KEY = 'brainplus_google_cx'

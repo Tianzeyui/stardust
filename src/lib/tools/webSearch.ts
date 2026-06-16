@@ -65,9 +65,10 @@ export function registerWebSearchTool(tools: ToolMap) {
       required: ['query'],
     }),
     execute: async ({ query, count }: { query: string; count?: number }) => {
+      const { getSearchCount } = await import('@/lib/config')
       const results = await searchAll(query)
       if (results.length === 0) return 'No results found. Try a different query.'
-      const max = Math.min(count || 5, results.length)
+      const max = Math.min(count || getSearchCount(), results.length)
       return results.slice(0, max).map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet}`).join('\n\n')
     },
   }

@@ -9,6 +9,7 @@ import {
   getGraphEnabled, saveGraphEnabled,
   getTerminalEnabled, saveTerminalEnabled,
   getSearchEngine, saveSearchEngine,
+  getSearchCount, saveSearchCount,
   getGoogleApiKey, saveGoogleApiKey, getGoogleCx, saveGoogleCx,
   getBraveApiKey, saveBraveApiKey,
   type SearchEngine,
@@ -46,6 +47,7 @@ export function CapabilitiesTab() {
   const [googleKey, setGoogleKey] = useState(getGoogleApiKey)
   const [googleCx, setGoogleCx] = useState(getGoogleCx)
   const [braveKey, setBraveKey] = useState(getBraveApiKey)
+  const [searchCount, setSearchCount] = useState(getSearchCount)
 
   // 终端
   const [terminalEnabled, setTerminalEnabled] = useState(getTerminalEnabled)
@@ -139,6 +141,14 @@ export function CapabilitiesTab() {
             <div className="rounded-md border border-border bg-muted/20 px-3 py-2.5 space-y-2">
               <div className="flex items-center justify-between">
                 <div><p className="text-xs font-medium text-foreground">Bing + DuckDuckGo</p><p className="text-[10px] text-muted-foreground">免费兜底，无需 API Key</p></div>
+              </div>
+            </div>
+            <div className="rounded-md border border-border bg-muted/20 px-3 py-2.5 flex items-center justify-between">
+              <div><p className="text-xs font-medium text-foreground">搜索结果数</p><p className="text-[10px] text-muted-foreground">每次搜索返回条数</p></div>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => { const v = Math.max(1, searchCount - 1); setSearchCount(v); saveSearchCount(v) }}>−</Button>
+                <Input type="number" min={1} max={20} value={searchCount} onChange={e => { const v = parseInt(e.target.value) || 5; setSearchCount(v); saveSearchCount(v) }} className="h-8 w-16 text-center text-sm" />
+                <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => { const v = Math.min(20, searchCount + 1); setSearchCount(v); saveSearchCount(v) }}>+</Button>
               </div>
             </div>
           </div>
