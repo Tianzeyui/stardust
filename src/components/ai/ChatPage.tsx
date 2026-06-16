@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   ArrowRight, Loader2, Bot, X, ListTodo, Circle, CheckCircle2, File,
   Paperclip, FileText, Image, FolderOpen, ExternalLink, ArrowLeft, ArrowDown,
+  Code, MessageSquare,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -1184,7 +1185,7 @@ export function ChatPage() {
             onClick={() => setCodingMode(!codingMode)}
             title={codingMode ? '编码模式' : '对话模式'}
           >
-            {codingMode ? 'Code' : 'Chat'}
+            {codingMode ? <Code className="h-3 w-3" /> : <MessageSquare className="h-3 w-3" />}
           </button>
           <MemoryPopup
             manager={memoryManager}
