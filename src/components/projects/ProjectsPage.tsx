@@ -308,34 +308,6 @@ export function ProjectsPage() {
                   <h4 className="text-sm font-semibold">项目设置</h4>
                 </div>
 
-                {/* PROMPT.md */}
-                <div className="mb-4">
-                  <button
-                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-1.5"
-                    onClick={() => setShowPrompt(!showPrompt)}
-                  >
-                    <span className={`transition-transform ${showPrompt ? 'rotate-90' : ''}`}>▸</span>
-                    PROMPT.md
-                    {selected.settings.prompt?.trim() && (
-                      <span className="text-[10px] text-primary/50">({selected.settings.prompt.trim().length} 字)</span>
-                    )}
-                  </button>
-                  {showPrompt && (
-                    <>
-                      <MdEditor
-                        value={selected.settings.prompt || ''}
-                        onChange={(v) => projectStore.updateSettings(selected.id, { prompt: v })}
-                        placeholder={`给 AI 的项目级提示词，会自动注入到对话中。\n例如：\n这是基于 Astro 的个人博客项目。\n所有文章放在 src/content/posts/ 下。\n不要修改配置文件。`}
-                        defaultMode="edit"
-                        minHeight="160px"
-                      />
-                      <p className="text-[9px] text-muted-foreground/50 mt-1">
-                        相当于 Claude Code 的 CLAUDE.md，聊天时自动作为 system prompt 注入。
-                      </p>
-                    </>
-                  )}
-                </div>
-
                 {/* Agents */}
                 <div className="mb-4">
                   <Label className="text-xs mb-1.5 block">Agents</Label>

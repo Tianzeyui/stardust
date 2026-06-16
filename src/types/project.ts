@@ -1,5 +1,4 @@
 export interface ProjectSettings {
-  prompt: string         // PROMPT.md 内容，注入到 system prompt
   agents: string[]       // 启用的 agent ID
   skills: string[]       // 启用的 skill ID
   mcpServers: string[]   // 启用的 MCP 服务器 ID
@@ -18,7 +17,6 @@ export interface Project {
 }
 
 export const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
-  prompt: '',
   agents: [],
   skills: [],
   mcpServers: [],

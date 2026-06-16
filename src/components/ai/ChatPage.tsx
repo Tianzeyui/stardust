@@ -902,7 +902,6 @@ export function ChatPage() {
         memoryInjection: sessionMemoryEnabled
           ? await memoryManager?.getInjectionText(input.trim()) ?? undefined
           : undefined,
-        projectPrompt: projectSettings?.prompt || undefined,
         userId: user?.id,
       })
       forceCompressRef.current = false
