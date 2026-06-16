@@ -2,10 +2,9 @@
 
 ## 🔴 提示词压缩——4段→2段
 
-- [ ] Rules+Verification+Safety 去重合并为一段（当前重复：读再改、验证再报、反幻觉都在多处出现）
-- [ ] Tools+Agent+Fork 合并为一段
-- [ ] 目标：15+ 条规则 → 8 条以内
-- [ ] 参照 CC 的对比式而非罗列式
+- [x] 6段20+行→2段8行 ✅
+- [x] Rules+Verification+Safety 合并 ✅
+- [x] Tools+Agent+Fork+Style 合并 ✅
 
 ## 🔴 两阶段披露——所有场景先判后做
 
