@@ -295,6 +295,17 @@ export function setModelTier(modelId: string, tier: ModelTier): void {
   saveTierMap(map)
 }
 
+// ========== 默认上下文窗口 ==========
+
+const DEFAULT_CTX_WIN_KEY = 'brainplus_default_ctx_window'
+
+export const DEFAULT_CTX_WINDOW = 128000
+export function getDefaultCtxWindow(): number {
+  try { const v = localStorage.getItem(DEFAULT_CTX_WIN_KEY); if (v) return parseInt(v) } catch {}
+  return DEFAULT_CTX_WINDOW
+}
+export function saveDefaultCtxWindow(v: number): void { localStorage.setItem(DEFAULT_CTX_WIN_KEY, String(v)) }
+
 // ========== 系统提示词（双模式） ==========
 
 const PROMPT_CODE_KEY = 'brainplus_prompt_code'
