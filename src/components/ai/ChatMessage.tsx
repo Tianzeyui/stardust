@@ -70,9 +70,12 @@ function ChatMessageInner({ msg }: ChatMessageProps) {
     const batch = (msg as any).toolBatch as ToolCallStatus[]
     return (
       <div className="flex flex-col gap-1">
-        {batch.map(tc => (
-          tc.name === 'run_terminal' ? null : <ToolBubble key={tc.id} tc={tc} />
-        ))}
+        {batch.map(tc => {
+          if (tc.name === 'run_terminal' || tc.name === 'run_terminal_input') return null
+          if (tc.name === 'web_search') return <SearchBubble key={tc.id} tc={tc} />
+          if (tc.name === 'web_fetch') return <FetchBubble key={tc.id} tc={tc} />
+          return <ToolBubble key={tc.id} tc={tc} />
+        })}
       </div>
     )
   }
