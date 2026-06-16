@@ -38,17 +38,20 @@
 
 ### 3.1 反幻觉
 - [x] 系统提示词已加 ✅
-- [ ] 关键工具返回时追加验证提醒（如 edit_file 成功后加 "Verify with run_terminal"）
 
-### 3.2 工具调用纪律
-- [ ] 首次不调工具 → 提示词引导（已在 Rules 中）
-- [ ] 对话变长后纪律松弛 → mid-conversation-system beta（已在 header）
-- [ ] 完成后不自夸、不追加 "anything else?"
+### 3.2 验证合约
+- [x] 3+文件改动时 spawn delegate_task 独立验证 ✅
+- [x] FAIL→fix→retry, PASS→spot-check ✅
 
-### 3.3 模式系统
-- [ ] 编码模式 / 审查模式 / 对话模式 可切换
-- [ ] 不同模式注入不同系统提示词片段
-- [ ] 在模型选择菜单中切换（类似 CC 的 `/mode`）
+### 3.3 Agent & Fork
+- [x] delegate_task 支线任务背景执行 ✅
+- [x] subagent 不重复主 Agent 工作 ✅
+
+### 3.4 Skills 引导
+- [x] 提示词引导先 read_skill 再使用 ✅
+
+### 3.5 模式系统
+- [ ] 编码模式 / 审查模式 / 对话模式 可切换（P2 后续）
 
 ## 4. 上下文管理
 
