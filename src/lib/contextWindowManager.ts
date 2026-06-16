@@ -33,7 +33,7 @@ export interface ContextWindowOptions {
 
 const DEFAULT_RECENT_COUNT = 10
 const DEFAULT_THRESHOLD = 0.8
-const DEFAULT_CONTEXT_WINDOW = 8192
+const DEFAULT_CONTEXT_WINDOW = 128000  // 现代模型普遍 128K+
 /** 每条消息的 role/metadata 开销估算（token） */
 const PER_MESSAGE_OVERHEAD = 4
 
