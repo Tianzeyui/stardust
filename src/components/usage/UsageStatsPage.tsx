@@ -26,10 +26,6 @@ export function UsageStatsPage({ onClose }: { onClose?: () => void }) {
   useEffect(() => { refresh() }, [refresh])
 
   const stats = getTotalStats()
-  const cacheHits = traces.filter(t => (t.cachedTokens || 0) > 0)
-  const totalCached = cacheHits.reduce((s, t) => s + (t.cachedTokens || 0), 0)
-  const totalInput = traces.reduce((s, t) => s + t.inputTokens, 0)
-  const cacheRate = totalInput > 0 ? Math.round(totalCached / totalInput * 100) : 0
 
   // 日统计聚合
   const dailyMap = new Map<string, { tokens: number; count: number; tools: number }>()
@@ -76,11 +72,6 @@ export function UsageStatsPage({ onClose }: { onClose?: () => void }) {
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><BarChart3 className="h-3.5 w-3.5" /> 平均/次</div>
               <p className="text-xl font-bold">{fmt(stats.avgTokensPerConv)}</p>
               <p className="text-[10px] text-muted-foreground/50">tok/对话</p>
-            </div>
-            <div className="rounded-lg border border-border p-4">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><Zap className="h-3.5 w-3.5" /> 缓存命中</div>
-              <p className="text-xl font-bold">{cacheRate}%</p>
-              <p className="text-[10px] text-muted-foreground/50">{cacheHits.length} 次命中，{fmt(totalCached)} tok</p>
             </div>
             <div className="rounded-lg border border-border p-4">
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><MessageSquare className="h-3.5 w-3.5" /> 工具调用</div>
