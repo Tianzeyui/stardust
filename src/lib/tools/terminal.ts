@@ -19,14 +19,14 @@ export function registerTerminalTool(tools: ToolMap) {
   if (!getTerminalEnabled()) return
 
   tools['run_terminal'] = {
-    description: '执行终端命令。mode="sync"等待完成(默认)；mode="async"后台执行；mode="interactive"给用户开交互终端——终端气泡出现$输入框，用户在框里自己打字，AI不要调用run_terminal_input。',
+    description: 'Execute shell command. mode="sync"=wait for completion(default); "async"=run in background; "interactive"=spawn interactive terminal for USER to type——AI do NOT call run_terminal_input.',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
-        command: { type: 'string', description: '要执行的 shell 命令。需要用户参与输入的程序(npm init/python REPL/ssh等)用 interactive=true。交互模式下不要调用 run_terminal_input，用户自己在终端输入。' },
-        cwd: { type: 'string', description: '工作目录。默认项目根目录' },
-        mode: { type: 'string', description: 'sync=等待完成, async=后台执行, interactive=PTY交互。默认sync' },
-        input: { type: 'string', description: '交互模式下发送给进程的输入（仅 interactive=true 时有效）' },
+        command: { type: 'string', description: 'Shell command to execute. Use interactive=true for programs needing user input (npm init/python REPL/ssh). AI do NOT call run_terminal_input, user types directly.' },
+        cwd: { type: 'string', description: 'Working directory. Default: project root' },
+        mode: { type: 'string', description: 'sync=wait, async=background, interactive=PTY. Default sync' },
+        input: { type: 'string', description: 'Input to send to process (interactive=true only)' },
       },
       required: ['command'],
     }),
@@ -141,7 +141,7 @@ export function registerTerminalTool(tools: ToolMap) {
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
-        terminal_id: { type: 'string', description: '异步终端命令的 ID' },
+        terminal_id: { type: 'string', description: 'Async terminal command ID' },
       },
       required: ['terminal_id'],
     }),
@@ -162,12 +162,12 @@ export function registerTerminalTool(tools: ToolMap) {
   }
 
   tools['run_terminal_input'] = {
-    description: '向交互终端发送输入。仅在用户明确要求"帮我发命令"时使用。正常情况下用户自己在$输入框打字，AI不要调用此工具。',
+    description: 'Send input to interactive terminal. ONLY use when user explicitly asks "send this command". Normally user types in $input field, AI do NOT call this.',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
-        terminal_id: { type: 'string', description: '交互终端的 ID' },
-        input: { type: 'string', description: '要发送的文本，自动追加换行' },
+        terminal_id: { type: 'string', description: 'Interactive terminal ID' },
+        input: { type: 'string', description: 'Text to send, auto-appends newline' },
       },
       required: ['terminal_id', 'input'],
     }),

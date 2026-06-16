@@ -38,14 +38,14 @@ export function registerSkillTools(tools: ToolMap) {
   }
 
   tools['read_skill'] = {
-    description: '读取技能文件。section 传入段落标题跳转(利用索引)，lines 传入行范围。file 默认 SKILL.md。',
+    description: 'Read skill file. section=jump to heading (using index), lines=line range. file defaults to SKILL.md.',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
-        name: { type: 'string', description: '技能名称' },
-        file: { type: 'string', description: '文件路径，如 "pptxgenjs.md"、"scripts/add_slide.py"。默认 SKILL.md' },
-        section: { type: 'string', description: '段落标题（利用系统提示中列出的索引），如 "Quick Reference"、"Scripts"' },
-        lines: { type: 'string', description: '行范围 "1-50"、"100-end"。不传且无 section 则返回全文' },
+        name: { type: 'string', description: 'Skill name' },
+        file: { type: 'string', description: 'File path, e.g. "pptxgenjs.md", "scripts/add_slide.py". Default: SKILL.md' },
+        section: { type: 'string', description: 'Section heading (use index from system prompt), e.g. "Quick Reference", "Scripts"' },
+        lines: { type: 'string', description: 'Line range "1-50", "100-end". Returns full text if neither section nor lines given' },
       },
       required: ['name'],
     }),

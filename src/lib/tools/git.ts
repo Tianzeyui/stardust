@@ -40,34 +40,34 @@ export function registerGitTools(tools: ToolMap) {
   if (!api()) return
 
   tools['git_status'] = {
-    description: '查看 git 工作区状态：已修改、已暂存、未跟踪文件。',
+    description: 'Show git working tree status: modified, staged, untracked files.',
     inputSchema: jsonSchema({ type: 'object', properties: {}, required: [] }),
     execute: async () => exec(['status', '--short']),
   }
 
   tools['git_diff'] = {
-    description: '查看未暂存的差异（工作区 vs HEAD）。可选传 path 只看某个文件。',
+    description: 'Show unstaged diff (working tree vs HEAD). Optional path to view single file.',
     inputSchema: jsonSchema({
       type: 'object',
-      properties: { path: { type: 'string', description: '文件路径（可选，不传则全部）' } },
+      properties: { path: { type: 'string', description: 'File path (optional, all if empty)' } },
       required: [],
     }),
     execute: async (args: { path?: string }) => exec(args.path ? ['diff', '--', args.path] : ['diff']),
   }
 
   tools['git_diff_staged'] = {
-    description: '查看已暂存的差异（暂存区 vs HEAD）。',
+    description: 'Show staged diff (staging area vs HEAD).',
     inputSchema: jsonSchema({ type: 'object', properties: {}, required: [] }),
     execute: async () => exec(['diff', '--staged']),
   }
 
   tools['git_log'] = {
-    description: '查看提交历史。n 控制条数，默认 10。oneline 默认 true。',
+    description: 'Show commit history. n=count (default 10). oneline=true by default.',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
-        n: { type: 'number', description: '条数，默认 10' },
-        oneline: { type: 'boolean', description: '单行模式，默认 true' },
+        n: { type: 'number', description: 'Count, default 10' },
+        oneline: { type: 'boolean', description: 'One-line mode, default true' },
       },
       required: [],
     }),
@@ -79,30 +79,30 @@ export function registerGitTools(tools: ToolMap) {
   }
 
   tools['git_add'] = {
-    description: '暂存文件。path 为空则暂存全部（git add .）。',
+    description: 'Stage files. Empty path stages all (git add .).',
     inputSchema: jsonSchema({
       type: 'object',
-      properties: { path: { type: 'string', description: '文件路径，不传则暂存全部' } },
+      properties: { path: { type: 'string', description: 'File path, stages all if empty' } },
       required: [],
     }),
     execute: async (args: { path?: string }) => exec(args.path ? ['add', args.path] : ['add', '.']),
   }
 
   tools['git_reset'] = {
-    description: '取消暂存。path 为空则取消全部暂存。',
+    description: 'Unstage files. Empty path unstages all.',
     inputSchema: jsonSchema({
       type: 'object',
-      properties: { path: { type: 'string', description: '文件路径，不传则取消全部暂存' } },
+      properties: { path: { type: 'string', description: 'File path, unstages all if empty' } },
       required: [],
     }),
     execute: async (args: { path?: string }) => exec(args.path ? ['reset', 'HEAD', '--', args.path] : ['reset', 'HEAD']),
   }
 
   tools['git_commit'] = {
-    description: '提交已暂存的更改。message 为提交信息。会弹出确认框由用户审批。',
+    description: 'Commit staged changes. message=commit message. User confirmation required.',
     inputSchema: jsonSchema({
       type: 'object',
-      properties: { message: { type: 'string', description: '提交信息' } },
+      properties: { message: { type: 'string', description: 'Commit message' } },
       required: ['message'],
     }),
     execute: async (args: { message: string }) => {
@@ -116,32 +116,32 @@ export function registerGitTools(tools: ToolMap) {
   }
 
   tools['git_branch'] = {
-    description: '查看/创建/切换分支。name 为空则列分支，传入则创建新分支。',
+    description: 'List/create/switch branches. Empty name lists all, passing name creates new branch.',
     inputSchema: jsonSchema({
       type: 'object',
-      properties: { name: { type: 'string', description: '新分支名（可选）' } },
+      properties: { name: { type: 'string', description: 'New branch name (optional)' } },
       required: [],
     }),
     execute: async (args: { name?: string }) => exec(args.name ? ['checkout', '-b', args.name] : ['branch', '-a']),
   }
 
   tools['git_checkout'] = {
-    description: '切换分支或恢复文件。target 为分支名或文件路径。',
+    description: 'Switch branch or restore file. target=branch name or file path.',
     inputSchema: jsonSchema({
       type: 'object',
-      properties: { target: { type: 'string', description: '分支名或文件路径' } },
+      properties: { target: { type: 'string', description: 'Branch name or file path' } },
       required: ['target'],
     }),
     execute: async (args: { target: string }) => exec(['checkout', args.target]),
   }
 
   tools['git_push'] = {
-    description: '推送当前分支到远程。可指定 remote（默认 origin）和 branch（默认当前分支）。',
+    description: 'Push current branch to remote. Optional remote (default origin) and branch (default current).',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
-        remote: { type: 'string', description: '远程名，默认 origin' },
-        branch: { type: 'string', description: '分支名，默认当前分支' },
+        remote: { type: 'string', description: 'Remote name, default origin' },
+        branch: { type: 'string', description: 'Branch name, default current' },
       },
       required: [],
     }),

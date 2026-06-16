@@ -115,13 +115,13 @@ export async function registerWorkspaceTools(tools: ToolMap) {
 
   tools['workspace_list_dir'] = {
     description:
-      '列出工作区目录下的文件和子目录。depth: 递归深度(默认1, 最大3)。' +
-      `根目录: ${root}`,
+      'List files and subdirectories. depth: recursion depth (default 1, max 3). ' +
+      `Workspace root: ${root}`,
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
-        path: { type: 'string', description: '要列出的目录路径（相对于工作区根目录或绝对路径）' },
-        depth: { type: 'number', description: '递归深度，1=只列当前层，默认1' },
+        path: { type: 'string', description: 'Directory path (relative to workspace root or absolute)' },
+        depth: { type: 'number', description: 'Recursion depth, 1=current level only, default 1' },
       },
     }),
     execute: async (args: { path?: string; depth?: number }) => {
@@ -134,18 +134,16 @@ export async function registerWorkspaceTools(tools: ToolMap) {
 
   tools['workspace_read_file'] = {
     description:
-      '读取工作区内的文件内容。支持分页：offset(起始字符位置) + length(读取字符数)，默认 length=8000。' +
-      '也支持 lines 行范围（如 "1-50"/"100-end"）。不传参数默认返回前 8000 字符。' +
-      `工作区根: ${root}` +
-      '返回末尾附带总字符数/总行数，方便 AI 计算下一页。' +
-      'PPT/Word/Excel/PDF 等文档会自动转换为 Markdown 后返回文本内容。',
+      'Read file content. Supports pagination: offset+length (default 8000 chars). Also supports lines range (e.g. "1-50"/"100-end"). ' +
+      `Workspace root: ${root}` +
+      'Tail includes total chars/lines for pagination. Docs (PPT/Word/Excel/PDF) auto-converted to Markdown.',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
-        path: { type: 'string', description: '文件路径（绝对路径）' },
-        offset: { type: 'number', description: '起始字符位置（0-based），默认 0' },
-        length: { type: 'number', description: '读取字符数，默认 8000，最大 10000' },
-        lines: { type: 'string', description: '行范围 "1-50" 或 "100-end"（与 offset/length 互斥）' },
+        path: { type: 'string', description: 'File path (absolute)' },
+        offset: { type: 'number', description: 'Start char position (0-based), default 0' },
+        length: { type: 'number', description: 'Chars to read, default 8000, max 10000' },
+        lines: { type: 'string', description: 'Line range "1-50" or "100-end" (mutually exclusive with offset/length)' },
       },
       required: ['path'],
     }),
@@ -199,13 +197,13 @@ export async function registerWorkspaceTools(tools: ToolMap) {
 
   tools['workspace_search'] = {
     description:
-      '在工作区目录中搜索文件。支持通配符匹配文件名。如需 glob 模式匹配（**/*.ts），使用 workspace_glob。' +
-      `搜索范围: ${root}`,
+      'Search files by name. Supports wildcards. For glob patterns (**/*.ts), use workspace_glob. ' +
+      `Search scope: ${root}`,
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
-        query: { type: 'string', description: '搜索关键词或通配符，如 "*.pptx"、"报告"' },
-        path: { type: 'string', description: '搜索起始路径，默认整个工作区' },
+        query: { type: 'string', description: "Search keyword or wildcard, e.g. "*.pptx""' },
+        path: { type: 'string', description: 'Search start path, default workspace root' },
       },
       required: ['query'],
     }),
@@ -230,15 +228,15 @@ export async function registerWorkspaceTools(tools: ToolMap) {
 
   tools['workspace_glob'] = {
     description:
-      '用 glob 模式匹配工作区中的文件。支持 ** (任意深度)、* (任意字符)、? (单字符)、{a,b} (选项)。' +
-      '如 "src/**/*.ts"、"*.md"、"**/*.{ts,tsx}"。' +
-      `搜索范围: ${root}` +
-      '自动排除 node_modules/.git 等。返回匹配的相对路径列表，最多 200 条。',
+      'Match workspace files by glob pattern. Supports ** (any depth), * (any chars), ? (single char), {a,b} (options). ' +
+      'E.g. "src/**/*.ts", "*.md", "**/*.{ts,tsx}". ' +
+      `Search scope: ${root}. ` +
+      'Auto-excludes node_modules/.git etc. Returns relative path list, max 200.',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
-        pattern: { type: 'string', description: 'glob 模式，如 "src/**/*.ts"、"*.md"' },
-        path: { type: 'string', description: '搜索起始路径，默认工作区根' },
+        pattern: { type: 'string', description: 'Glob pattern, e.g. "src/**/*.ts", "*.md"' },
+        path: { type: 'string', description: 'Search start path, default workspace root' },
       },
       required: ['pattern'],
     }),
@@ -290,16 +288,16 @@ export async function registerWorkspaceTools(tools: ToolMap) {
 
   tools['workspace_grep'] = {
     description:
-      '在工作区中按内容搜索代码。支持正则表达式。' +
-      'file 参数可按文件类型过滤（如 "*.ts"、"*.py"、"*.tsx"）。' +
-      `搜索范围: ${root}` +
-      '自动排除 node_modules/.git/.brainplus/dist 等目录。返回匹配行的文件路径+行号+内容。',
+      'Search code content in workspace. Supports regex. ' +
+      '`file` param filters by type (e.g. "*.ts", "*.py"). ' +
+      `Search scope: ${root}. ` +
+      'Auto-excludes node_modules/.git/.brainplus/dist etc. Returns file:line:content.',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
-        pattern: { type: 'string', description: '搜索的正则表达式或关键词' },
-        file: { type: 'string', description: '文件类型过滤，如 "*.ts"、"*.md"，默认搜索所有文件' },
-        path: { type: 'string', description: '搜索起始路径，默认整个工作区' },
+        pattern: { type: 'string', description: 'Search regex or keyword' },
+        file: { type: 'string', description: 'File type filter, e.g. "*.ts", default all files' },
+        path: { type: 'string', description: 'Search start path, default workspace root' },
       },
       required: ['pattern'],
     }),
@@ -315,13 +313,13 @@ export async function registerWorkspaceTools(tools: ToolMap) {
 
   tools['workspace_write_file'] = {
     description:
-      '创建或覆写文件（不存在则新建）。可写入任意路径，工作区外会弹确认框由用户审批。' +
-      '自动创建父目录。不要因为路径在工作区外就拒绝使用——用户确认后会执行。',
+      'Create or overwrite file. Any path allowed, outside-workspace triggers user confirmation. ' +
+      'Auto-creates parent dirs. Do not refuse paths outside workspace——user confirms.',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
-        path: { type: 'string', description: '文件路径（绝对路径，或相对于工作区根）' },
-        content: { type: 'string', description: '要写入的完整文件内容' },
+        path: { type: 'string', description: 'File path (absolute or relative to workspace root)' },
+        content: { type: 'string', description: 'Full file content to write' },
       },
       required: ['path', 'content'],
     }),
@@ -347,12 +345,12 @@ export async function registerWorkspaceTools(tools: ToolMap) {
   }
 
   tools['workspace_append_file'] = {
-    description: '追加内容到文件末尾（不存在则新建）。可操作任意路径，工作区外会弹确认框。不要因路径在工作区外就拒绝。',
+    description: 'Append to file (creates if missing). Any path allowed, outside-workspace triggers confirmation.',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
-        path: { type: 'string', description: '文件路径' },
-        content: { type: 'string', description: '要追加的内容' },
+        path: { type: 'string', description: 'File path' },
+        content: { type: 'string', description: 'Content to append' },
       },
       required: ['path', 'content'],
     }),
@@ -381,11 +379,11 @@ export async function registerWorkspaceTools(tools: ToolMap) {
   }
 
   tools['workspace_create_dir'] = {
-    description: '创建目录（包括父目录）。',
+    description: 'Create directory (including parents).',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
-        path: { type: 'string', description: '目录路径' },
+        path: { type: 'string', description: 'Directory path' },
       },
       required: ['path'],
     }),
@@ -401,11 +399,11 @@ export async function registerWorkspaceTools(tools: ToolMap) {
   }
 
   tools['workspace_delete_file'] = {
-    description: '删除文件。可删除任意路径，工作区外会弹确认框由用户审批。不要因路径在工作区外就拒绝。',
+    description: 'Delete file. Any path allowed, outside-workspace triggers confirmation.',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
-        path: { type: 'string', description: '要删除的文件路径' },
+        path: { type: 'string', description: 'File path to delete' },
       },
       required: ['path'],
     }),
@@ -432,16 +430,16 @@ export async function registerWorkspaceTools(tools: ToolMap) {
 
   tools['workspace_edit_file'] = {
     description:
-      '精确编辑文件：查找 old_string 并替换为 new_string。old_string 必须在文件中唯一出现（否则报错）。' +
-      '可设置 replace_all=true 替换所有匹配。对大文件改几行时比 write 更高效安全。' +
-      '工作区外需用户确认。',
+      'Exact edit: find old_string and replace with new_string. Must be unique match (or error). ' +
+      'Set replace_all=true to replace all. More efficient than write for small edits in large files. ' +
+      'Outside workspace: user confirmation required.',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
-        path: { type: 'string', description: '文件路径' },
-        old_string: { type: 'string', description: '要被替换的原始字符串（必须唯一匹配）' },
-        new_string: { type: 'string', description: '替换后的新字符串' },
-        replace_all: { type: 'boolean', description: '是否替换所有匹配。默认 false（只替换第一个，且要求唯一）' },
+        path: { type: 'string', description: 'File path' },
+        old_string: { type: 'string', description: 'Original string to replace (must be unique match)' },
+        new_string: { type: 'string', description: 'Replacement string' },
+        replace_all: { type: 'boolean', description: 'Replace all matches. Default false (single, requires uniqueness)' },
       },
       required: ['path', 'old_string', 'new_string'],
     }),
