@@ -79,7 +79,7 @@ function getProvider(model: AIModelConfig) {
     return createOpenAI({ apiKey, baseURL })
   }
   if (providerName === 'anthropic' || providerName === 'claude') {
-    return createAnthropic({ apiKey, baseURL })
+    return createAnthropic({ apiKey, baseURL, headers: { 'anthropic-beta': 'interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05' } })
   }
   if (providerName === 'google' || providerName === 'gemini') {
     return createGoogleGenerativeAI({ apiKey, baseURL })
@@ -91,7 +91,7 @@ function getProvider(model: AIModelConfig) {
   // 兼容旧的 model.id 直接等于 provider 名称的情况
   const legacyId = model.id.toLowerCase()
   if (legacyId === 'deepseek') return createDeepSeek({ apiKey, baseURL })
-  if (legacyId === 'anthropic') return createAnthropic({ apiKey, baseURL })
+  if (legacyId === 'anthropic') return createAnthropic({ apiKey, baseURL, headers: { 'anthropic-beta': 'interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05' } })
   if (legacyId === 'google' || legacyId === 'gemini') return createGoogleGenerativeAI({ apiKey, baseURL })
 
   // 其他 OpenAI 兼容的 provider（qwen, openrouter, groq, together, mistral 等）
