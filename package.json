@@ -67,6 +67,9 @@
       "dist-electron/**/*",
       "public/**/*"
     ],
+    "asarUnpack": [
+      "node_modules/node-pty/**"
+    ],
     "mac": {
       "category": "public.app-category.productivity",
       "icon": "public/assets/icons/icon.png",
