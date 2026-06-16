@@ -793,14 +793,14 @@ export function ChatPage() {
                 else n.pop()
               }
               // 创建并行工具组消息
-              n.push({ role: 'tool', content: '', toolBatch: [...toolBatchRef.current] as any })
+              n.push({ role: 'tool', content: '', toolBatch: toolBatchRef.current as any })
               return [...n]
             })
           } else {
             // 追加到已有的工具组
             setMessages(prev => prev.map(m => {
               if (m.role === 'tool' && (m as any).toolBatch) {
-                return { ...m, toolBatch: [...toolBatchRef.current] as any }
+                return { ...m, toolBatch: toolBatchRef.current as any }
               }
               return m
             }))
@@ -814,7 +814,7 @@ export function ChatPage() {
             const tokMatch = String(event.toolOutput ?? '').match(/(\d+)\s*tok/)
             if (tokMatch) agentTotalTokensRef.current += parseInt(tokMatch[1])
           }
-          // 更新 batch 中对应工具的状态
+          // 更新 batch 中对应工具的状态（原地修改，保持引用稳定）
           const batch = toolBatchRef.current
           for (const t of batch) {
             if (t.name === matchName || t.name === sdkName) {
@@ -824,7 +824,7 @@ export function ChatPage() {
           }
           setMessages(prev => prev.map(m => {
             if (m.role === 'tool' && (m as any).toolBatch) {
-              return { ...m, toolBatch: [...batch] as any }
+              return { ...m, toolBatch: batch as any }
             }
             // 兼容旧的 toolCall 模式
             if (m.role === 'tool' && m.toolCall && (m.toolCall.name === matchName || m.toolCall.name === sdkName) && m.toolCall.status === 'running') {
