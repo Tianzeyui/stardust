@@ -73,8 +73,12 @@ export class ContextWindowManager {
     const originalTokens = messageTokens + (opts?.extraTokens || 0)
     const limit = contextWindow || getCtxWindow()
 
-    // 未超过阈值（且非强制），直接返回
-    const threshold = getCompressThreshold() / 100
+    // 基础阈值
+    let threshold = getCompressThreshold() / 100
+    // 工具密集时提前压缩：近20%消息是工具调用 → 阈值降10%
+    const recentSlice = messages.slice(Math.floor(messages.length * 0.8))
+    const toolDensity = recentSlice.filter(m => m.role === 'tool').length / Math.max(recentSlice.length, 1)
+    if (toolDensity > 0.3) threshold = Math.max(0.5, threshold - 0.1)
     // 小模型保护：至少超过 2000 token 才触发压缩
     if (!opts?.force && (originalTokens <= limit * threshold || originalTokens < 2000)) {
       return { messages, wasCompressed: false, originalTokens, compressedTokens: originalTokens, limit }
