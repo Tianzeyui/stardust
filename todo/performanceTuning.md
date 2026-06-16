@@ -1,46 +1,53 @@
 # 性能/精确度调优 TODO
 
-> 基于 Claude Code 请求结构分析，同用 DeepSeek API 但 Claude Code 更精准的核心原因
+> 基于 Claude Code 源码分析 (claude-code-main) + API 请求对比
 
-## 🔴 高优先级
+## 🔴 立即可做（低投入高回报）
 
-### 1. interleaved-thinking beta header
-- [ ] chatService 请求头加 `anthropic-beta: interleaved-thinking-2025-05-14`
-- [ ] 效果：模型在每次工具调用结果返回后，先思考再决定下一步
-- [ ] 当前：BrainPlus 没传此 header，DeepSeek 在工具调用间无思考步骤
+### 1. 提示词加入反幻觉 + 工具选择引导  
+- [ ] 加"false-claims mitigation"："Report outcomes faithfully. Never say tests pass when they fail."
+- [ ] 加"search before saying unknown"：引用文件/函数时必须先 grep/glob  
+- [ ] 加"anti-over-explanation"：不要说"let me call Grep"，直接调
+- [ ] 加"warm tone"："Avoid negative assumptions"，pushback 要 constructive
+- [ ] 来源：`src/constants/prompts.ts` → `getUsingYourToolsSection()` + `getSimpleDoingTasksSection()`
 
-### 2. 两阶段调用（先判后做）
-- [ ] 第一次请求：fast 模型 + 不传工具 → 判断任务类型和复杂度
-- [ ] 第二次请求：pro 模型 + 完整工具列表 → 执行任务
-- [ ] 当前：一次性传所有工具，token 浪费 + 干扰判断
-- [ ] 参考：Claude Code 第一次请求 `tools: []`
+### 2. CLAUDE.md 改 user message（不是 system prompt）
+- [ ] `rules.md` 不再拼入 system prompt，改为单独一条 user message
+- [ ] 包在 `<project-instructions>` 标签里
+- [ ] 原因：user message 的 attention weight 远高于 system prompt
 
-### 3. 工具定义精简
-- [ ] 过滤不常用的工具，减少 token 消耗
-- [ ] 参考 Claude Code：第一次 0 工具，第二次 26 工具
-- [ ] 当前：每次都传全部 20+ 工具
+### 3. 工具调用隐式引导（非说明式）
+- [ ] 不写"Use workspace_glob to find files"  
+- [ ] 写成"Prefer workspace_glob over grep for file finding — it's faster and doesn't read file contents"
+- [ ] 决策树模式：glob → read → edit，而非并列列表
 
-## 🟡 中优先级
+## 🟡 中期可做
 
-### 4. 系统提示词对比优化
-- [ ] 对照 Claude Code 的 3 个 system block 结构
-- [ ] 我们的提示词是否过长/过短？
-- [ ] 工具调用引导是否明确？
+### 4. 提示词分层缓存 (dynamic boundary)
+- [ ] 静态部分（身份、规则）→ 可 cache
+- [ ] 动态部分（环境信息、git状态）→ 不可 cache
+- [ ] 用 `SYSTEM_PROMPT_DYNAMIC_BOUNDARY` 分隔
 
-### 5. context_management beta
-- [ ] 加 `anthropic-beta: context-management-2025-06-27`
-- [ ] 让 API 层处理上下文压缩，不依赖应用层
+### 5. 工具分层：核心永远可见 vs 按需发现
+- [ ] workspace/git/terminal → 核心工具，always loaded
+- [ ] MCP 外部工具 → 不在工具列表，通过 enable_tool 按需激活
+- [ ] 已在做（渐进式披露），但可以更彻底
 
-### 6. effort 参数
-- [ ] 加 `effort-2025-11-24` beta
-- [ ] 控制模型投入程度
+### 6. 系统提示词分区 memoization
+- [ ] identity/规则/行动 三个模块分别缓存
+- [ ] 只在 `/clear` 或 `/compact` 时重建
+- [ ] 每次对话不重复计算
 
-## 🟢 低优先级
+## 🟢 长期参考
 
-### 7. 响应后处理优化
-- [ ] 工具结果是否被截断/格式化影响模型判断
-- [ ] MarkdownPreview 渲染前的 stripHtml 是否过度
+### 7. 工具 prompt() 模式
+- [ ] 每个工具自带 `prompt()` 方法返回提示文本
+- [ ] 工具注册时统一拼接，而非分散在 description 字段
 
-### 8. 工具执行顺序
-- [ ] 是否支持 parallel tool execution 的 UI 展示
-- [ ] 并行工具的返回是否按正确顺序
+### 8. prompt engineering regression tests
+- [ ] 自动化测试系统提示词输出
+- [ ] 验证关键规则都能被模型理解
+
+### 9. Modes 系统（角色切换）
+- [ ] 编码模式 / 审查模式 / 教学模式
+- [ ] 不同模式注入不同系统提示词片段
