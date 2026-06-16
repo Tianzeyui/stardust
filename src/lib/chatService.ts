@@ -319,9 +319,9 @@ export async function chat(
         rulesParts.push(`[项目规则 (rules.md)]\n${rootRules.content}`)
       }
     }
-    if (rulesParts.length > 0) {
-      agentRules = rulesParts.join('\n\n') + '\n\n' + agentRules
-    }
+  }
+  // rules.md 内容作为 projectInstructions 返回，由调用方注入为 user message（不进 system prompt）
+  const projectInstructions = rulesParts.length > 0 ? rulesParts.join('\n') : undefined
   } catch {}
 
   // 渐进式披露：只筛选 MCP 业务工具（含 __ 分隔符），内建工具始终全部预加载
@@ -485,10 +485,15 @@ export async function chat(
   const totalSystem = staticPart + (dynamicPart ? '\n\n' + dynamicPart : '')
   onEvent?.({ type: 'system-log', text: `📋 系统提示词 (${totalSystem.length}字):\n${totalSystem.slice(0, 500)}${totalSystem.length > 500 ? '...(截断)' : ''}` })
 
+  // rules.md 作为 user message（attention weight 高于 system prompt）
+  const finalMessages = projectInstructions
+    ? [{ role: 'user' as const, content: `<project-instructions>\n${projectInstructions}\n</project-instructions>` }, ...compressedMessages]
+    : compressedMessages
+
   const result = streamText({
     model: model.instance,
     system: systemBlocks.length > 0 ? systemBlocks : undefined,
-    messages: compressedMessages,
+    messages: finalMessages,
     tools: Object.keys(filteredTools).length > 0 ? filteredTools : undefined,
     stopWhen: stepCountIs(getAgentMaxSteps()),
     abortSignal: opts?.abortSignal,
