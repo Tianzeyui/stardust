@@ -123,6 +123,7 @@ export function ChatPage() {
   const agentStreamedRef = useRef('')
   const agentTimelineRef = useRef<Array<{ type: 'text'; content: string } | { type: 'tool'; name: string; brief: string; status: 'running' | 'ok' | 'error'; output?: string }>>([])
   const agentTotalTokensRef = useRef(0)  // 本轮所有子 Agent 累计 token
+  const toolBatchRef = useRef<ToolCallStatus[]>([])  // 并行工具 batch
   // 记忆管理器（根据项目+对话隔离）
   const [memoryManager, setMemoryManager] = useState<MemoryManager | null>(null)
   useEffect(() => {
@@ -596,6 +597,7 @@ export function ChatPage() {
       setConsoleLog([]); setTaskList([]); setActivatedToolNames(new Set())
       thinkingRef.current = ''
       mainTimelineRef.current = []
+      toolBatchRef.current = []
       agentThinkingRef.current = ''
       agentStreamedRef.current = ''
       agentTimelineRef.current = []
@@ -768,30 +770,62 @@ export function ChatPage() {
             toolNameProxyRef.current.set(rawName, toolName)
           }
           const tc: ToolCallStatus = { id: Math.random().toString(36).slice(2, 8), name: toolName, type: toolType, status: 'running', input: event.toolInput }
-          // 记录本轮激活的工具名
           setActivatedToolNames(prev => { const next = new Set(prev); next.add(toolName); return next })
           pushLog('>', `[${tc.type}] ${tc.name}`, 'running')
+
+          const isFirstInBatch = toolBatchRef.current.length === 0
+          toolBatchRef.current.push(tc)
+
           const textBeforeTool = streamed; streamed = ''
-          // 新 assistant 段：重置时间线
-          mainTimelineRef.current = []
-          setMessages(prev => {
-            const n = [...prev]; const l = n[n.length - 1]
-            if (l?.role === 'assistant' && l.streaming) { if (textBeforeTool) { l.content = textBeforeTool; l.streaming = false } else n.pop() }
-            n.push({ role: 'tool', content: '', toolCall: tc }, { role: 'assistant', content: '', streaming: true, modelName, mainTimeline: [] })
-            return [...n]
-          })
+
+          if (isFirstInBatch) {
+            mainTimelineRef.current = []
+            setMessages(prev => {
+              const n = [...prev]; const l = n[n.length - 1]
+              if (l?.role === 'assistant' && l.streaming) {
+                if (textBeforeTool) { l.content = textBeforeTool; l.streaming = false }
+                else n.pop()
+              }
+              // 创建并行工具组消息
+              n.push({ role: 'tool', content: '', toolBatch: [...toolBatchRef.current] as any })
+              return [...n]
+            })
+          } else {
+            // 追加到已有的工具组
+            setMessages(prev => prev.map(m => {
+              if (m.role === 'tool' && (m as any).toolBatch) {
+                return { ...m, toolBatch: [...toolBatchRef.current] as any }
+              }
+              return m
+            }))
+          }
         } else if (event.type === 'tool-result') {
           const ok = !String(event.toolOutput ?? '').startsWith('Error')
-          // resolve enable_tool proxy name
           const sdkName = event.toolName || 'unknown'
           const proxyName = toolNameProxyRef.current.get(sdkName)
           const matchName = proxyName || sdkName
-          // delegate_task/sub-agent 完成时累计 token 消耗
           if (sdkName === 'delegate_task' || matchName === 'delegate_task') {
             const tokMatch = String(event.toolOutput ?? '').match(/(\d+)\s*tok/)
             if (tokMatch) agentTotalTokensRef.current += parseInt(tokMatch[1])
           }
-          setMessages(prev => prev.map(m => m.role === 'tool' && (m.toolCall?.name === matchName || m.toolCall?.name === sdkName) && m.toolCall?.status === 'running' ? { ...m, content: String(event.toolOutput ?? ''), toolCall: { ...m.toolCall, status: ok ? 'done' as const : 'error' as const, result: String(event.toolOutput ?? '') } } : m))
+          // 更新 batch 中对应工具的状态
+          const batch = toolBatchRef.current
+          for (const t of batch) {
+            if (t.name === matchName || t.name === sdkName) {
+              t.status = ok ? 'done' : 'error'
+              t.result = String(event.toolOutput ?? '')
+            }
+          }
+          setMessages(prev => prev.map(m => {
+            if (m.role === 'tool' && (m as any).toolBatch) {
+              return { ...m, toolBatch: [...batch] as any }
+            }
+            // 兼容旧的 toolCall 模式
+            if (m.role === 'tool' && m.toolCall && (m.toolCall.name === matchName || m.toolCall.name === sdkName) && m.toolCall.status === 'running') {
+              return { ...m, content: String(event.toolOutput ?? ''), toolCall: { ...m.toolCall, status: ok ? 'done' : 'error', result: String(event.toolOutput ?? '') } }
+            }
+            return m
+          }))
           pushLog(ok ? 'OK' : 'ERR', `${matchName} ${ok ? 'done' : 'fail'}`, ok ? 'ok' : 'error')
           // cleanup proxy mapping
           if (proxyName) toolNameProxyRef.current.delete(sdkName)

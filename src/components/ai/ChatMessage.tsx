@@ -66,8 +66,18 @@ function ChatMessageInner({ msg }: ChatMessageProps) {
     )
   }
 
+  if (msg.role === 'tool' && (msg as any).toolBatch) {
+    const batch = (msg as any).toolBatch as ToolCallStatus[]
+    return (
+      <div className="flex gap-2 flex-wrap">
+        {batch.map(tc => (
+          tc.name === 'run_terminal' ? null : <ToolBubble key={tc.id} tc={tc} />
+        ))}
+      </div>
+    )
+  }
+
   if (msg.role === 'tool' && msg.toolCall) {
-    // run_terminal / workspace_write_file / workspace_delete_file 有独立气泡，不显示通用工具气泡
     if (msg.toolCall.name === 'run_terminal') return null
     return msg.parentAgent ? (
       <div className="ml-4 border-l-2 border-primary/20 pl-3 my-1">

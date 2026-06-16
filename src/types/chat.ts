@@ -43,6 +43,7 @@ export interface UIMessage {
   modelName?: string
   trace?: string  // 可观测性信息
   parentAgent?: string  // 子 Agent 标签，工具消息渲染到 Agent 容器内
+  toolBatch?: ToolCallStatus[]          // 并行工具调用组
   agentToolCalls?: AgentToolCallEntry[]  // 保留兼容
   agentTimeline?: AgentTimelineItem[]    // 时间线：文字+工具调用按顺序穿插
   mainTimeline?: MainTimelineItem[]     // 主对话时间线：thinking+text 按实际发生顺序
