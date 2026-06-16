@@ -24,15 +24,15 @@
 ## 2. 工具系统
 
 ### 2.1 工具描述对齐
-- [ ] workspace_glob: "List files by name pattern. Much faster than grep for locating files."
-- [ ] workspace_grep: "Search file contents. Use after glob to narrow down specific code."
-- [ ] workspace_edit_file: "Edit small sections. Prefer over write_file — preserves surrounding code."
-- [ ] workspace_write_file: "Write or overwrite entire file. Use when creating or rewriting."
-- [ ] run_terminal: "For package installs, builds, test runners, git ops. Not for file search."
+- [x] workspace_glob: "Find files by name. Much faster than grep for locating files." ✅
+- [x] workspace_grep: "Search file contents. Use after glob to find specific code." ✅
+- [x] workspace_edit_file: "Edit specific lines. Prefer over write_file — preserves code." ✅
+- [x] workspace_write_file: "Create/overwrite entire file. Use for new files or full rewrites." ✅
+- [x] run_terminal: "For package installs, builds, tests, git ops. NOT for file search." ✅
 
 ### 2.2 工具职责边界明确
-- [ ] 每个工具描述里写清 "Prefer X over this for Y scenario"
-- [ ] 工具描述里写清 "Reserve this for: ..."
+- [x] 每个工具描述里写清 "Prefer X over this for Y scenario" ✅
+- [x] 工具描述里写清 "Use for: / NOT for:" ✅
 
 ## 3. Agent 行为
 
