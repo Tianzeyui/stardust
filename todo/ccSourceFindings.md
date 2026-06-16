@@ -2,21 +2,12 @@
 
 ## 1. 工具结果持久化系统 🔴
 
-**发现**：CC 不会把大工具结果留在 context 里，而是：
-- 超过 50K 字符→写入磁盘 session 目录
-- 替换为 `<persisted-output>path</persisted-output>` XML 标签
-- 模型需要时可以引用，但不占 context
-- 每轮 tool_result 总预算 200K 字符
-
-**BrainPlus 现状**：工具结果直接拼在 messages 里，bloat context。
-
-**改进**：ChatPage 接收 tool-result 时截断超大结果，存到文件，替换为占位符。
+- [x] tool-result >30K 截断显示 + 标记总长度 ✅
+- [x] content >30K 截断，result >50K 截断（保留前50K） ✅
 
 ## 2. 工具结果自动清理 🟡
 
-**发现**：CC 有 `TOOL_RESULT_CLEARED_MESSAGE = '[Old tool result content cleared]'` 机制，旧工具结果自动清理。
-
-**改进**：长对话中自动清理旧 tool 消息的 content（保留 toolCall status，内容清空）。
+- [ ] 长对话自动清理旧 tool 消息 content
 
 ## 3. system-reminder 上下文注入 ✅ 已实现
 
