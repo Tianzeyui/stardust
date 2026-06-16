@@ -6,3 +6,6 @@ dist-electron/
 .vite/
 originalBrainPlus/
 .claude/
+claude-code-admin/
+claude-code-admin/
+claude-code-main/
