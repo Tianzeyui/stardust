@@ -351,11 +351,11 @@ export async function chat(
   // rules.md 内容作为 projectInstructions，注入为 user message（不进 system prompt）
   const projectInstructions = rulesParts.length > 0 ? rulesParts.join('\n') : undefined
 
-  // 渐进式披露：只筛选 MCP 业务工具（含 __ 分隔符），内建工具始终全部预加载
+  // 渐进式披露：只筛选 MCP 业务工具。内建+插件+Agent工具始终全量加载
   const threshold = getDisclosureThreshold()
   const allNames = Object.keys(toolsForDisclosure)
-  const builtinNames = allNames.filter(n => !n.includes('__') || n.startsWith('agent__'))
-  const mcpNames = allNames.filter(n => n.includes('__') && !n.startsWith('agent__'))
+  const builtinNames = allNames.filter(n => !n.includes('__') || n.startsWith('agent__') || n.startsWith('plugin__'))
+  const mcpNames = allNames.filter(n => n.includes('__') && !n.startsWith('agent__') && !n.startsWith('plugin__'))
 
   // 内建工具（沙箱/工作区/Agent/Skill/网关）始终保留，不参与筛选
   const builtinTools = Object.fromEntries(builtinNames.map(n => [n, toolsForDisclosure[n]]))
