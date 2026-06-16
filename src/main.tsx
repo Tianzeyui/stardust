@@ -18,7 +18,12 @@ function ToastContainer() {
   return <ToastViewport toasts={toasts} onDismiss={dismiss} />
 }
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+// HMR 安全：复用已存在的 root，避免 "createRoot() on a container that has already been passed to createRoot()" 警告
+const container = document.getElementById('root')!
+const root = (container as any)._reactRoot || ReactDOM.createRoot(container)
+;(container as any)._reactRoot = root
+
+root.render(
   <React.StrictMode>
     <ToastProvider>
       <AuthProvider>

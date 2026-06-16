@@ -3,11 +3,12 @@ import { createOpenAI } from '@ai-sdk/openai'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { createDeepSeek } from '@ai-sdk/deepseek'
-import { getAIModels, getDisclosureThreshold, getAgentMaxSteps, type AIModelConfig } from './config'
+import { getAIModels, getAgentMaxSteps, type AIModelConfig } from './config'
 import { getInstalledSkills } from './skillService'
-import { progressiveDisclosure, extractToolInfo, type DisclosureResult } from './toolDisclosure'
+import type { DisclosureResult } from './toolDisclosure'
 import { createTrace, estimateTokens, type TurnTrace } from './observability'
-import { ContextWindowManager } from './contextWindowManager'
+import { ContextWindowManager, buildPostCompactInjection } from './contextWindowManager'
+import { getRecentFiles, trackFileOp } from './fileTracker'
 
 // ====== Agent 自带工具的事件类型 ======
 
@@ -165,11 +166,13 @@ export async function getMCPSdkTools(autoMode?: boolean, userId?: string): Promi
     const { registerWebFetchTool } = await import('./tools/webFetch')
     const { registerWebSearchTool } = await import('./tools/webSearch')
     const { registerAgentTools: registerAgentDefs } = await import('./tools/agentRegistry')
+    const { registerVerifyTools } = await import('./tools/verify')
 
     await registerMCPBusinessTools(tools)
     registerSkillTools(tools)
     registerAgentTools(tools, autoMode)
     registerMCPGatewayTools(tools)
+    registerVerifyTools(tools)
     await registerSandboxTools(tools)
     await registerWorkspaceTools(tools)
     registerTerminalTool(tools)
@@ -235,11 +238,15 @@ export interface ChatStreamEvent {
 }
 
 let _lastCompressionSummary = ''
+let _lastRulesSummary: string | undefined  // 压缩时保存的规则摘要
+
+/** 暴露文件追踪（供工具调用，实际实现在 fileTracker.ts 避免循环依赖） */
+export { trackFileOp } from './fileTracker'
 
 export async function chat(
   messages: ModelMessage[],
   onEvent?: (event: ChatStreamEvent) => void,
-  opts?: { abortSignal?: AbortSignal; autoMode?: boolean; codingMode?: boolean; localModelId?: string; forceCompression?: boolean; selectedTools?: Set<string> | null; memoryInjection?: string; userId?: string; modelOverride?: { provider: string; modelId: string } },
+  opts?: { abortSignal?: AbortSignal; autoMode?: boolean; codingMode?: boolean; localModelId?: string; forceCompression?: boolean; memoryInjection?: string; userId?: string; modelOverride?: { provider: string; modelId: string } },
 ) {
   // 本地模型路径
   if (opts?.localModelId) {
@@ -248,6 +255,7 @@ export async function chat(
 
   let model = getChatModel()
   if (!model) throw new Error('请先在设置中启用一个 AI 模型')
+  const primaryModel = model  // 固定引用，TS 能推断非 null
   // 动态路由：覆盖模型选择
   if (opts?.modelOverride) {
     model = { ...model, selectedModel: opts.modelOverride.modelId }
@@ -262,7 +270,17 @@ export async function chat(
     const lastMsg = messages[messages.length - 1]?.content
     const userText = typeof lastMsg === 'string' ? lastMsg : ''
     // 明显的编码操作 → 直接走工具，不预检
-    const codeHints = ['fix', 'edit', 'change', 'write', 'create', 'implement', 'refactor', 'debug', 'error', 'test', 'build', 'install', 'deploy', '改', '修', '写', '实现', '创建', '重构', 'bug']
+    const codeHints = [
+      // 英文
+      'fix', 'edit', 'change', 'write', 'create', 'implement', 'refactor', 'debug',
+      'error', 'test', 'build', 'install', 'deploy', 'review', 'search', 'find',
+      'check', 'look', 'examine', 'analyze', 'add', 'remove', 'delete', 'update',
+      'modify', 'rename', 'move', 'run', 'commit', 'push', 'pull', 'merge', 'diff',
+      // 中文
+      '改', '修', '写', '实现', '创建', '重构', 'bug',
+      '分析', '看', '查', '找', '搜索', '加', '删', '改', '帮',
+      '运行', '测试', '提交', '部署', '安装', '编译', '调试',
+    ]
     const needsTools = codeHints.some(w => userText.toLowerCase().includes(w))
 
     // 非明显编码 → fast 模型预检
@@ -286,20 +304,7 @@ export async function chat(
 
   const mcpTools = await getMCPSdkTools(opts?.autoMode, opts?.userId)
 
-  // 应用用户手动选择的 MCP 工具过滤
-  let toolsForDisclosure = mcpTools
-  if (opts?.selectedTools) {
-    if (opts.selectedTools.size > 0) {
-      toolsForDisclosure = Object.fromEntries(
-        Object.entries(mcpTools).filter(([name]) => opts.selectedTools!.has(name))
-      )
-    } else {
-      toolsForDisclosure = {}  // 用户明确选了空集 → 不发送 MCP 工具
-    }
-  }
-
-  // 保存完整工具集引用（渐进式披露筛选后，enable_tool 需要访问完整集合）
-  const fullToolSet = toolsForDisclosure
+  const toolsForDisclosure = mcpTools
 
   // Skills 渐进式披露（参考 OpenClaw 三层架构）
   // Level 1: 元数据（name + description），~100 tokens/skill，注入系统提示
@@ -326,135 +331,159 @@ export async function chat(
   const { getPromptCode, getPromptChat } = await import('@/lib/config')
   let agentRules = opts?.codingMode === false ? getPromptChat() : getPromptCode()
 
-  // 读取项目级 rules.md（文件优先于设置中的 PROMPT.md）
-  const rulesParts: string[] = []
+  // 多层规则发现：从项目根向上遍历，读取 brainPlusRules.md + .brainplus/rules/
+  let projectInstructions: string | undefined
+  let conditionalRules: Array<{ glob: string; content: string; path: string }> = []
   try {
-    const fsApi = (window as any).electronAPI?.fs
-    // 读项目级 .brainplus/rules.md 和根目录 rules.md
-    let wsRoot = ''
-    try {
-      const wsApi = (window as any).electronAPI?.workspace
-      if (wsApi) { const info = await wsApi.getPaths(); wsRoot = info.root }
-    } catch {}
-    if (wsRoot && fsApi) {
-      const projectRules = await fsApi.readFile(`${wsRoot}/.brainplus/rules.md`).catch(() => null)
-      if (projectRules?.success && projectRules.content) {
-        rulesParts.push(`[项目规则 (.brainplus/rules.md)]\n${projectRules.content}`)
-      }
-      // 读工作区根目录的 rules.md（项目根）
-      const rootRules = await fsApi.readFile(`${wsRoot}/rules.md`).catch(() => null)
-      if (rootRules?.success && rootRules.content) {
-        rulesParts.push(`[项目规则 (rules.md)]\n${rootRules.content}`)
+    const wsApi = (window as any).electronAPI?.workspace
+    if (wsApi) {
+      let wsRoot = ''
+      try { const info = await wsApi.getPaths(); wsRoot = info.root } catch {}
+      if (wsRoot) {
+        const { discoverRules, matchConditionalRules } = await import('./projectRules')
+        const discovered = await discoverRules(wsRoot)
+        if (discovered.unconditional) {
+          projectInstructions = discovered.unconditional
+        }
+        conditionalRules = discovered.conditional
+        if (discovered.files.length > 0) {
+          console.log(`[projectRules] 发现 ${discovered.files.length} 个规则文件: ${discovered.files.join(', ')}`)
+        }
       }
     }
   } catch {}
-  // rules.md 内容作为 projectInstructions，注入为 user message（不进 system prompt）
-  const projectInstructions = rulesParts.length > 0 ? rulesParts.join('\n') : undefined
 
-  // 渐进式披露：只筛选 MCP 业务工具。内建+插件+Agent工具始终全量加载
-  const threshold = getDisclosureThreshold()
-  const allNames = Object.keys(toolsForDisclosure)
-  const builtinNames = allNames.filter(n => !n.includes('__') || n.startsWith('agent__') || n.startsWith('plugin__'))
-  const mcpNames = allNames.filter(n => n.includes('__') && !n.startsWith('agent__') && !n.startsWith('plugin__'))
-
-  // 内建工具（沙箱/工作区/Agent/Skill/网关）始终保留，不参与筛选
-  const builtinTools = Object.fromEntries(builtinNames.map(n => [n, toolsForDisclosure[n]]))
-  let mcpFiltered = Object.fromEntries(mcpNames.map(n => [n, toolsForDisclosure[n]]))
-  let disclosureResult: DisclosureResult
-
-  if (mcpNames.length > threshold) {
-    const lastMsg = messages[messages.length - 1]?.content
-    const userText = typeof lastMsg === 'string' ? lastMsg : ''
-    const toolInfo = extractToolInfo(mcpFiltered)
-    disclosureResult = progressiveDisclosure(toolInfo, userText, { maxTools: threshold })
-    mcpFiltered = Object.fromEntries(disclosureResult.tools.map(name => [name, mcpFiltered[name]]))
-    const excluded = mcpNames.length - disclosureResult.tools.length
-    if (excluded > 0) console.log(`[disclosure] MCP ${mcpNames.length}→${disclosureResult.tools.length} tools (excluded ${excluded}, threshold ${threshold}), built-in ${builtinNames.length} always loaded`)
-  } else {
-    disclosureResult = {
-      tools: mcpNames,
-      excluded: [],
-      scores: Object.fromEntries(mcpNames.map(name => [name, { score: 0, matched: true }])),
+  // 条件规则匹配：基于最近操作的文件，注入匹配的 .brainplus/rules/*.md
+  if (conditionalRules.length > 0) {
+    const { getRecentFiles } = await import('./fileTracker')
+    const recentFiles = getRecentFiles()
+    if (recentFiles.length > 0) {
+      const { matchConditionalRules } = await import('./projectRules')
+      const conditionalInjection = matchConditionalRules(conditionalRules, recentFiles)
+      if (conditionalInjection) {
+        projectInstructions = projectInstructions
+          ? projectInstructions + '\n\n' + conditionalInjection
+          : conditionalInjection
+      }
     }
   }
 
-  // 合并：内建工具始终全部保留 + 筛选后的 MCP 工具
-  let filteredTools = { ...builtinTools, ...mcpFiltered }
-  const builtinScores = Object.fromEntries(builtinNames.map(name => [name, { score: 100, matched: true }]))
-  disclosureResult = { ...disclosureResult, scores: { ...builtinScores, ...disclosureResult.scores } }
+  // ====== 渐进式披露 v2：对齐 CC SearchExtraTools + ExecuteExtraTool 拉取模式 ======
+
+  // 保存完整工具集（供 search_tools / use_tool 使用）
+  const fullToolSet = toolsForDisclosure
+
+  // Phase 1: 内置工具显式白名单——不靠命名猜测，声明即内置
+  const CORE_TOOL_PREFIXES = [
+    'workspace_', 'git_', 'sandbox_',                          // 文件/Git/沙箱
+    'run_terminal', 'check_terminal', 'run_terminal_input',    // 终端
+    'web_fetch', 'web_search', 'search_bing', 'search_duckduckgo', // 网络
+    'mcp_list', 'mcp_read', 'mcp_get',                          // MCP 网关
+    'ask_user', 'show_progress', 'notify_complete', 'update_task_list', // Agent UI
+    'delegate_task', 'delegate_batch', 'delegate_chain',       // Agent 路由
+    'agent__', 'plugin__',                                     // A2A Agent + 插件
+    'read_skill', 'search_tools', 'use_tool',                  // 技能 + 按需激活
+  ]
+  const isCoreTool = (name: string) => CORE_TOOL_PREFIXES.some(p => name.startsWith(p))
+
+  const allNames = Object.keys(toolsForDisclosure)
+  const builtinNames = allNames.filter(isCoreTool)
+  const mcpNames = allNames.filter(n => !isCoreTool(n))
+
+  // 内置工具始终全量加载，MCP 工具全部推迟（按需拉取）
+  let filteredTools = Object.fromEntries(builtinNames.map(n => [n, toolsForDisclosure[n]]))
+  const disclosureResult: DisclosureResult = {
+    tools: builtinNames,
+    excluded: mcpNames,
+    scores: Object.fromEntries([
+      ...builtinNames.map(n => [n, { score: 100, matched: true }] as const),
+      ...mcpNames.map(n => [n, { score: 0, matched: false, reason: 'MCP工具按需拉取，使用 search_tools 查找' }] as const),
+    ]),
+  }
   onEvent?.({ type: 'disclosure', disclosureResult })
 
-  // 注册 enable_tool：AI 可通过它按需激活并调用任何在目录中但未预加载的工具
-  if (Object.keys(fullToolSet).length > 0) {
-    filteredTools = {
-      ...filteredTools,
-      enable_tool: {
-        description: '按需激活并使用一个 MCP 工具。当需要的工具不在当前已加载列表中时调用此工具。查看系统提示中的"工具目录"获取所有可用工具的名称和功能描述。如果工具已加载，请直接调用而非通过此工具。',
-        inputSchema: jsonSchema({
-          type: 'object',
-          properties: {
-            name: { type: 'string', description: '要使用的工具名称（来自工具目录）' },
-            args: { type: 'object', description: '传递给该工具的参数，根据工具目录中的功能描述合理构造' },
-          },
-          required: ['name'],
-        }),
-        execute: async ({ name, args }: { name: string; args?: any }) => {
-          const tool = fullToolSet[name] as any
-          if (!tool) return `工具 "${name}" 不在可用目录中。请检查工具目录中的工具名称。`
-
-          // 检查参数：如果 args 为空且工具要求必填参数，返回 schema 引导 AI 重试
-          const raw = tool._rawSchema as Record<string, any> | undefined
-          const required = (raw?.required || []) as string[]
-          const hasArgs = args && typeof args === 'object' && Object.keys(args).length > 0
-
-          if (required.length > 0 && !hasArgs) {
-            const props = raw?.properties as Record<string, any> | undefined
-            const schemaHint = props
-              ? '参数说明:\n' + Object.entries(props).map(([k, v]: [string, any]) =>
-                  `  ${k} (${v.type || 'any'})${required.includes(k) ? ' *必填*' : ''}${v.description ? ': ' + v.description : ''}`
-                ).join('\n')
-              : '参数结构未知'
-            return `工具 "${name}" 需要参数。请重新调用 enable_tool 并提供 args。\n${schemaHint}`
-          }
-
-          try {
-            const result = await tool.execute(args || {})
-            return result
-          } catch (e: any) {
-            // 如果执行失败且 args 为空，可能是参数缺失，提供 schema 引导
-            if (!hasArgs && required.length > 0) {
-              const props = raw?.properties as Record<string, any> | undefined
-              const hint = props ? '。参数: ' + Object.keys(props).join(', ') : ''
-              return `调用 ${name} 失败: ${e.message}${hint}。请用 enable_tool 重新调用并传入正确的 args。`
-            }
-            return `调用 ${name} 失败: ${e.message}`
-          }
+  // Phase 2: search_tools + use_tool —— 对齐 CC 拉取模式
+  filteredTools = {
+    ...filteredTools,
+    search_tools: {
+      description:
+        '搜索可用的 MCP 工具。当你需要的能力不在当前工具列表中时，描述你的需求，系统会返回匹配的工具名和功能描述。找到后用 use_tool 调用。' +
+        '不要在请求里尝试猜工具名——描述你需要做什么即可。' +
+        `当前可用 MCP 工具 ${mcpNames.length} 个。`,
+      inputSchema: jsonSchema({
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: '描述你需要什么能力，例如"查询PostgreSQL数据库"、"调用Slack发送消息"、"操作Kubernetes集群"' },
         },
+        required: ['query'],
+      }),
+      execute: async ({ query }: { query: string }) => {
+        if (mcpNames.length === 0) return '当前没有可用的 MCP 工具。'
+        // 关键词打分：对每个 MCP 工具做匹配
+        const tokens = query.toLowerCase().split(/\s+/).filter(t => t.length > 1)
+        const scored = mcpNames.map(name => {
+          const tool = fullToolSet[name] as any
+          const text = `${name} ${tool?.description || ''}`.toLowerCase()
+          let score = 0
+          for (const t of tokens) {
+            if (text.includes(t)) score += name.toLowerCase().includes(t) ? 2 : 1
+          }
+          return { name, description: tool?.description || '', score }
+        })
+        scored.sort((a, b) => b.score - a.score)
+        const top = scored.filter(s => s.score > 0).slice(0, 8)
+        if (top.length === 0) return `未找到匹配 "${query}" 的 MCP 工具。试试更通用的关键词，或描述具体的操作目标。`
+        return '匹配的 MCP 工具:\n' + top.map((t, i) =>
+          `${i + 1}. ${t.name}: ${t.description.slice(0, 120)}`
+        ).join('\n')
       },
-    }
+    },
+    use_tool: {
+      description:
+        '调用通过 search_tools 发现的 MCP 工具。传入工具名和参数即可执行。如果工具需要参数但你没传，系统会返回参数提示。',
+      inputSchema: jsonSchema({
+        type: 'object',
+        properties: {
+          tool_name: { type: 'string', description: '工具名称（search_tools 返回结果中列出的名称）' },
+          params: { type: 'object', description: '传递给该工具的参数' },
+        },
+        required: ['tool_name'],
+      }),
+      execute: async ({ tool_name, params }: { tool_name: string; params?: Record<string, unknown> }) => {
+        const tool = fullToolSet[tool_name] as any
+        if (!tool) return `工具 "${tool_name}" 不存在。请先调用 search_tools 查找可用工具。`
+
+        // 检查必填参数
+        const raw = tool._rawSchema as Record<string, any> | undefined
+        const required = (raw?.required || []) as string[]
+        const hasArgs = params && typeof params === 'object' && Object.keys(params).length > 0
+
+        if (required.length > 0 && !hasArgs) {
+          const props = raw?.properties as Record<string, any> | undefined
+          const schemaHint = props
+            ? '参数说明:\n' + Object.entries(props).map(([k, v]: [string, any]) =>
+                `  ${k} (${v.type || 'any'})${required.includes(k) ? ' *必填*' : ''}${v.description ? ': ' + v.description : ''}`
+              ).join('\n')
+            : '参数结构未知'
+          return `工具 "${tool_name}" 需要参数。\n${schemaHint}\n\n请重新调用 use_tool 并提供 params。`
+        }
+
+        try {
+          return await tool.execute(params || {})
+        } catch (e: any) {
+          if (!hasArgs && required.length > 0) {
+            const props = raw?.properties as Record<string, any> | undefined
+            const hint = props ? '。参数: ' + Object.keys(props).join(', ') : ''
+            return `调用 ${tool_name} 失败: ${e.message}${hint}`
+          }
+          return `调用 ${tool_name} 失败: ${e.message}`
+        }
+      },
+    },
   }
 
-  // 工具目录：标注每个工具是预加载还是需激活（在披露之后生成，确保状态准确）
-  // 工具目录：只列 MCP 业务工具（serverName__toolName 格式），排除沙箱/代理/网关等内建工具
-  const preloadedNames = new Set(Object.keys(filteredTools))
-  const mcpToolNames = Object.keys(fullToolSet).filter(n => n.includes('__') && !n.startsWith('agent__'))
-  const toolCatalog = mcpToolNames.length > 0
-    ? '可用 MCP 工具目录（共 ' + mcpToolNames.length + ' 个）:\n' +
-      mcpToolNames.map(name => {
-        const t = fullToolSet[name] as any
-        const desc = (t?.description || name).replace(/\n/g, ' ')
-        const tag = preloadedNames.has(name) ? '[预加载]' : '[需激活]'
-        // 提取参数概要
-        const raw = t?._rawSchema as Record<string, any> | undefined
-        const props = raw?.properties as Record<string, any> | undefined
-        const params = props ? Object.entries(props).map(([k, v]: [string, any]) => `${k}:${v.type || 'any'}`).join(', ') : ''
-        const paramHint = params ? ` (参数: ${params.slice(0, 80)})` : ''
-        return `- ${tag} ${name}: ${desc.slice(0, 100)}${paramHint}`
-      }).join('\n') +
-      '\n\n[预加载] 工具可直接调用。[需激活] 的 MCP 工具请调用 enable_tool(name, args)。'
-    : undefined
-
-  const systemPrompt = [agentRules, toolCatalog, skillInjection].filter(Boolean).join('\n\n') || undefined
+  // Phase 4: 不再注入工具目录——search_tools 替代了它的作用
+  const systemPrompt = [agentRules, skillInjection].filter(Boolean).join('\n\n') || undefined
 
   // 上下文窗口压缩（摘要堆叠：传递上轮摘要）
   const cwm = new ContextWindowManager()
@@ -480,6 +509,8 @@ export async function chat(
 
   if (wasCompressed) {
     _lastCompressionSummary = summary || ''
+    // 压缩后保存当前上下文供下次恢复
+    _lastRulesSummary = projectInstructions || undefined
     onEvent?.({
       type: 'compression',
       originalTokens,
@@ -488,6 +519,11 @@ export async function chat(
       summary,
     })
   }
+
+  // 压缩后恢复注入：重新注入最近操作的文件和项目规则
+  const postCompactInjection = wasCompressed
+    ? await buildPostCompactInjection(getRecentFiles(), _lastRulesSummary)
+    : null
 
   // 动静分离 system prompt（静态部分可缓存）
   const staticPart = (systemPrompt || '') + (summary ? `\n\n[Conversation summary]\n${summary}` : '')
@@ -503,6 +539,7 @@ export async function chat(
   // 动静分离：静态在前，动态追加。缓存通过beta header处理
   let finalSystem = staticPart.trim()
   if (dynamicPart.trim()) finalSystem += '\n\n' + dynamicPart.trim()
+  if (postCompactInjection) finalSystem += '\n\n' + postCompactInjection
 
   onEvent?.({ type: 'system-log', text: `📋 系统提示词 (${finalSystem.length}字):\n${finalSystem.slice(0, 500)}${finalSystem.length > 500 ? '...(截断)' : ''}` })
 
@@ -521,69 +558,182 @@ export async function chat(
     content: `<system-reminder>\nAs you answer the user's questions, you can use the following context:\n# currentDate\nToday's date is ${new Date().toLocaleDateString('en-CA')}.\n\nIMPORTANT: this context may or may not be relevant to your tasks. You should not respond to this context unless it is highly relevant to your task.\n</system-reminder>`,
   })
 
-  const finalMessages = [...contextMessages, ...compressedMessages]
+  let currentMessages = [...contextMessages, ...compressedMessages]
 
-  const result = streamText({
-    model: model.instance,
-    system: finalSystem || undefined,
-    messages: finalMessages,
-    tools: Object.keys(filteredTools).length > 0 ? filteredTools : undefined,
-    stopWhen: stepCountIs(getAgentMaxSteps()),
-    abortSignal: opts?.abortSignal,
-  })
-
-  // 可观测性追踪
-  const trace = createTrace()
-  compressedMessages.forEach(m => trace.addInput(typeof m.content === 'string' ? m.content : JSON.stringify(m.content)))
+  // ====== 恢复循环：max_output_tokens 升级 + 模型回退 ======
+  const MAX_ESCALATIONS = 2
+  let maxOutputTokens: number | undefined = undefined  // 首次不设限制，用模型默认
+  let escalationCount = 0
+  let hasAttemptedFallback = false
+  let currentModel = primaryModel
+  let finalUsage: any = null  // 最后一次成功调用的 usage
 
   let fullText = ''
 
-  for await (const chunk of result.fullStream) {
-    // 手动检查 abort——工具执行中 AI SDK 可能不会立即中断
-    if (opts?.abortSignal?.aborted) {
-      onEvent?.({ type: 'done' })
+  while (true) {
+    const result = streamText({
+      model: currentModel.instance,
+      system: finalSystem || undefined,
+      messages: currentMessages,
+      tools: Object.keys(filteredTools).length > 0 ? filteredTools : undefined,
+      stopWhen: stepCountIs(getAgentMaxSteps()),
+      abortSignal: opts?.abortSignal,
+      temperature: 0.3,
+      ...(maxOutputTokens != null ? { maxOutputTokens } as any : {}),
+    })
+
+    // 可观测性追踪
+    const trace = createTrace()
+    currentMessages.forEach(m => trace.addInput(typeof m.content === 'string' ? (m.content as string) : JSON.stringify(m.content)))
+
+    let streamError: Error | null = null
+    const assistantMsgs: Array<{ role: 'assistant'; content: string }> = []
+
+    try {
+      for await (const chunk of result.fullStream) {
+        if (opts?.abortSignal?.aborted) break
+        if (chunk.type === 'reasoning-delta') {
+          onEvent?.({ type: 'reasoning-delta', text: (chunk as any).text || (chunk as any).delta || '', reasoningId: (chunk as any).id })
+        } else if (chunk.type === 'text-delta') {
+          fullText += chunk.text
+          trace.addOutput(chunk.text)
+          onEvent?.({ type: 'text-delta', text: chunk.text })
+        } else if (chunk.type === 'tool-call') {
+          const name = (chunk as any).toolName || 'unknown'
+          trace.toolStart(name)
+          onEvent?.({ type: 'tool-call', toolName: name, toolInput: (chunk as any).args || (chunk as any).input })
+        } else if (chunk.type === 'tool-result') {
+          const name = (chunk as any).toolName || 'unknown'
+          const output = (chunk as any).result || (chunk as any).output || ''
+          const ok = !String(output).startsWith('Error')
+          trace.toolEnd(name, ok)
+          onEvent?.({ type: 'tool-result', toolName: name, toolOutput: (chunk as any).result || (chunk as any).output })
+        }
+      }
+    } catch (e: any) {
+      streamError = e
+      const errMsg = String(e.message || e)
+
+      // === 上下文长度错误 → 响应式压缩重试 ===
+      if (
+        errMsg.includes('prompt') && (errMsg.includes('too long') || errMsg.includes('length') || errMsg.includes('exceeded')) ||
+        errMsg.includes('context_length_exceeded') ||
+        errMsg.includes('400') && errMsg.includes('token')
+      ) {
+        const recovered = await tryReactiveCompact(currentMessages.slice(contextMessages.length), cwm, contextWindow)
+        if (recovered) {
+          onEvent?.({ type: 'system-log', text: '⚠️ 上下文过长，已自动压缩后重试...' })
+          currentMessages = [...contextMessages, ...recovered]
+          continue  // 回到循环顶部重试
+        }
+        onEvent?.({ type: 'system-log', text: '⚠️ 上下文过长且无法自动压缩。请减少上下文后重试。' })
+        break
+      }
+
+      // === 模型错误 → 回退到备选模型 ===
+      if (!hasAttemptedFallback) {
+        const fallbackModel = await pickFallbackModel(currentModel)
+        if (fallbackModel) {
+          hasAttemptedFallback = true
+          currentModel = fallbackModel
+          onEvent?.({ type: 'system-log', text: `⚠️ 模型 ${currentModel.config.displayName || currentModel.config.name} 调用失败，回退到 ${fallbackModel.config.displayName || fallbackModel.config.name}...` })
+          continue  // 回到循环顶部，用回退模型重试
+        }
+      }
+
+      // 无法恢复 → 退出
       break
     }
-    if (chunk.type === 'reasoning-delta') {
-      onEvent?.({ type: 'reasoning-delta', text: (chunk as any).text || (chunk as any).delta || '', reasoningId: (chunk as any).id })
-    } else if (chunk.type === 'text-delta') {
-      fullText += chunk.text
-      trace.addOutput(chunk.text)
-      onEvent?.({ type: 'text-delta', text: chunk.text })
-    } else if (chunk.type === 'tool-call') {
-      const name = (chunk as any).toolName || 'unknown'
-      trace.toolStart(name)
-      onEvent?.({
-        type: 'tool-call',
-        toolName: name,
-        toolInput: (chunk as any).args || (chunk as any).input,
-      })
-    } else if (chunk.type === 'tool-result') {
-      const name = (chunk as any).toolName || 'unknown'
-      const output = (chunk as any).result || (chunk as any).output || ''
-      const ok = !String(output).startsWith('Error')
-      trace.toolEnd(name, ok)
-      onEvent?.({
-        type: 'tool-result',
-        toolName: name,
-        toolOutput: (chunk as any).result || (chunk as any).output,
-      })
+
+    // ====== 流式完成，检查输出是否被截断 ======
+    if (!streamError) {
+      let finishReason = ''
+      try {
+        finishReason = (await (result as any).finishReason) || ''
+      } catch {}
+
+      const isTruncated =
+        finishReason === 'length' ||
+        finishReason === 'max_tokens'
+
+      if (isTruncated && escalationCount < MAX_ESCALATIONS && !opts?.abortSignal?.aborted) {
+        escalationCount++
+        // 首次截断设置 32k，之后每次翻倍
+        maxOutputTokens = maxOutputTokens == null ? 32000 : maxOutputTokens * 2
+        onEvent?.({ type: 'system-log', text: `⚠️ 输出被截断 (finishReason=${finishReason})，升级至 ${maxOutputTokens} tokens 重试 (#${escalationCount})...` })
+        // 注入恢复消息，保留已输出的文本
+        assistantMsgs.push({ role: 'assistant', content: fullText.slice(-500) }) // 最后 500 字符作为上下文
+        currentMessages = [
+          ...currentMessages,
+          ...assistantMsgs,
+          { role: 'user' as const, content: 'Output truncated. Resume directly — no recap, no apology. Pick up mid-thought where cut off. Break remaining work into smaller pieces.' },
+        ]
+        continue  // 回到循环顶部重试
+      }
+
+      // 捕获真实 API usage
+      try {
+        const usage = await result.usage
+        if (usage) finalUsage = usage
+      } catch {}
     }
+
+    break  // 正常完成或无法恢复 → 退出循环
   }
 
-  const turnTrace = trace.finish()
-  // 捕获真实 API usage（覆盖估算值）
-  try {
-    const usage = await result.usage
-    if (usage) {
-      turnTrace.inputTokens = (usage as any).inputTokens || (usage as any).promptTokens || turnTrace.inputTokens
-      turnTrace.outputTokens = (usage as any).outputTokens || (usage as any).completionTokens || turnTrace.outputTokens
-      const cached = (usage as any).cachedInputTokens || (usage as any).cacheReadInputTokens || 0
-      if (cached > 0) turnTrace.cachedInputTokens = cached
-    }
-  } catch {}
+  // ====== 后处理：usage 回传 ======
+  if (finalUsage) {
+    cwm.updateRealTokens(
+      finalUsage.inputTokens || finalUsage.promptTokens || 0,
+      finalUsage.outputTokens || finalUsage.completionTokens || 0,
+    )
+  }
+  const traceBuilder = createTrace()
+  const turnTrace = traceBuilder.finish()
+  if (finalUsage) {
+    turnTrace.inputTokens = finalUsage.inputTokens || finalUsage.promptTokens || 0
+    turnTrace.outputTokens = finalUsage.outputTokens || finalUsage.completionTokens || 0
+    const cached = finalUsage.cachedInputTokens || finalUsage.cacheReadInputTokens || 0
+    if (cached > 0) turnTrace.cachedInputTokens = cached
+  }
   onEvent?.({ type: 'done', trace: turnTrace })
   return fullText
+}
+
+/** 选择一个备选模型用于回退 */
+async function pickFallbackModel(current: { config: AIModelConfig }): Promise<{ instance: any; config: AIModelConfig } | null> {
+  try {
+    const { getAIModels } = await import('./config')
+    const all = getAIModels()
+    const enabled = all.filter(m => m.enabled && m.apiKey)
+    if (enabled.length <= 1) return null
+    // 找和当前模型不同的第一个可用模型
+    const cfg = enabled.find(m => m.selectedModel !== current.config.selectedModel)
+    if (!cfg) return null
+    const provider = getProvider(cfg)
+    return { instance: provider(cfg.selectedModel), config: cfg }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 响应式压缩：在 API 返回 context length 错误时调用
+ * 返回重试用的消息数组，或 null 表示无法恢复
+ */
+async function tryReactiveCompact(
+  messages: ModelMessage[],
+  cwm: ContextWindowManager,
+  contextWindow: number,
+): Promise<ModelMessage[] | null> {
+  try {
+    const result = await cwm.reactiveCompact(messages, contextWindow, _lastCompressionSummary || undefined)
+    if (result.wasCompressed) {
+      _lastCompressionSummary = result.summary || ''
+      return result.messages
+    }
+  } catch {}
+  return null
 }
 
 

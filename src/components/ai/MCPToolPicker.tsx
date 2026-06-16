@@ -5,16 +5,16 @@ import type { DisclosureResult, ToolScore } from '@/lib/toolDisclosure'
 import { getServers, getAllTools } from '@/lib/mcpClient'
 
 interface MCPToolPickerProps {
-  selectedTools: Set<string> | null  // null = 自动模式（全部工具）
-  onSelectionChange: (selected: Set<string> | null) => void
-  disclosureResult: DisclosureResult | null  // 发送消息后的索引数据
-  threshold: number
-  onThresholdChange: (n: number) => void
-  activatedToolNames: Set<string>  // 本轮实际激活的工具名
-  projectMCPServerIds?: string[]    // 项目配置的 MCP 服务器 ID
-  projectMCPTools?: string[]        // 项目配置的具体 MCP 工具（空=全部）
-  projectPluginTools?: string[]     // 项目配置的具体插件工具（空=全部）
-  pluginTools?: Array<{ name: string; description: string }>  // 插件注册的工具
+  selectedTools?: Set<string> | null  // v2: 可选，拉取模式下不再需要手动选择
+  onSelectionChange?: (selected: Set<string> | null) => void
+  disclosureResult?: DisclosureResult | null
+  threshold?: number
+  onThresholdChange?: (n: number) => void
+  activatedToolNames?: Set<string>
+  projectMCPServerIds?: string[]
+  projectMCPTools?: string[]
+  projectPluginTools?: string[]
+  pluginTools?: Array<{ name: string; description: string }>
 }
 
 /** 组合工具全名，与 getMCPSdkTools 中格式一致: {serverName}__{toolName} */
@@ -23,8 +23,9 @@ function toolFullName(serverName: string, toolName: string) {
 }
 
 export function MCPToolPicker({
-  selectedTools, onSelectionChange,
-  disclosureResult, threshold, onThresholdChange, activatedToolNames,
+  selectedTools = null, onSelectionChange,
+  disclosureResult = null, threshold = 8, onThresholdChange,
+  activatedToolNames = new Set(),
   projectMCPServerIds,
   projectMCPTools,
   projectPluginTools,
@@ -98,14 +99,14 @@ export function MCPToolPicker({
   const handleToggleTool = (fullName: string) => {
     if (selectedTools === null) {
       const all = allToolFullNames()
-      onSelectionChange(new Set(all.filter(n => n !== fullName)))
+      onSelectionChange?.(new Set(all.filter(n => n !== fullName)))
     } else {
       const next = new Set(selectedTools)
       if (next.has(fullName)) next.delete(fullName)
       else next.add(fullName)
       const all = allToolFullNames()
-      if (all.length > 0 && all.every(n => next.has(n))) onSelectionChange(null)
-      else onSelectionChange(next)
+      if (all.length > 0 && all.every(n => next.has(n))) onSelectionChange?.(null)
+      else onSelectionChange?.(next)
     }
   }
 
@@ -301,9 +302,9 @@ export function MCPToolPicker({
             {enabledServers.length > 0 && !loading && (
               <div className="flex items-center gap-2 border-t border-border px-3 py-1.5">
                 <button className="text-[10px] text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30"
-                  onClick={() => onSelectionChange(null)} disabled={isAllSelected}>全选</button>
+                  onClick={() => onSelectionChange?.(null)} disabled={isAllSelected}>全选</button>
                 <button className="text-[10px] text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30"
-                  onClick={() => onSelectionChange(new Set())}
+                  onClick={() => onSelectionChange?.(new Set())}
                   disabled={selectedTools !== null && selectedTools.size === 0}>取消全选</button>
                 {selectedTools !== null && (
                   <span className="ml-auto text-[10px] text-muted-foreground/50">{selectedCount}/{allNames.length}</span>
@@ -317,13 +318,13 @@ export function MCPToolPicker({
                 <span className="text-[10px] text-muted-foreground">渐进式披露阈值</span>
                 <div className="flex items-center gap-1">
                   <button className="rounded p-0.5 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30"
-                    onClick={() => onThresholdChange(threshold - 1)} disabled={threshold <= 1}
+                    onClick={() => onThresholdChange?.(threshold - 1)} disabled={threshold <= 1}
                     title="减少">
                     <Minus className="h-3 w-3" />
                   </button>
                   <span className="w-6 text-center text-[11px] font-mono font-medium">{threshold}</span>
                   <button className="rounded p-0.5 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30"
-                    onClick={() => onThresholdChange(threshold + 1)} disabled={threshold >= 50}
+                    onClick={() => onThresholdChange?.(threshold + 1)} disabled={threshold >= 50}
                     title="增加">
                     <Plus className="h-3 w-3" />
                   </button>

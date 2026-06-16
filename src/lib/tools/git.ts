@@ -8,7 +8,7 @@ import { createFileOp, setFileOpResolver } from '@/lib/fileOpManager'
 
 /** 工作区根（由 ChatPage 注入） */
 let _workspaceRoot: string | undefined
-export function setGitWorkspaceRoot(root: string) { _workspaceRoot = root }
+export function setGitWorkspaceRoot(root: string) { if (root) _workspaceRoot = root }
 
 function cwd(): string { return _workspaceRoot || process.cwd() }
 function api() { return (window as any).electronAPI?.git }

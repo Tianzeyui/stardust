@@ -25,6 +25,10 @@ export function useWorkspace(projectId?: string | null): WorkspacePaths & { refr
         setPaths({ root: p.path, output: `${p.path}/.brainplus/output`, isCustom: true })
         return
       }
+      // store 还没初始化完 → 不 fallback，等 onChange 触发重 resolve
+      if (!projectStore.isReady()) return
+      // store 就绪但项目不存在（可能被删除）→ 回退到全局
+      console.warn(`[useWorkspace] 项目 ${projectId} 不存在，回退到全局工作区`)
     }
 
     // 全局 → 使用 Electron workspace 配置

@@ -20,7 +20,7 @@ import { ConversationBar, type ConvInfo } from './ConversationBar'
 import { SkillPicker } from './SkillPicker'
 import { MCPToolPicker } from './MCPToolPicker'
 import type { DisclosureResult } from '@/lib/toolDisclosure'
-import { getDisclosureThreshold, saveDisclosureThreshold, getCtxWindow, getModelTier } from '@/lib/config'
+import { getCtxWindow, getModelTier } from '@/lib/config'
 import { MemoryManager } from '@/lib/memory/manager'
 import { createLocalMemoryStore } from '@/lib/memory/store-local'
 import { createSupabaseMemoryStore } from '@/lib/memory/store-supabase'
@@ -57,12 +57,25 @@ function briefArgs(input: any): string {
   return firstKey
 }
 
+const PROJECT_ID_KEY = 'brainplus_currentProjectId'
+
+function loadProjectId(): string | null {
+  try { return localStorage.getItem(PROJECT_ID_KEY) } catch { return null }
+}
+function saveProjectId(pid: string | null) {
+  try { if (pid) localStorage.setItem(PROJECT_ID_KEY, pid); else localStorage.removeItem(PROJECT_ID_KEY) } catch {}
+}
+
 export function ChatPage() {
   const { user } = useAuth()
   const [messages, setMessages] = useState<UIMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null)
+  const [currentProjectId, setCurrentProjectIdRaw] = useState<string | null>(loadProjectId)
+  const setCurrentProjectId = useCallback((pid: string | null) => {
+    saveProjectId(pid)
+    setCurrentProjectIdRaw(pid)
+  }, [])
   const { configuredModels, activeModel, setActiveModel, refreshModels } = useModelLoader()
   const workspace = useWorkspace(currentProjectId)
   const projectSettings = currentProjectId ? projectStore.getById(currentProjectId)?.settings : null
@@ -94,10 +107,7 @@ export function ChatPage() {
   const workspaceBtnRef = useRef<HTMLButtonElement>(null)
   const [workspacePath, setWorkspacePath] = useState('')
   const [workspaceEntries, setWorkspaceEntries] = useState<Array<{ name: string; path: string; isDir: boolean }>>([])
-  // MCP 工具选择：null = 自动模式（全用），Set = 手动选择
-  const [selectedMCPTools, setSelectedMCPTools] = useState<Set<string> | null>(null)
   const [disclosureResult, setDisclosureResult] = useState<DisclosureResult | null>(null)
-  const [disclosureThreshold, setDisclosureThreshold] = useState(getDisclosureThreshold)
   // 本轮实际激活的工具名（用于披露面板展示）
   const [activatedToolNames, setActivatedToolNames] = useState<Set<string>>(new Set())
   // 记忆开关（本次会话）
@@ -114,6 +124,7 @@ export function ChatPage() {
   const [compressionInfo, setCompressionInfo] = useState<CompressionEventData | null>(null)
   const [compressing, setCompressing] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
+  const convIdRef = useRef<string | null>(null)  // 始终指向当前 convId，避免闭包捕获旧值
   const forceCompressRef = useRef(false)
   const pickerRef = useRef<HTMLDivElement>(null)
   const messagesRef = useRef<UIMessage[]>([])
@@ -141,7 +152,6 @@ export function ChatPage() {
   const logId = useRef(0)
   const endRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const userPausedRef = useRef(false)
   const pendingUpdateRef = useRef<(() => void) | null>(null)
   const rafRef = useRef(0)
   const streamTickRef = useRef(0)
@@ -173,74 +183,68 @@ export function ChatPage() {
   const streamingRef = useRef(false)
   streamingRef.current = messages.some(m => m.streaming)
 
-  // wheel 事件：在浏览器实际滚动之前触发，提前设暂停标记，避免竞态
+  // 判断用户当前是否在底部（用实际 scroll 位置，不用 ref 记意图）
+  // 纯 DOM 层跟底——不依赖 React useEffect，避免与渲染循环竞争
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
-    const onWheel = (e: WheelEvent) => {
-      if (!streamingRef.current) return
-      // 向上滚（离开底部）：立即暂停
-      if (e.deltaY < 0) {
-        userPausedRef.current = true
-        setShowScrollBtn(true)
-      }
-    }
-    el.addEventListener('wheel', onWheel, { passive: true })
-    return () => el.removeEventListener('wheel', onWheel)
-  }, [])
 
-  // scroll 事件：检测用户回到底部以恢复跟底
-  useEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
-    let resumeTimer: ReturnType<typeof setTimeout> | null = null
+    let atBottom = true
+
+    // scroll 事件：用户手动滚动时更新状态
     const onScroll = () => {
-      if (!streamingRef.current) return
-      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
-      if (nearBottom && userPausedRef.current) {
-        // 触控板惯性滚动在底部附近抖动，延迟确认
-        if (resumeTimer) clearTimeout(resumeTimer)
-        resumeTimer = setTimeout(() => {
-          userPausedRef.current = false
-          setShowScrollBtn(false)
-        }, 150)
-      }
+      atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
     }
     el.addEventListener('scroll', onScroll, { passive: true })
+
+    // ResizeObserver：内容高度变化 → 用户在底部才跟底
+    const ro = new ResizeObserver(() => {
+      if (atBottom) {
+        el.scrollTop = el.scrollHeight
+      }
+    })
+    ro.observe(el)
+
     return () => {
       el.removeEventListener('scroll', onScroll)
-      if (resumeTimer) clearTimeout(resumeTimer)
+      ro.disconnect()
     }
   }, [])
 
-  // 自动跟底：未暂停时始终跟底
+  // 显示"回到底部"按钮
   useEffect(() => {
-    if (userPausedRef.current) return
+    if (!streamingRef.current) return
     const el = scrollRef.current
-    if (el) el.scrollTop = el.scrollHeight
+    if (!el) return
+    const check = () => setShowScrollBtn(el.scrollHeight - el.scrollTop - el.clientHeight >= 80)
+    const id = requestAnimationFrame(check)
+    return () => cancelAnimationFrame(id)
   }, [messages])
 
-  // 流式结束时重置 + 旧工具结果清理
+  // 流式结束时重置 + 旧工具结果清理（仅清理一次）
   useEffect(() => {
     const streaming = messages.some(m => m.streaming)
     if (!streaming && messages.length > 0) {
-      userPausedRef.current = false
       setShowScrollBtn(false)
-      // 清理前20条之外的旧工具消息内容
+      // 清理前20条之外的旧工具消息内容（只清理尚未清理的）
       if (messages.length > 30) {
-        setMessages(prev => prev.map((m, i) => {
-          if (m.role === 'tool' && i < prev.length - 25 && m.content && m.content.length > 100) {
-            return { ...m, content: '[Content cleared]' }
-          }
-          return m
-        }))
+        const needsClean = messages.some((m, i) =>
+          m.role === 'tool' && i < messages.length - 25 && m.content && m.content.length > 100 && m.content !== '[Content cleared]'
+        )
+        if (needsClean) {
+          setMessages(prev => prev.map((m, i) => {
+            if (m.role === 'tool' && i < prev.length - 25 && m.content && m.content.length > 100 && m.content !== '[Content cleared]') {
+              return { ...m, content: '[Content cleared]' }
+            }
+            return m
+          }))
+        }
       }
     }
   }, [messages])
 
-  // 点击按钮：恢复跟底并滚到底部
+  // 点击按钮：滚到底部（下一帧自动跟底会自然接上）
   const scrollToBottom = useCallback(() => {
-    userPausedRef.current = false
     setShowScrollBtn(false)
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'instant' })
   }, [])
@@ -274,9 +278,9 @@ export function ChatPage() {
     })()
     return () => { import('@/lib/taskManager').then(m => m.setTaskUserId(() => null)) }
   }, [user?.id])
-  // 切换对话时重置 MCP 工具选择
+  // 切换对话时重置
   useEffect(() => {
-    setSelectedMCPTools(null); setDisclosureResult(null); setShortMemoryCount(0)
+    setDisclosureResult(null); setShortMemoryCount(0)
   }, [convId, currentProjectId])
   useEffect(() => { loadConvList() }, [loadConvList])
 
@@ -408,7 +412,8 @@ export function ChatPage() {
     if (!api) return
     const project = currentProjectId ? projectStore.getById(currentProjectId) : null
     const c = await api.create('新对话', undefined, currentProjectId, project?.name)
-    setConvId(c.id); setConvTitle('新对话'); setMessages([]); setCompressionInfo(null)
+    setConvId(c.id); setConvTitle('新对话'); setMessages([]); setCompressionInfo(null); convIdRef.current = c.id
+    setDisclosureResult(null); setActivatedToolNames(new Set()); setShortMemoryCount(0)
     setConvList(prev => [{ id: c.id, title: '新对话', messageCount: 0, updatedAt: c.updatedAt, projectId: currentProjectId }, ...prev])
   }, [currentProjectId])
 
@@ -421,7 +426,8 @@ export function ChatPage() {
     if (!api) return
     const c = await api.get(id)
     if (c) {
-      setConvId(c.id); setConvTitle(c.title); setMessages(c.messages || [])
+      setConvId(c.id); setConvTitle(c.title); setMessages(c.messages || []); convIdRef.current = c.id
+      setDisclosureResult(null); setActivatedToolNames(new Set()); setShortMemoryCount(0)
       // 恢复压缩状态（若消息数未变化则有效，否则视为过期）
       const snap = (c as any).compression
       if (snap && snap.messageCount === (c.messages || []).length) {
@@ -589,7 +595,7 @@ export function ChatPage() {
     let cid = convId
     if (!cid && window.electronAPI?.conv) {
       const c = await window.electronAPI.conv.create('新对话', undefined, currentProjectId)
-      cid = c.id; setConvId(c.id)
+      cid = c.id; setConvId(c.id); convIdRef.current = c.id  // 立即同步 ref，不等 useEffect
       setConvList(prev => [{ id: c.id, title: '新对话', messageCount: 0, updatedAt: c.updatedAt, projectId: currentProjectId }, ...prev])
       // 立即创建 MemoryManager（不等 useEffect），确保首条消息也能注入记忆
       setMemoryManager(new MemoryManager(
@@ -662,7 +668,11 @@ export function ChatPage() {
       agentTotalTokensRef.current = 0
       pushLog('--', '开始处理', 'info')
 
+      // 记录发起时的 convId，防止旧 chat() 残留事件污染新会话 UI
+      const originConvId = convIdRef.current || '@new'
       await chat(history, (event: ChatStreamEvent) => {
+        // 用 ref 读当前 convId，避免闭包捕获旧值
+        if ((convIdRef.current || '@new') !== originConvId) return
         // ===== Agent 事件处理 =====
         // 主 AI 调用 delegate_task 时记录
         if (event.type === 'tool-call' && event.toolName === 'delegate_task') {
@@ -967,7 +977,6 @@ export function ChatPage() {
         codingMode,
         modelOverride: usedModel !== activeModel ? { provider: usedModel.name, modelId: usedModel.selectedModel } : undefined,
         forceCompression: forceCompressRef.current ? true : undefined,
-        selectedTools: selectedMCPTools,
         memoryInjection: sessionMemoryEnabled
           ? await memoryManager?.getInjectionText(input.trim()) ?? undefined
           : undefined,
@@ -1021,7 +1030,7 @@ export function ChatPage() {
       const aiText = aiReply?.content?.slice(0, 200) || ''
       if (aiText) setTimeout(() => generateTitle(cid, userText, aiText), 1000)
     }
-  }, [input, loading, activeModel, messages, attachments, autoMode, convId, generateTitle, selectedMCPTools])
+  }, [input, loading, activeModel, messages, attachments, autoMode, convId, generateTitle])
 
   // @ 文件选择器
   const handleInputChange = useCallback(async (val: string) => {
@@ -1238,10 +1247,7 @@ export function ChatPage() {
           <AgentPicker projectAgentIds={projectSettings?.agents} />
           <SkillPicker projectSkillIds={projectSettings?.skills} />
           <MCPToolPicker
-            selectedTools={selectedMCPTools}
-            onSelectionChange={setSelectedMCPTools}
             disclosureResult={disclosureResult}
-            threshold={disclosureThreshold}
             onThresholdChange={(n) => { setDisclosureThreshold(n); saveDisclosureThreshold(n) }}
             activatedToolNames={activatedToolNames}
             projectMCPServerIds={projectSettings?.mcpServers}
@@ -1377,7 +1383,7 @@ export function ChatPage() {
         onNew={handleNewConv}
         onProjectChange={(pid) => {
           setCurrentProjectId(pid)
-          setConvId(null); setConvTitle('新对话'); setMessages([]); setCompressionInfo(null)
+          setConvId(null); setConvTitle('新对话'); setMessages([]); setCompressionInfo(null); convIdRef.current = null
           setConvList([])
         }}
         onSwitch={handleSwitchConv}
@@ -1400,13 +1406,15 @@ export function ChatPage() {
       ) : (
         /* 有消息：消息区 + 底部输入框 */
         <>
-          <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar relative">
-            <div className="chat-messages w-full px-4 py-4 space-y-4">
-              {messages.map((msg, i) => <ChatMessage key={i} msg={msg} />)}
-              {taskList.length > 0 && <TaskListCard tasks={taskList} />}
-              <div ref={endRef} />
+          <div className="flex-1 relative">
+            <div ref={scrollRef} className="absolute inset-0 overflow-y-auto custom-scrollbar">
+              <div className="chat-messages w-full px-4 py-4 space-y-4">
+                {messages.map((msg, i) => <ChatMessage key={i} msg={msg} />)}
+                {taskList.length > 0 && <TaskListCard tasks={taskList} />}
+                <div ref={endRef} />
+              </div>
             </div>
-            {/* 回到底部按钮 */}
+            {/* 回到底部按钮 — 在滚动容器外，始终固定在视口底部 */}
             {showScrollBtn && (
               <button
                 className="absolute bottom-4 right-4 z-10 rounded-full bg-primary text-primary-foreground shadow-lg p-2 hover:bg-primary/90 transition-all"

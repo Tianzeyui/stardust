@@ -8,7 +8,7 @@ import { getJSSandboxEnabled, getPythonSandboxEnabled } from '../config'
 
 /** 模块级：当前沙箱输出目录（由 ChatPage 注入） */
 let _sandboxOutputDir: string | undefined
-export function setSandboxOutputDir(dir: string | undefined) { _sandboxOutputDir = dir }
+export function setSandboxOutputDir(dir: string | undefined) { if (dir) _sandboxOutputDir = dir }
 
 export async function registerSandboxTools(tools: ToolMap) {
   if (!window.electronAPI?.sandbox) return

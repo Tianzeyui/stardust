@@ -43,13 +43,14 @@ export interface DelegateResult {
 export async function delegateToAgent(
   agent: Agent,
   taskInput: string,
+  overrideSystemPrompt?: string,
 ): Promise<DelegateResult> {
   const streamHandler = getAgentStreamHandler()
   const task = TaskManager.create(agent.id!, agent.name, taskInput)
 
   // 远程 Agent：HTTP A2A 调用
   if (agent.type === 'remote' && agent.url) {
-    return delegateToRemoteAgent(agent, taskInput, task, streamHandler)
+    return delegateToRemoteAgent(agent, taskInput, task, streamHandler, overrideSystemPrompt)
   }
 
   // 本地 Agent：streamText
@@ -62,7 +63,9 @@ export async function delegateToAgent(
   const skillDesc = agent.skills.length > 0
     ? '\n能力:\n' + agent.skills.map(s => `- ${s.name}: ${s.description}`).join('\n')
     : ''
-  const systemPrompt = agent.systemPrompt
+  // 验证任务时：使用专用验证提示词，覆盖 Agent 自身的 systemPrompt
+  const systemPrompt = overrideSystemPrompt
+    || agent.systemPrompt
     || `You are "${agent.name}", a coding agent. ${agent.description}${skillDesc}\n\nUse tools directly. Report in one sentence. Do not explain.`
   const messages: ModelMessage[] = [{ role: 'user', content: taskInput }]
   const toolCalls: string[] = []
@@ -148,6 +151,7 @@ export async function delegateToAgent(
 async function delegateToRemoteAgent(
   agent: Agent, taskInput: string, task: Task,
   streamHandler: ReturnType<typeof getAgentStreamHandler>,
+  _overrideSystemPrompt?: string,
 ): Promise<DelegateResult> {
   const endpoint = agent.url.replace(/\/+$/, '')
   log(`🌐 远程调用 ${agent.name} @ ${endpoint}`)

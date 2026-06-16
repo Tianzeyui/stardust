@@ -149,8 +149,9 @@ export function registerAgentTools(tools: ToolMap, autoMode?: boolean) {
       description:
         '将复杂子任务委托给更合适的模型或 Agent 处理。' +
         'tier: "fast" 简单任务, "balanced" 日常, "powerful" 复杂推理。' +
-        'agentName: 指定 Agent 名称（如 "代码助手"），将任务路由给该 Agent 执行。传 agentName 时 tier 可选。' +
-        'task 描述要具体，包含上下文。',
+        'agentName: 指定 Agent 名称。传 agentName 时 tier 可选。' +
+        '用于独立验证时：传入 task 包含"验证"/"verify"关键词，系统会自动注入对抗性验证提示词——验证 Agent 会尝试破坏你的实现而非确认它，每步检查必须有命令运行记录，以 VERDICT: PASS/FAIL/PARTIAL 结尾。' +
+        'task 描述要具体，包含原始需求、改动文件列表、采用的方法。',
       inputSchema: jsonSchema({
         type: 'object',
         properties: {
@@ -163,16 +164,26 @@ export function registerAgentTools(tools: ToolMap, autoMode?: boolean) {
       }),
       execute: async (args: { tier?: string; agentName?: string; task: string }) => {
         try {
+          // 检测是否为验证任务 → 注入验证 Agent 专用系统提示词
+          const isVerification = /(验证|verify|verification|test.*pass|check.*correct|review.*code)/i.test(args.task)
+          const systemContext = isVerification
+            ? (await import('./verify')).VERIFICATION_SYSTEM_PROMPT
+            : undefined
+
           if (args.agentName) {
             const { findAgent, delegateToAgent } = await import('../orchestrator')
             const { agent, available } = await findAgent(args.agentName)
             if (agent) {
-              const res = await delegateToAgent(agent, args.task)
+              const res = await delegateToAgent(agent, args.task, systemContext)
               return res.html
             }
             return `Agent "${args.agentName}" 未找到。可用: ${available.join(', ') || '(无)'}`
           }
-          const result = await delegateToModel(args.tier as 'fast' | 'balanced' | 'powerful', args.task)
+          const result = await delegateToModel(
+            args.tier as 'fast' | 'balanced' | 'powerful',
+            args.task,
+            systemContext || undefined,
+          )
           return `[${result.modelName}]\n${result.result}`
         } catch (e: any) {
           return `委托失败: ${e.message}`

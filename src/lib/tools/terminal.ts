@@ -9,7 +9,7 @@ import { createTerminal, updateTerminal, getTerminal, setResolver } from '@/lib/
 import { getTerminalUIHandler } from '@/lib/chatService'
 
 let _termWorkspaceRoot = ''
-export function setTermWorkspaceRoot(root: string) { _termWorkspaceRoot = root }
+export function setTermWorkspaceRoot(root: string) { if (root) _termWorkspaceRoot = root }
 
 function notifyUI(event: any) {
   getTerminalUIHandler()?.(event)

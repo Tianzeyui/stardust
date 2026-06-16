@@ -5,13 +5,16 @@
 import { jsonSchema } from 'ai'
 import type { ToolMap } from './registry'
 import { createFileOp, updateFileOp, getFileOp, setFileOpResolver } from '@/lib/fileOpManager'
+import { trackFileOp } from '@/lib/fileTracker'
 
 /** 当前工作区根目录（由 ChatPage 动态注入） */
 let _workspaceRoot: string | undefined
 let _workspaceOutput: string | undefined
 export function setWorkspaceRoots(root: string, output: string) {
+  // 拒绝空值——防止在 projectStore 初始化前误设回退路径
+  if (!root) return
   _workspaceRoot = root
-  _workspaceOutput = output
+  if (output) _workspaceOutput = output
 }
 
 function getRoot(): string { return _workspaceRoot || '~/BrainPlus/workspace' }
@@ -64,6 +67,24 @@ function resolvePath(p: string): string {
   return p.startsWith('/') ? p : `${root}/${p}`
 }
 
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
+}
+
+// glob 转正则（供 listDirTree pattern 过滤和 workspace_glob 使用）
+function globToRegex(pattern: string): RegExp {
+  let p = pattern
+    .replace(/\./g, '\\.')
+    .replace(/\?/g, '[^/]')
+    .replace(/\*\*\//g, 'ZWKZWK')
+    .replace(/\*/g, '[^/]*')
+    .replace(/ZWKZWK/g, '(?:.+/)*')
+  p = p.replace(/\{([^}]+)\}/g, (_, alts) => `(${alts.split(',').join('|')})`)
+  return new RegExp(`^${p}$`, 'i')
+}
+
 async function listDirTree(dirPath: string, maxDepth: number, currentDepth: number): Promise<string> {
   const api = window.electronAPI?.fs
   if (!api) return ''
@@ -78,7 +99,11 @@ async function listDirTree(dirPath: string, maxDepth: number, currentDepth: numb
     const statResult = await api.stat(childPath)
     const isDir = statResult.success && statResult.stat?.isDirectory === true
     const prefix = isDir ? '[DIR]' : '[FILE]'
-    lines.push(`${indent}${prefix} ${name}`)
+    const size = !isDir && statResult.success && statResult.stat?.size
+      ? formatSize(statResult.stat.size)
+      : ''
+    const sizeStr = size ? ` (${size})` : ''
+    lines.push(`${indent}${prefix} ${name}${sizeStr}`)
 
     if (isDir && currentDepth < maxDepth - 1) {
       const sub = await listDirTree(childPath, maxDepth, currentDepth + 1)
@@ -88,24 +113,6 @@ async function listDirTree(dirPath: string, maxDepth: number, currentDepth: numb
   return lines.join('\n')
 }
 
-async function searchFiles(basePath: string, query: string, results: string[] = []): Promise<string[]> {
-  const api = window.electronAPI?.fs
-  if (!api || results.length >= 50) return results
-  const listResult = await api.listDir(basePath)
-  if (!listResult.success || !listResult.files) return results
-
-  for (const name of listResult.files) {
-    if (name.startsWith('.')) continue
-    const childPath = `${basePath.replace(/\/+$/, '')}/${name}`
-    const statResult = await api.stat(childPath)
-
-    if (name.toLowerCase().includes(query.toLowerCase())) results.push(childPath)
-    if (statResult.success && statResult.stat?.isDirectory) {
-      await searchFiles(childPath, query, results)
-    }
-  }
-  return results
-}
 
 export async function registerWorkspaceTools(tools: ToolMap) {
   if (!window.electronAPI?.workspace || !window.electronAPI?.fs) return
@@ -115,39 +122,68 @@ export async function registerWorkspaceTools(tools: ToolMap) {
 
   tools['workspace_list_dir'] = {
     description:
-      'List files and subdirectories. depth: recursion depth (default 1, max 3). ' +
+      'List files and subdirectories with size info. Use pattern to filter (e.g. "*.ts", "*.vue"). ' +
+      'Shows [DIR]/[FILE] tags with file sizes. depth: recursion depth (default 1, max 3). ' +
       `Workspace root: ${root}`,
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
         path: { type: 'string', description: 'Directory path (relative to workspace root or absolute)' },
         depth: { type: 'number', description: 'Recursion depth, 1=current level only, default 1' },
+        pattern: { type: 'string', description: 'Glob filter, e.g. "*.ts", "*.vue", "test*". Directories always traversed (children may match).' },
       },
     }),
-    execute: async (args: { path?: string; depth?: number }) => {
-      const dirPath = args.path || getRoot()
+    execute: async (args: { path?: string; depth?: number; pattern?: string }) => {
+      const dirPath = args.path ? resolvePath(args.path) : getRoot()
       const depth = Math.min(args.depth || 1, 3)
-      const result = await listDirTree(dirPath, depth, 0)
-      return result || '(空目录)'
+      const raw = await listDirTree(dirPath, depth, 0)
+      if (!raw || raw === '(空目录)') return '(空目录)'
+
+      // 无 pattern → 原样返回
+      if (!args.pattern) return raw
+
+      // 后过滤（v2——用简单字符串匹配，不依赖任何外部函数）
+      const lines = raw.split('\n')
+      const out: string[] = []
+      for (const line of lines) {
+        // 目录行始终保留
+        if (line.includes('[DIR]')) { out.push(line); continue }
+        // 提取文件名：`  [FILE] Header.vue (2.3KB)` → `Header.vue`
+        const m = line.match(/\[FILE\]\s+(.+?)(?:\s+\(|$)/)
+        if (!m) { out.push(line); continue }
+        const fileName = m[1].trim()
+        // 将 pattern 转为大小写不敏感的正则
+        const escaped = args.pattern
+          .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+          .replace(/\*/g, '.*')
+          .replace(/\?/g, '.')
+        if (new RegExp('^' + escaped + '$', 'i').test(fileName)) {
+          out.push(line)
+        }
+      }
+      if (out.length === 0) return `(无匹配 pattern="${args.pattern}" 的文件)`
+      return out.join('\n')
     },
   }
 
   tools['workspace_read_file'] = {
     description:
-      'Read file content. Supports pagination: offset+length (default 8000 chars). Also supports lines range (e.g. "1-50"/"100-end"). ' +
-      `Workspace root: ${root}` +
-      'Tail includes total chars/lines for pagination. Docs (PPT/Word/Excel/PDF) auto-converted to Markdown.',
+      'Read file content. Supports lines range — use this first: lines="1-50", lines="100-end", ' +
+      'or lines="1-end" to read the entire file at once. Also supports offset+length (max 10000 chars). ' +
+      'Always returns total lines and chars at the end, so you never need a probe read. ' +
+      `Workspace root: ${root}. Docs (PPT/Word/Excel/PDF) auto-converted to Markdown.`,
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
         path: { type: 'string', description: 'File path (absolute)' },
-        offset: { type: 'number', description: 'Start char position (0-based), default 0' },
-        length: { type: 'number', description: 'Chars to read, default 8000, max 10000' },
-        lines: { type: 'string', description: 'Line range "1-50" or "100-end" (mutually exclusive with offset/length)' },
+        lines: { type: 'string', description: 'Line range. "1-50" = first 50 lines, "100-end" = from line 100 to EOF, "1-end" = entire file. Preferred over offset/length.' },
+        offset: { type: 'number', description: 'Start char position (0-based). Only use if you need character-level offset.' },
+        length: { type: 'number', description: 'Chars to read, default 8000, max 10000. Use lines param instead for predictable results.' },
       },
       required: ['path'],
     }),
     execute: async (args: { path: string; offset?: number; length?: number; lines?: string }) => {
+      trackFileOp(args.path)
       const fsApi = window.electronAPI!.fs
       const ext = (args.path.split('.').pop() || '').toLowerCase()
       const needsConvert = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'pdf'].includes(ext)
@@ -173,58 +209,30 @@ export async function registerWorkspaceTools(tools: ToolMap) {
       const totalChars = content.length
       const totalLines = content.split('\n').length
 
-      // 行范围模式
+      // 行范围模式（推荐）
       if (args.lines) {
         const allLines = content.split('\n')
         const match = args.lines.match(/^(\d+)(-(\d+|end))?$/i)
-        if (!match) return `行格式错误: "${args.lines}"。例: "1-50"、"100-end"`
+        if (!match) return `行格式错误: "${args.lines}"。例: "1-50"、"100-end"、"1-end"`
         const start = Math.max(0, parseInt(match[1]) - 1)
         const end = !match[2] ? start + 1 : match[3]?.toLowerCase() === 'end' ? allLines.length : parseInt(match[3])
         const slice = allLines.slice(start, end).join('\n')
-        return slice + `\n\n--- L${start + 1}-${end} / ${totalLines} 行，${totalChars} 字符 ---`
+        const readLen = end - start
+        const isFull = start === 0 && end >= allLines.length
+        return slice + `\n\n--- L${start + 1}-${end} / ${totalLines} 行（共${totalChars}字符）${isFull ? ' [已读完]' : ''} ---`
       }
 
-      // 字符分页模式（默认）
+      // 字符分页模式（回退方案）
       const off = Math.max(0, args.offset || 0)
       const len = Math.min(args.length || 8000, 10000)
       const slice = content.slice(off, off + len)
       if (off + len >= totalChars) {
         return slice + `\n\n--- ${totalChars} 字符，${totalLines} 行（已读完）---`
       }
-      return slice + `\n\n--- 第 ${off + 1}-${off + len} / ${totalChars} 字符，${totalLines} 行 --- 用 offset=${off + len} 读下一页`
+      return slice + `\n\n--- 第 ${off + 1}-${off + len} / ${totalChars} 字符，${totalLines} 行 --- 用 lines="${Math.floor(off / 80) + 1}-end" 可继续按行读取`
     },
   }
 
-  tools['workspace_search'] = {
-    description:
-      'Search files by name. Supports wildcards. For glob patterns (**/*.ts), use workspace_glob. ' +
-      `Search scope: ${root}`,
-    inputSchema: jsonSchema({
-      type: 'object',
-      properties: {
-        query: { type: 'string', description: 'Search keyword or wildcard, e.g. *.pptx' },
-        path: { type: 'string', description: 'Search start path, default workspace root' },
-      },
-      required: ['query'],
-    }),
-    execute: async (args: { query: string; path?: string }) => {
-      const basePath = args.path || getRoot()
-      const results = await searchFiles(basePath, args.query, [])
-      return results.length > 0 ? results.join('\n') : `未找到匹配 "${args.query}" 的文件`
-    },
-  }
-
-  // glob 转正则
-  function globToRegex(pattern: string): RegExp {
-    let p = pattern
-      .replace(/\./g, '\\.')
-      .replace(/\?/g, '[^/]')           // ? → 单字符（必须在 ** 展开前）
-      .replace(/\*\*\//g, 'ZWKZWK')     // **/ → 占位
-      .replace(/\*/g, '[^/]*')           // * → 非斜杠
-      .replace(/ZWKZWK/g, '(?:.+/)*')    // 占位 → 任意深度目录
-    p = p.replace(/\{([^}]+)\}/g, (_, alts) => `(${alts.split(',').join('|')})`)
-    return new RegExp(`^${p}$`, 'i')
-  }
 
   tools['workspace_glob'] = {
     description:
@@ -243,7 +251,7 @@ export async function registerWorkspaceTools(tools: ToolMap) {
       const root = getRoot()
       // 去掉 ./ 前缀
       let pat = args.pattern.replace(/^\.\//, '')
-      const basePath = args.path ? (args.path.startsWith('/') ? args.path : `${root}/${args.path}`) : root
+      const basePath = args.path ? resolvePath(args.path) : root
       const regex = globToRegex(pat)
 
       // 用系统命令收集文件列表（跨平台）
@@ -287,32 +295,110 @@ export async function registerWorkspaceTools(tools: ToolMap) {
 
   tools['workspace_grep'] = {
     description:
-      'Search file contents. Use after glob to find specific code. Prefer workspace_glob over this for finding files by name. ' +
+      'Search file contents with context lines. Use after glob to find specific code. Prefer workspace_glob for finding files by name. ' +
+      'Use context_before/context_after (default 2 each) to see surrounding code without extra read_file calls. ' +
       'Supports regex. `file` param filters by type (e.g. "*.ts"). ' +
-      `Search scope: ${root}. Auto-excludes node_modules/.git. Returns file:line:content.`,
+      `Search scope: ${root}. Auto-excludes node_modules/.git/dist/build. Returns file:line:content with context.`,
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
         pattern: { type: 'string', description: 'Search regex or keyword' },
         file: { type: 'string', description: 'File type filter, e.g. "*.ts", default all files' },
         path: { type: 'string', description: 'Search start path, default workspace root' },
+        context_before: { type: 'number', description: 'Lines of context before each match, default 2' },
+        context_after: { type: 'number', description: 'Lines of context after each match, default 2' },
       },
       required: ['pattern'],
     }),
-    execute: async (args: { pattern: string; file?: string; path?: string }) => {
+    execute: async (args: { pattern: string; file?: string; path?: string; context_before?: number; context_after?: number }) => {
       const api = window.electronAPI?.fs
       if (!api?.grep) return 'grep 不可用'
-      const basePath = args.path || getRoot()
+      const basePath = args.path ? resolvePath(args.path) : getRoot()
+      const ctxBefore = args.context_before ?? 2
+      const ctxAfter = args.context_after ?? 2
+
       const result = await api.grep(basePath, args.pattern, args.file)
       if (!result.success) return `grep 失败: ${result.error}`
-      return result.output || '(无匹配)'
+      if (!result.output?.trim()) return '(无匹配)'
+
+      // 无上下文请求 → 直接返回原始结果
+      if (ctxBefore <= 0 && ctxAfter <= 0) return result.output
+
+      // 解析 grep 输出: file:line:content
+      const lines = result.output.split('\n')
+      const matches: { file: string; line: number; content: string }[] = []
+      for (const l of lines) {
+        const m = l.match(/^(.+?):(\d+):(.*)/)
+        if (m) matches.push({ file: m[1], line: parseInt(m[2]), content: m[3] })
+      }
+      if (matches.length === 0) return result.output
+
+      // 大结果集：跳过上下文提取，直接返回摘要（避免 IO 阻塞 UI）
+      if (matches.length > 50) {
+        const fileCount = new Set(matches.map(m => m.file)).size
+        return result.output + `\n\n(共 ${matches.length} 处匹配，${fileCount} 个文件。请缩小搜索范围或指定 context_before=0 跳过上下文提取)`
+      }
+
+      // 按文件分组
+      const fileGroups = new Map<string, number[]>()
+      for (const m of matches) {
+        if (!fileGroups.has(m.file)) fileGroups.set(m.file, [])
+        fileGroups.get(m.file)!.push(m.line)
+      }
+
+      // 最多并行读 8 个文件，超时 3 秒
+      const MAX_FILES = 8
+      const fileEntries = [...fileGroups.entries()].slice(0, MAX_FILES)
+      const skipped = fileGroups.size - MAX_FILES
+
+      // 并行读取所有文件（用 Promise.all 替代串行 await）
+      const fileReads = await Promise.all(
+        fileEntries.map(async ([filePath, lineNums]) => {
+          try {
+            const readResult = await api.readFile(filePath)
+            return { filePath, lineNums, readResult }
+          } catch {
+            return { filePath, lineNums, readResult: null as any }
+          }
+        })
+      )
+
+      // 组装输出
+      const out: string[] = []
+      for (const { filePath, lineNums, readResult } of fileReads) {
+        if (!readResult?.success || readResult.content == null) {
+          for (const ln of lineNums) {
+            const match = matches.find(m => m.file === filePath && m.line === ln)
+            if (match) out.push(`${filePath}:${ln}:${match.content}`)
+          }
+          continue
+        }
+        const allLines = readResult.content.split('\n')
+        const shown = new Set<number>()
+        for (const ln of lineNums) {
+          if (shown.has(ln)) continue
+          shown.add(ln)
+          const start = Math.max(0, ln - 1 - ctxBefore)
+          const end = Math.min(allLines.length, ln + ctxAfter)
+          out.push(`\n── ${filePath}:${ln} ──`)
+          for (let i = start; i < end; i++) {
+            const marker = i === ln - 1 ? '>' : ' '
+            const lineStr = allLines[i] || ''
+            out.push(`${marker} ${i + 1}: ${lineStr}`)
+          }
+        }
+      }
+
+      if (skipped > 0) out.push(`... 还有 ${skipped} 个文件，缩小搜索范围以查看详情`)
+      return out.join('\n') || '(无匹配)'
     },
   }
 
   tools['workspace_write_file'] = {
     description:
       'Create or overwrite entire file. Prefer workspace_edit_file for small changes — this rewrites the whole file. ' +
-      'Use for creating new files or rewriting existing ones. Auto-creates parent dirs. Outside-workspace triggers confirmation.',
+      'Use for creating new files or major rewrites. Auto-creates parent dirs. ' +
+      'When overwriting, returns a diff preview like edit_file does. Outside-workspace triggers confirmation.',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
@@ -325,16 +411,89 @@ export async function registerWorkspaceTools(tools: ToolMap) {
       const api = window.electronAPI?.fs
       if (!api) return '文件系统不可用'
       const absPath = resolvePath(args.path)
+      trackFileOp(absPath)
       let fopId: string | null = null
       if (!isInsideWorkspace(absPath)) {
         const r = await confirmOutside('write', absPath, args.content)
         if (!r.confirmed) return `写入 ${absPath} 已被用户拒绝。`
         fopId = r.id
       }
+
+      // 检查是否覆盖已有文件，生成 diff 预览
+      const existing = await api.readFile(absPath).catch(() => null)
+      const isNew = !existing?.success || existing.content == null
+      const oldContent: string = isNew ? '' : (existing!.content ?? '')
+
       try {
         await api.writeFile(absPath, args.content)
         if (fopId) notifyFileOpDone(fopId, { status: 'done', size: args.content.length })
-        return `✅ 已写入 ${absPath} (${args.content.length} 字符)`
+
+        if (isNew) {
+          const newLines = args.content.split('\n')
+          const lineCount = newLines.length
+          const preview = newLines.slice(0, 10).map(l => `+ ${l}`).join('\n')
+          const more = newLines.length > 10 ? `\n... 还有 ${newLines.length - 10} 行` : ''
+          return [
+            `✅ 已创建 ${absPath}（${lineCount} 行，${args.content.length} 字符）`,
+            '',
+            '```diff',
+            `@@ -0,0 +1,${lineCount} @@`,
+            preview + more,
+            '```',
+          ].join('\n')
+        }
+
+        // 覆盖已有文件 → 生成 diff
+        const oldLines = oldContent.split('\n')
+        const newLines = args.content.split('\n')
+        const oldTotal = oldLines.length
+        const newTotal = newLines.length
+        const changed = args.content.length - oldContent.length
+        const changeSign = changed >= 0 ? '+' : ''
+
+        // 简单 diff：找出变化行
+        const diffLines: string[] = []
+        let diffStart = -1
+        const maxLen = Math.min(oldTotal, newTotal)
+        for (let i = 0; i < maxLen; i++) {
+          const oldL = oldLines[i]
+          const newL = newLines[i]
+          if (oldL !== newL) {
+            if (diffStart < 0) diffStart = i + 1
+            diffLines.push(`- ${oldL.slice(0, 80)}`)
+            diffLines.push(`+ ${newL.slice(0, 80)}`)
+          } else if (diffLines.length > 0 && diffLines.length < 20) {
+            diffLines.push(`  ${oldL.slice(0, 80)}`)
+          } else if (diffLines.length >= 20) {
+            diffLines.push(`... (省略 ${oldTotal - i} 行未变化内容)`)
+            break
+          }
+        }
+        // 新文件更长
+        if (newTotal > oldTotal) {
+          for (let i = oldTotal; i < Math.min(newTotal, oldTotal + 5); i++) {
+            diffLines.push(`+ ${newLines[i].slice(0, 80)}`)
+          }
+          if (newTotal - oldTotal > 5) diffLines.push(`... 还有 ${newTotal - oldTotal - 5} 行新增内容`)
+        }
+        // 旧文件更长
+        if (oldTotal > newTotal) {
+          for (let i = newTotal; i < Math.min(oldTotal, newTotal + 5); i++) {
+            diffLines.push(`- ${oldLines[i].slice(0, 80)}`)
+          }
+          if (oldTotal - newTotal > 5) diffLines.push(`... 还有 ${oldTotal - newTotal - 5} 行已删除`)
+        }
+
+        const diffHeader = diffStart > 0 ? `@@ -${diffStart},${oldTotal} +${diffStart},${newTotal} @@` : `新旧文件行数: ${oldTotal}→${newTotal}`
+
+        return [
+          `✅ 已覆盖 ${absPath}（${newTotal} 行，${changeSign}${changed} 字符）`,
+          diffLines.length > 0 ? '```diff' : '',
+          diffLines.length > 0 ? diffHeader : '',
+          diffLines.length > 0 ? diffLines.join('\n') : '',
+          diffLines.length > 0 ? '```' : '',
+          diffLines.length === 0 ? '(无显著行级变化 — 可能仅有空白或格式差异)' : '',
+        ].filter(Boolean).join('\n')
       } catch (e: any) {
         if (fopId) notifyFileOpDone(fopId, { status: 'error', error: e.message })
         return `写入失败: ${e.message}`
@@ -356,6 +515,7 @@ export async function registerWorkspaceTools(tools: ToolMap) {
       const api = window.electronAPI?.fs
       if (!api) return '文件系统不可用'
       const absPath = resolvePath(args.path)
+      trackFileOp(absPath)
       let fopId: string | null = null
       if (!isInsideWorkspace(absPath)) {
         const r = await confirmOutside('write', absPath, args.content)
@@ -389,6 +549,7 @@ export async function registerWorkspaceTools(tools: ToolMap) {
       const api = window.electronAPI?.fs
       if (!api) return '文件系统不可用'
       const absPath = resolvePath(args.path)
+      trackFileOp(absPath)
       try {
         await api.mkdir(absPath)
         return `✅ 已创建目录 ${absPath}`
@@ -409,6 +570,7 @@ export async function registerWorkspaceTools(tools: ToolMap) {
       const api = window.electronAPI?.fs
       if (!api) return '文件系统不可用'
       const absPath = resolvePath(args.path)
+      trackFileOp(absPath)
       let fopId: string | null = null
       if (!isInsideWorkspace(absPath)) {
         const r = await confirmOutside('delete', absPath)
@@ -428,39 +590,96 @@ export async function registerWorkspaceTools(tools: ToolMap) {
 
   tools['workspace_edit_file'] = {
     description:
-      'Edit specific lines in a file. Find old_string (must be unique) and replace with new_string. ' +
-      'Prefer this over workspace_write_file for small edits — it preserves surrounding code. ' +
-      'Set replace_all=true to replace all matches. Outside workspace: user confirmation required.',
+      'Edit a file. Two modes:\n' +
+      '1. Line-based (RECOMMENDED): Use start_line + end_line + new_string. Replace lines start_line through end_line (inclusive). No uniqueness requirement.\n' +
+      '2. String-based (fallback): Use old_string + new_string. old_string must be unique unless replace_all=true.\n' +
+      'Returns a unified diff preview of the change, so you can verify before proceeding. ' +
+      'Prefer this over workspace_write_file for small edits.',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
         path: { type: 'string', description: 'File path' },
-        old_string: { type: 'string', description: 'Original string to replace (must be unique match)' },
+        // 行号模式（推荐）
+        start_line: { type: 'number', description: 'Start line number (1-based, inclusive). Use with end_line + new_string for line-based editing.' },
+        end_line: { type: 'number', description: 'End line number (1-based, inclusive). Must be >= start_line.' },
+        // 字符串模式（回退）
+        old_string: { type: 'string', description: 'Original string to find and replace. Use ONLY when you cannot determine exact line numbers.' },
         new_string: { type: 'string', description: 'Replacement string' },
-        replace_all: { type: 'boolean', description: 'Replace all matches. Default false (single, requires uniqueness)' },
+        replace_all: { type: 'boolean', description: 'Replace all matches. Default false (single, requires uniqueness). Only for string-based mode.' },
       },
-      required: ['path', 'old_string', 'new_string'],
+      required: ['path', 'new_string'],
     }),
-    execute: async (args: { path: string; old_string: string; new_string: string; replace_all?: boolean }) => {
+    execute: async (args: { path: string; start_line?: number; end_line?: number; old_string?: string; new_string: string; replace_all?: boolean }) => {
       const api = window.electronAPI?.fs
       if (!api) return '文件系统不可用'
       const absPath = resolvePath(args.path)
+      trackFileOp(absPath)
 
       // 读文件
       const readResult = await api.readFile(absPath)
       if (!readResult.success || readResult.content == null) return `读取失败: ${readResult.error || '文件不存在'}`
       const original = readResult.content
+      const allLines = original.split('\n')
+      const totalLines = allLines.length
 
-      // 检查匹配
-      const count = original.split(args.old_string).length - 1
-      if (count === 0) return `❌ 未找到匹配的 old_string。请确认字符串内容与文件中完全一致（包括空格、缩进、换行）。`
-      if (!args.replace_all && count > 1) {
-        return `❌ old_string 匹配了 ${count} 处，不唯一。请扩大匹配范围（包含更多上下文）使其唯一，或设置 replace_all=true。`
+      // 生成 diff 预览
+      const diffPreview = (oldLines: string[], newLines: string[], startLine: number): string => {
+        const maxLen = 80
+        const oldChunk = oldLines.map(l => `- ${l.slice(0, maxLen)}`).join('\n')
+        const newChunk = newLines.map(l => `+ ${l.slice(0, maxLen)}`).join('\n')
+        const oldCount = oldLines.length
+        const newCount = newLines.length
+        const header = `@@ -${startLine},${oldCount} +${startLine},${newCount} @@`
+        return [header, oldChunk, newChunk].filter(Boolean).join('\n')
       }
 
-      const newContent = args.replace_all
-        ? original.split(args.old_string).join(args.new_string)
-        : original.replace(args.old_string, args.new_string)
+      let newContent: string
+      let diff: string
+      let desc: string
+
+      // ====== 模式 1: 行号定位（优先） ======
+      if (args.start_line != null && args.end_line != null) {
+        if (args.start_line < 1 || args.end_line > totalLines || args.start_line > args.end_line) {
+          return `❌ 行号范围无效: start_line=${args.start_line}, end_line=${args.end_line}。文件共 ${totalLines} 行。`
+        }
+        const startIdx = args.start_line - 1
+        const endIdx = args.end_line  // slice end is exclusive
+
+        const oldLines = allLines.slice(startIdx, endIdx)
+        const newLines = args.new_string.split('\n')
+
+        newContent = [
+          ...allLines.slice(0, startIdx),
+          ...newLines,
+          ...allLines.slice(endIdx),
+        ].join('\n')
+
+        diff = diffPreview(oldLines, newLines, args.start_line)
+        desc = `行 ${args.start_line}-${args.end_line}`
+      } else if (args.old_string != null) {
+        // ====== 模式 2: 字符串匹配（回退） ======
+        const count = original.split(args.old_string).length - 1
+        if (count === 0) {
+          return `❌ 未找到匹配的 old_string。请确认字符串内容与文件中完全一致（包括空格、缩进、换行）。\n提示：如果知道行号，可用 start_line + end_line 代替 old_string。`
+        }
+        if (!args.replace_all && count > 1) {
+          return `❌ old_string 匹配了 ${count} 处，不唯一。选项：\n- 扩大 old_string 范围（包含更多上下文）使其唯一\n- 设置 replace_all=true 替换全部 ${count} 处\n- 使用 start_line + end_line 按行号定位（推荐）`
+        }
+
+        newContent = args.replace_all
+          ? original.split(args.old_string).join(args.new_string)
+          : original.replace(args.old_string, args.new_string)
+
+        // 计算匹配位置用于 diff
+        const matchIdx = original.indexOf(args.old_string)
+        const prefixLines = original.slice(0, matchIdx).split('\n').length
+        const oldLines = args.old_string.split('\n')
+        const newLines = args.new_string.split('\n')
+        diff = diffPreview(oldLines, newLines, prefixLines)
+        desc = args.replace_all ? `替换 ${count} 处` : '替换 1 处'
+      } else {
+        return `❌ 缺少定位参数。请提供 start_line + end_line（推荐），或 old_string（回退）。`
+      }
 
       // 工作区外确认
       let fopId: string | null = null
@@ -474,8 +693,14 @@ export async function registerWorkspaceTools(tools: ToolMap) {
         await api.writeFile(absPath, newContent)
         if (fopId) notifyFileOpDone(fopId, { status: 'done', size: newContent.length })
         const changed = newContent.length - original.length
-        const diff = changed >= 0 ? `+${changed}` : `${changed}`
-        return `✅ 已编辑 ${absPath}（${args.replace_all ? `替换 ${count} 处` : '替换 1 处'}，${diff} 字符）`
+        const changeSign = changed >= 0 ? '+' : ''
+        return [
+          `✅ 已编辑 ${absPath}（${desc}，${changeSign}${changed} 字符）`,
+          '',
+          '```diff',
+          diff,
+          '```',
+        ].join('\n')
       } catch (e: any) {
         if (fopId) notifyFileOpDone(fopId, { status: 'error', error: e.message })
         return `编辑失败: ${e.message}`

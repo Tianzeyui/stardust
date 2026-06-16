@@ -74,6 +74,8 @@ class ProjectStoreImpl {
 
   getById(id: string): Project | undefined { return this.projects.find(p => p.id === id) }
 
+  isReady(): boolean { return this.ready }
+
   async create(name: string, description: string, customPath?: string): Promise<Project | null> {
     const api = (window as any).electronAPI
     if (!api?.workspace) {
