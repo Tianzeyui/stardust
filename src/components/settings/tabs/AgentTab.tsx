@@ -15,7 +15,6 @@ export function AgentTab() {
   const [maxSteps, setMaxSteps] = useState(getAgentMaxSteps)
   const [compressThreshold, setCompressThreshold] = useState(getCompressThreshold)
   const [tokenLimit, setTokenLimit] = useState(getTokenLimit)
-  const [systemPrompt, setSystemPrompt] = useState(getSystemPrompt)
   const manager = new MemoryManager(createLocalMemoryStore('settings'), createSupabaseMemoryStore(() => user?.id ?? null))
 
   return (
