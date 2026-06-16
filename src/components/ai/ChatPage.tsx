@@ -1139,7 +1139,7 @@ export function ChatPage() {
           </div>
           {autoMode && routeScore > 0 && (
             <span className="text-[9px] text-muted-foreground/50 shrink-0 ml-0.5" title={`复杂度 ${routeScore}`}>
-              {routeModel === 'fast' ? '⚡' : routeModel === 'powerful' ? '💪' : '⚖'} {routeScore}
+              {routeModel === 'fast' ? 'Fast' : routeModel === 'powerful' ? 'Pro' : 'Std'} {routeScore}
             </span>
           )}
           <MemoryPopup
