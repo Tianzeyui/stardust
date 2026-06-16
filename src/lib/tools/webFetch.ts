@@ -45,6 +45,10 @@ export function registerWebFetchTool(tools: ToolMap) {
         const result = await api.fetch(url, { timeout: 15000 })
         if (!result.success) return `Fetch failed: ${result.error}`
         const text = stripHtml(result.data || '')
+        // 检测 JS 墙
+        if (text.length < 200 && /JavaScript|javascript|enable.*js|cookie|Cloudflare/i.test(text)) {
+          return `⚠️ This page requires JavaScript (${text.length} chars captured). Try searching for the same info on a different site, or use textise.iitty.com as a proxy.`
+        }
 
         if (doSummarize) {
           const s = await summarize(text)
