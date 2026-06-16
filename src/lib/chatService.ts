@@ -257,26 +257,28 @@ export async function chat(
   const { setAgentStreamHandler } = await import('./tools/agent')
   setAgentStreamHandler(onEvent as any || null)
 
-  // 两阶段调用：先用 fast 模型判断是否需要工具
+  // 两阶段调用：所有请求先 fast 无工具判断意图
   if (opts?.autoMode) {
     const lastMsg = messages[messages.length - 1]?.content
     const userText = typeof lastMsg === 'string' ? lastMsg : ''
-    // 快速启发式判断：明显的编码操作 → 跳过快检，直接走工具
+    // 明显的编码操作 → 直接走工具，不预检
     const codeHints = ['fix', 'edit', 'change', 'write', 'create', 'implement', 'refactor', 'debug', 'error', 'test', 'build', 'install', 'deploy', '改', '修', '写', '实现', '创建', '重构', 'bug']
-    const chatHints = ['why', 'how', 'what', 'explain', 'describe', 'document', '区别', '为什么', '怎么', '是什么', '解释', '介绍']
     const needsTools = codeHints.some(w => userText.toLowerCase().includes(w))
-    const isChat = chatHints.some(w => userText.toLowerCase().includes(w)) && !needsTools
 
-    // 纯对话 → fast 模型无工具直接回复
-    if (isChat && messages.length < 5) {
+    // 非明显编码 → fast 模型预检
+    if (!needsTools) {
       try {
-        const fastModel = { ...model, selectedModel: model.availableModels?.[0]?.id || model.selectedModel }
         const { delegateToModel } = await import('./chatService')
         const fastReply = await delegateToModel('fast', userText, agentRules)
         if (fastReply?.result) {
-          onEvent?.({ type: 'text-delta', text: fastReply.result })
-          onEvent?.({ type: 'done' })
-          return fastReply.result
+          // 如果 fast 模型没有建议调工具 → 直接返回
+          const toolKeywords = ['workspace_', 'run_terminal', 'git_', 'web_search', 'web_fetch', 'read_skill', 'delegate_task']
+          const suggestsTools = toolKeywords.some(w => fastReply.result.includes(w))
+          if (!suggestsTools) {
+            onEvent?.({ type: 'text-delta', text: fastReply.result })
+            onEvent?.({ type: 'done' })
+            return fastReply.result
+          }
         }
       } catch { /* 失败继续正常流程 */ }
     }
