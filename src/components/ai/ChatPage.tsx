@@ -1183,7 +1183,7 @@ export function ChatPage() {
           {/* 编码/对话模式切换 */}
           <div className="relative shrink-0">
             <button
-              className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] transition-colors ${codingMode ? 'text-primary/70 hover:text-primary' : 'text-muted-foreground/40 hover:text-muted-foreground'}`}
+              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-colors"
               onClick={() => setShowModeMenu(!showModeMenu)}
               title={codingMode ? '编码模式' : '对话模式'}
             >
