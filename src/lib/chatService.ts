@@ -294,9 +294,9 @@ export async function chat(
   const { getSystemPrompt } = await import('@/lib/config')
   let agentRules = getSystemPrompt()
 
-  // 读取项目级和全局 rules.md
+  // 读取项目级 rules.md（文件优先于设置中的 PROMPT.md）
+  const rulesParts: string[] = []
   try {
-    const rulesParts: string[] = []
     const fsApi = (window as any).electronAPI?.fs
     // 读项目级 .brainplus/rules.md 和根目录 rules.md
     let wsRoot = ''
@@ -460,7 +460,8 @@ export async function chat(
 
   // 项目 PROMPT.md + 记忆 注入 system prompt
   let finalSystem = systemPrompt || ''
-  if (opts?.projectPrompt?.trim()) {
+  // 项目规则：文件优先于设置（避免重复）
+  if (rulesParts.length === 0 && opts?.projectPrompt?.trim()) {
     finalSystem = `[项目上下文]\n${opts.projectPrompt.trim()}\n\n${finalSystem}`
   }
   if (opts?.memoryInjection) {
