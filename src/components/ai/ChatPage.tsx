@@ -76,7 +76,8 @@ export function ChatPage() {
   })()
   const [showModelPicker, setShowModelPicker] = useState(false)
   const [autoMode, setAutoMode] = useState(true)
-  const [codingMode, setCodingMode] = useState(true) // true=编码, false=对话
+  const [codingMode, setCodingMode] = useState(true)
+  const [showModeMenu, setShowModeMenu] = useState(false)
   const [routeScore, setRouteScore] = useState(0)
   const [routeModel, setRouteModel] = useState('')
   const [outputFiles, setOutputFiles] = useState<Array<{ name: string; path: string; size: number }>>([])
@@ -1180,13 +1181,35 @@ export function ChatPage() {
             />
           </div>
           {/* 编码/对话模式切换 */}
-          <button
-            className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] transition-colors ${codingMode ? 'text-primary/70 hover:text-primary' : 'text-muted-foreground/40 hover:text-muted-foreground'}`}
-            onClick={() => setCodingMode(!codingMode)}
-            title={codingMode ? '编码模式' : '对话模式'}
-          >
-            {codingMode ? <Code className="h-3 w-3" /> : <MessageSquare className="h-3 w-3" />}
-          </button>
+          <div className="relative shrink-0">
+            <button
+              className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] transition-colors ${codingMode ? 'text-primary/70 hover:text-primary' : 'text-muted-foreground/40 hover:text-muted-foreground'}`}
+              onClick={() => setShowModeMenu(!showModeMenu)}
+              title={codingMode ? '编码模式' : '对话模式'}
+            >
+              {codingMode ? <Code className="h-3 w-3" /> : <MessageSquare className="h-3 w-3" />}
+              <span className="max-w-[40px] truncate">{codingMode ? 'Code' : 'Chat'}</span>
+            </button>
+            {showModeMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowModeMenu(false)} />
+                <div className="absolute left-0 bottom-full z-50 mb-1 w-36 rounded-lg border border-border bg-card shadow-lg py-1">
+                  <button
+                    className={`flex items-center gap-2 w-full px-3 py-1.5 text-xs transition-colors ${codingMode ? 'bg-accent' : 'hover:bg-muted/50'}`}
+                    onClick={() => { setCodingMode(true); setShowModeMenu(false) }}
+                  >
+                    <Code className="h-3.5 w-3.5" />编码模式
+                  </button>
+                  <button
+                    className={`flex items-center gap-2 w-full px-3 py-1.5 text-xs transition-colors ${!codingMode ? 'bg-accent' : 'hover:bg-muted/50'}`}
+                    onClick={() => { setCodingMode(false); setShowModeMenu(false) }}
+                  >
+                    <MessageSquare className="h-3.5 w-3.5" />对话模式
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           <MemoryPopup
             manager={memoryManager}
             enabled={sessionMemoryEnabled}
