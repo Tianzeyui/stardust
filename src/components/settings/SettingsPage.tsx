@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Settings, Cpu, Server, Trash2, Plus, RefreshCw, Check, Wrench, FolderOpen, MessageSquare, Play, ChevronDown, Loader2, X, ArrowLeft, Info, Bot, Globe, Zap, Search, Code, Pencil } from 'lucide-react'
+import { Settings, Cpu, Server, Trash2, Plus, RefreshCw, Check, Wrench, FolderOpen, MessageSquare, Play, ChevronDown, Loader2, X, ArrowLeft, Info, Bot, Globe, Zap, Search, Code, Pencil, BookOpen } from 'lucide-react'
 // import { APP_VERSION } from '@/lib/version'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { GeneralTab } from './tabs/GeneralTab'
 import { CapabilitiesTab } from './tabs/CapabilitiesTab'
 import { AgentTab } from './tabs/AgentTab'
+import { PromptTab } from './tabs/PromptTab'
 import { A2ATab } from './tabs/A2ATab'
 import { AboutTab } from './tabs/AboutTab'
 import {
@@ -59,7 +60,7 @@ function NumberField({ label, value, setValue, min, max, unit }: {
   )
 }
 
-type Tab = 'general' | 'ai' | 'mcp' | 'capabilities' | 'agent' | 'a2a' | 'about'
+type Tab = 'general' | 'ai' | 'mcp' | 'capabilities' | 'agent' | 'a2a' | 'about' | 'prompt'
 
 export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; initialTab?: Tab }) {
   const { user } = useAuth()
@@ -441,6 +442,7 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
             { id: 'mcp' as const, label: 'MCP 服务器', icon: Server },
             { id: 'capabilities' as const, label: '能力', icon: Zap },
             { id: 'agent' as const, label: 'Agent', icon: Bot },
+            { id: 'prompt' as const, label: '提示词', icon: BookOpen },
             { id: 'a2a' as const, label: 'A2A', icon: Globe },
             { id: 'about' as const, label: '关于', icon: Info },
           ]).map((t) => (
@@ -465,6 +467,9 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
 
         {/* ===== Agent 设置 ===== */}
         {tab === 'agent' && <AgentTab />}
+
+        {/* ===== 提示词设置 ===== */}
+        {tab === 'prompt' && <PromptTab />}
 
         {/* ===== A2A 设置 ===== */}
         {tab === 'a2a' && <A2ATab />}

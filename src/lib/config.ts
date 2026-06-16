@@ -295,11 +295,12 @@ export function setModelTier(modelId: string, tier: ModelTier): void {
   saveTierMap(map)
 }
 
-// ========== 系统提示词 ==========
+// ========== 系统提示词（双模式） ==========
 
-const SYSTEM_PROMPT_KEY = 'brainplus_system_prompt'
+const PROMPT_CODE_KEY = 'brainplus_prompt_code'
+const PROMPT_CHAT_KEY = 'brainplus_prompt_chat'
 
-export const DEFAULT_SYSTEM_PROMPT =
+export const DEFAULT_PROMPT_CODE =
   '你是一个编程 Agent，用工具直接操作代码。\n\n' +
   '模式识别：\n' +
   '- 用户说"写/实现/创建/改/修复/加" → 编码模式：直接动手，只输出代码或操作结果\n' +
@@ -308,11 +309,28 @@ export const DEFAULT_SYSTEM_PROMPT =
   '工具链：workspace_read_file → workspace_grep → workspace_edit_file → run_terminal\n' +
   '改完跑检查（tsc/pyright/go vet），改到干净。结果一句话报告。'
 
-export function getSystemPrompt(): string {
-  try { const v = localStorage.getItem(SYSTEM_PROMPT_KEY); if (v != null) return v } catch {}
-  return DEFAULT_SYSTEM_PROMPT
+export const DEFAULT_PROMPT_CHAT =
+  '你是用户的工作助手，友好专业。可以自由对话，解释问题，提供建议。' +
+  '需要操作代码时使用工具，不需要时直接回复。'
+
+export function getPromptCode(): string {
+  try { const v = localStorage.getItem(PROMPT_CODE_KEY); if (v != null) return v } catch {}
+  return DEFAULT_PROMPT_CODE
 }
-export function saveSystemPrompt(v: string): void { localStorage.setItem(SYSTEM_PROMPT_KEY, v) }
+export function savePromptCode(v: string): void { localStorage.setItem(PROMPT_CODE_KEY, v) }
+
+export function getPromptChat(): string {
+  try { const v = localStorage.getItem(PROMPT_CHAT_KEY); if (v != null) return v } catch {}
+  return DEFAULT_PROMPT_CHAT
+}
+export function savePromptChat(v: string): void { localStorage.setItem(PROMPT_CHAT_KEY, v) }
+
+/** 统一获取：如果用户自定义了编程提示词，用那个；否则默认编程模式 */
+export function getSystemPrompt(): string {
+  const code = getPromptCode()
+  return code !== DEFAULT_PROMPT_CODE ? code : DEFAULT_PROMPT_CODE
+}
+export function saveSystemPrompt(v: string): void { savePromptCode(v) }
 
 // ========== 终端开关 ==========
 
