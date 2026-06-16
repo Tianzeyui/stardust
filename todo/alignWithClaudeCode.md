@@ -5,10 +5,10 @@
 ## 1. 系统提示词
 
 ### 1.1 动静分离 + prompt caching
-- [ ] system prompt 拆为静态块和动态块，中间插 `SYSTEM_PROMPT_DYNAMIC_BOUNDARY` 标记
-- [ ] 静态块（身份、规则、工具引导）→ `cache_control: { type: 'ephemeral' }`
-- [ ] 动态块（环境信息、git status、日期、rules.md、MCP指令）→ 不 cache
-- [ ] chatService 构建 system 参数时改为数组 `[{text, cache_control}, ...]` 而非单个 string
+- [x] system prompt 拆为静态块和动态块 ✅
+- [x] 静态块（身份、规则、工具引导）→ `cache_control: { type: 'ephemeral' }` ✅
+- [x] 动态块（记忆注入）→ 不 cache ✅
+- [x] chatService 构建 system 参数时改为数组 `[{type:'text', text, cache_control}, ...]` ✅
 
 ### 1.2 提示词内容结构
 - [x] `# Rules` — 读再改、验证再报、真实反馈、语言信号、不超需求 ✅
