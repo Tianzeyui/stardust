@@ -504,10 +504,22 @@ export async function chat(
 
   onEvent?.({ type: 'system-log', text: `📋 系统提示词 (${finalSystem.length}字):\n${finalSystem.slice(0, 500)}${finalSystem.length > 500 ? '...(截断)' : ''}` })
 
-  // rules.md 作为 user message（attention weight 高于 system prompt）
-  const finalMessages = projectInstructions
-    ? [{ role: 'user' as const, content: `<project-instructions>\n${projectInstructions}\n</project-instructions>` }, ...compressedMessages]
-    : compressedMessages
+  // user message 注入：rules.md + 日期上下文
+  const contextMessages: Array<{ role: 'user'; content: string }> = []
+
+  if (projectInstructions) {
+    contextMessages.push({
+      role: 'user',
+      content: `<project-instructions>\n${projectInstructions}\n</project-instructions>`,
+    })
+  }
+
+  contextMessages.push({
+    role: 'user',
+    content: `<system-reminder>\nAs you answer the user's questions, you can use the following context:\n# currentDate\nToday's date is ${new Date().toLocaleDateString('en-CA')}.\n\nIMPORTANT: this context may or may not be relevant to your tasks. You should not respond to this context unless it is highly relevant to your task.\n</system-reminder>`,
+  })
+
+  const finalMessages = [...contextMessages, ...compressedMessages]
 
   const result = streamText({
     model: model.instance,
