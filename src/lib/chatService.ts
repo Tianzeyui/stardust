@@ -160,10 +160,10 @@ export async function getMCPSdkTools(autoMode?: boolean, userId?: string): Promi
     const { registerMCPGatewayTools } = await import('./tools/mcpGateway')
     const { registerSandboxTools } = await import('./tools/sandbox')
     const { registerWorkspaceTools } = await import('./tools/workspace')
-    const { registerSearchTools } = await import('./tools/search')
     const { registerTerminalTool } = await import('./tools/terminal')
     const { registerGitTools } = await import('./tools/git')
     const { registerWebFetchTool } = await import('./tools/webFetch')
+    const { registerWebSearchTool } = await import('./tools/webSearch')
     const { registerAgentTools: registerAgentDefs } = await import('./tools/agentRegistry')
 
     await registerMCPBusinessTools(tools)
@@ -172,10 +172,10 @@ export async function getMCPSdkTools(autoMode?: boolean, userId?: string): Promi
     registerMCPGatewayTools(tools)
     await registerSandboxTools(tools)
     await registerWorkspaceTools(tools)
-    registerSearchTools(tools)
     registerTerminalTool(tools)
     registerGitTools(tools)
     registerWebFetchTool(tools)
+    registerWebSearchTool(tools)
     if (userId) await registerAgentDefs(tools, userId)
     // 注入插件 AI 工具
     const { pluginSystem } = await import('./pluginSystem')

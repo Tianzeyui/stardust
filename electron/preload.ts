@@ -218,6 +218,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   search: {
     fetch: (url: string, timeout: number) => ipcRenderer.invoke('search:fetch', url, timeout),
+    duckduckgo: (query: string) => ipcRenderer.invoke('search:ddg', query),
+    bing: (query: string, count: number) => ipcRenderer.invoke('search:bing', query, count),
+    google: (query: string, apiKey: string, cx: string) => ipcRenderer.invoke('search:google', query, apiKey, cx),
+    brave: (query: string, apiKey: string) => ipcRenderer.invoke('search:brave', query, apiKey),
   },
 
   http: {

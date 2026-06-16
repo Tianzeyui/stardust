@@ -295,6 +295,36 @@ export function setModelTier(modelId: string, tier: ModelTier): void {
   saveTierMap(map)
 }
 
+// ========== 搜索引擎配置 ==========
+
+const SEARCH_ENGINE_KEY = 'brainplus_search_engine'
+const GOOGLE_API_KEY = 'brainplus_google_api_key'
+const GOOGLE_CX_KEY = 'brainplus_google_cx'
+const BRAVE_API_KEY = 'brainplus_brave_api_key'
+
+export type SearchEngine = 'auto' | 'google' | 'brave' | 'bing' | 'ddg'
+
+export function getSearchEngine(): SearchEngine {
+  try { const v = localStorage.getItem(SEARCH_ENGINE_KEY); if (v) return v as SearchEngine } catch {}
+  return 'auto'
+}
+export function saveSearchEngine(v: SearchEngine): void { localStorage.setItem(SEARCH_ENGINE_KEY, v) }
+
+export function getGoogleApiKey(): string {
+  try { return localStorage.getItem(GOOGLE_API_KEY) || '' } catch { return '' }
+}
+export function saveGoogleApiKey(v: string): void { localStorage.setItem(GOOGLE_API_KEY, v) }
+
+export function getGoogleCx(): string {
+  try { return localStorage.getItem(GOOGLE_CX_KEY) || '' } catch { return '' }
+}
+export function saveGoogleCx(v: string): void { localStorage.setItem(GOOGLE_CX_KEY, v) }
+
+export function getBraveApiKey(): string {
+  try { return localStorage.getItem(BRAVE_API_KEY) || '' } catch { return '' }
+}
+export function saveBraveApiKey(v: string): void { localStorage.setItem(BRAVE_API_KEY, v) }
+
 // ========== 上下文窗口 ==========
 
 const CTX_WINDOW_KEY = 'brainplus_ctx_window'

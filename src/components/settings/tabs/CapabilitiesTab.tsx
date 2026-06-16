@@ -6,12 +6,12 @@ import { Label } from '@/components/ui/label'
 import {
   getJSSandboxEnabled, saveJSSandboxEnabled,
   getPythonSandboxEnabled, savePythonSandboxEnabled,
-  getDuckDuckGoEnabled, saveDuckDuckGoEnabled,
-  getDDGResultCount, saveDDGResultCount, getDDGTimeout, saveDDGTimeout,
-  getBingEnabled, saveBingEnabled,
-  getBingResultCount, saveBingResultCount, getBingTimeout, saveBingTimeout,
   getGraphEnabled, saveGraphEnabled,
   getTerminalEnabled, saveTerminalEnabled,
+  getSearchEngine, saveSearchEngine,
+  getGoogleApiKey, saveGoogleApiKey, getGoogleCx, saveGoogleCx,
+  getBraveApiKey, saveBraveApiKey,
+  type SearchEngine,
 } from '@/lib/config'
 
 function Toggle({ enabled, onToggle }: { enabled: boolean; onToggle: () => void }) {
@@ -42,12 +42,10 @@ export function CapabilitiesTab() {
   const [capExpanded, setCapExpanded] = useState<Record<string, boolean>>({ sandbox: true, search: true, graph: true, terminal: true })
   const [sandboxJS, setSandboxJS] = useState(getJSSandboxEnabled)
   const [sandboxPython, setSandboxPython] = useState(getPythonSandboxEnabled)
-  const [ddgEnabled, setDdgEnabled] = useState(getDuckDuckGoEnabled)
-  const [ddgResultCount, setDdgResultCount] = useState(getDDGResultCount)
-  const [ddgTimeout, setDdgTimeout] = useState(getDDGTimeout)
-  const [bingEnabled, setBingEnabled] = useState(getBingEnabled)
-  const [bingResultCount, setBingResultCount] = useState(getBingResultCount)
-  const [bingTimeout, setBingTimeout] = useState(getBingTimeout)
+  const [searchEngine, setSearchEngine] = useState<SearchEngine>(getSearchEngine)
+  const [googleKey, setGoogleKey] = useState(getGoogleApiKey)
+  const [googleCx, setGoogleCx] = useState(getGoogleCx)
+  const [braveKey, setBraveKey] = useState(getBraveApiKey)
 
   // 终端
   const [terminalEnabled, setTerminalEnabled] = useState(getTerminalEnabled)
@@ -121,24 +119,27 @@ export function CapabilitiesTab() {
       {/* 外部搜索 */}
       <div className="rounded-lg border border-border">
         <div className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => setCapExpanded(p => ({ ...p, search: !p.search }))}>
-          <div className="flex items-center gap-3"><Search className="h-4 w-4 text-muted-foreground" /><div><p className="text-sm font-medium text-foreground">外部搜索</p><p className="text-[10px] text-muted-foreground">互联网搜索引擎</p></div></div>
+          <div className="flex items-center gap-3"><Search className="h-4 w-4 text-muted-foreground" /><div><p className="text-sm font-medium text-foreground">互联网搜索</p><p className="text-[10px] text-muted-foreground">多引擎 fallback: Google → Brave → Bing → DuckDuckGo</p></div></div>
           <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${capExpanded.search ? '' : '-rotate-90'}`} />
         </div>
         {capExpanded.search && (
-          <div className="border-t border-border px-4 py-3 space-y-2">
+          <div className="border-t border-border px-4 py-3 space-y-3">
             <div className="rounded-md border border-border bg-muted/20 px-3 py-2.5 space-y-2">
               <div className="flex items-center justify-between">
-                <div><p className="text-xs font-medium text-foreground">Bing</p><p className="text-[10px] text-muted-foreground">网页搜索，中文支持好，全球可用</p></div>
-                <Toggle enabled={bingEnabled} onToggle={() => { setBingEnabled(v => { const nv = !v; saveBingEnabled(nv); return nv }) }} />
+                <div><p className="text-xs font-medium text-foreground">Google</p><p className="text-[10px] text-muted-foreground">需 API Key + Search Engine ID (CX)</p></div>
               </div>
-              {bingEnabled && <div className="grid grid-cols-2 gap-3"><NumberField label="搜索结果数" value={bingResultCount} setValue={n => { setBingResultCount(n); saveBingResultCount(n) }} min={1} max={20} unit="条" /><NumberField label="超时" value={bingTimeout} setValue={n => { setBingTimeout(n); saveBingTimeout(n) }} min={3} max={60} unit="秒" /></div>}
+              <div className="flex gap-2"><Input className="flex-1 h-7 text-xs" placeholder="API Key" value={googleKey} onChange={e => { setGoogleKey(e.target.value); saveGoogleApiKey(e.target.value) }} /><Input className="flex-1 h-7 text-xs" placeholder="CX" value={googleCx} onChange={e => { setGoogleCx(e.target.value); saveGoogleCx(e.target.value) }} /></div>
             </div>
             <div className="rounded-md border border-border bg-muted/20 px-3 py-2.5 space-y-2">
               <div className="flex items-center justify-between">
-                <div><p className="text-xs font-medium text-foreground">DuckDuckGo</p><p className="text-[10px] text-muted-foreground">Instant Answer API，英文效果好，隐私优先</p></div>
-                <Toggle enabled={ddgEnabled} onToggle={() => { setDdgEnabled(v => { const nv = !v; saveDuckDuckGoEnabled(nv); return nv }) }} />
+                <div><p className="text-xs font-medium text-foreground">Brave</p><p className="text-[10px] text-muted-foreground">需 API Key，免费额度 2000 次/月</p></div>
               </div>
-              {ddgEnabled && <div className="grid grid-cols-2 gap-3"><NumberField label="搜索结果数" value={ddgResultCount} setValue={n => { setDdgResultCount(n); saveDDGResultCount(n) }} min={1} max={20} unit="条" /><NumberField label="超时" value={ddgTimeout} setValue={n => { setDdgTimeout(n); saveDDGTimeout(n) }} min={3} max={60} unit="秒" /></div>}
+              <Input className="flex-1 h-7 text-xs" placeholder="API Key" value={braveKey} onChange={e => { setBraveKey(e.target.value); saveBraveApiKey(e.target.value) }} />
+            </div>
+            <div className="rounded-md border border-border bg-muted/20 px-3 py-2.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <div><p className="text-xs font-medium text-foreground">Bing + DuckDuckGo</p><p className="text-[10px] text-muted-foreground">免费兜底，无需 API Key</p></div>
+              </div>
             </div>
           </div>
         )}

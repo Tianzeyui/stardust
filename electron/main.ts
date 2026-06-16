@@ -959,6 +959,27 @@ ipcMain.handle('graph:query', async (_event, cypher: string, pluginId: string) =
 })
 
 // 搜索代理：主进程发起 HTTP 请求（绕过渲染进程 CORS 限制）
+ipcMain.handle('search:google', async (_e, query: string, apiKey: string, cx: string) => {
+  try {
+    const url = `https://www.googleapis.com/customsearch/v1?key=${encodeURIComponent(apiKey)}&cx=${encodeURIComponent(cx)}&q=${encodeURIComponent(query)}`
+    const res = await fetch(url)
+    const json = await res.json()
+    if (json.items) return { success: true, data: json.items.slice(0, 10).map((i: any) => ({ title: i.title, url: i.link, snippet: i.snippet })) }
+    return { success: false, error: json.error?.message || 'No results' }
+  } catch (e: any) { return { success: false, error: e.message } }
+})
+
+ipcMain.handle('search:brave', async (_e, query: string, apiKey: string) => {
+  try {
+    const res = await fetch(`https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=10`, {
+      headers: { 'Accept': 'application/json', 'Accept-Encoding': 'gzip', 'X-Subscription-Token': apiKey },
+    })
+    const json = await res.json()
+    if (json.web?.results) return { success: true, data: json.web.results.map((i: any) => ({ title: i.title, url: i.url, snippet: i.description })) }
+    return { success: false, error: 'No results' }
+  } catch (e: any) { return { success: false, error: e.message } }
+})
+
 ipcMain.handle('search:fetch', async (_e, url: string, timeout: number) => {
   try {
     const controller = new AbortController()
