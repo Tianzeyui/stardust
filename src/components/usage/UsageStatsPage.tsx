@@ -20,7 +20,20 @@ function toDateKey(ts: number): string {
 
 export function UsageStatsPage({ onClose }: { onClose?: () => void }) {
   const [traces, setTraces] = useState<TraceRecord[]>([])
-  const [tab, setTab] = useState<'overview' | 'trend' | 'daily'>('overview')
+  const [tab, setTab] = useState<'overview' | 'trend' | 'daily' | 'model'>('overview')
+
+  // 按模型聚合
+  const modelStats = new Map<string, { tokens: number; calls: number; agentTokens: number }>()
+  for (const t of traces) {
+    const key = t.modelName || '未知'
+    const s = modelStats.get(key) || { tokens: 0, calls: 0, agentTokens: 0 }
+    s.tokens += t.inputTokens + t.outputTokens
+    s.agentTokens += t.agentTokens || 0
+    s.calls++
+    modelStats.set(key, s)
+  }
+  const modelList = Array.from(modelStats.entries()).sort((a, b) => b[1].tokens - a[1].tokens)
+  const maxModelTok = Math.max(...modelList.map(([, s]) => s.tokens), 1)
 
   const refresh = useCallback(() => setTraces(getTraces()), [])
   useEffect(() => { refresh() }, [refresh])
@@ -51,7 +64,7 @@ export function UsageStatsPage({ onClose }: { onClose?: () => void }) {
         )}
         <span className="text-sm font-medium">用量统计</span>
         <div className="flex items-center gap-1 ml-4">
-          {(['overview', 'trend', 'daily'] as const).map(t => (
+          {(['overview', 'trend', 'daily', 'model'] as const).map(t => (
             <button key={t}
               className={`rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${tab === t ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
               onClick={() => setTab(t)}>
@@ -138,6 +151,33 @@ export function UsageStatsPage({ onClose }: { onClose?: () => void }) {
             </div>
           )
         )}
+
+        {tab === 'model' && (
+            <div className="rounded-lg border border-border p-4">
+              <p className="text-xs font-medium mb-3">模型用量分布</p>
+              <div className="space-y-2">
+                {modelList.length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-4">暂无数据</p>
+                ) : (
+                  modelList.map(([name, s]) => {
+                    const w = Math.max(2, (s.tokens / maxModelTok) * 100)
+                    return (
+                      <div key={name} className="flex items-center gap-2">
+                        <span className="text-[10px] text-muted-foreground w-32 shrink-0 truncate" title={name}>{name}</span>
+                        <div className="flex-1 h-4 bg-muted rounded-sm overflow-hidden">
+                          <div className="h-full bg-primary/60 rounded-sm flex items-center justify-end pr-1 transition-all" style={{ width: `${w}%` }}>
+                            <span className="text-[9px] text-primary-foreground font-medium">{fmt(s.tokens)}</span>
+                          </div>
+                        </div>
+                        <span className="text-[9px] text-muted-foreground/50 w-14 shrink-0 text-right">{s.calls}次</span>
+                        {s.agentTokens > 0 && <span className="text-[9px] text-muted-foreground/30 w-10 shrink-0">+{fmt(s.agentTokens)}</span>}
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            </div>
+          )}
 
         {/* 历史列表 */}
         <div className="rounded-lg border border-border">
