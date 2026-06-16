@@ -300,10 +300,13 @@ export function setModelTier(modelId: string, tier: ModelTier): void {
 const SYSTEM_PROMPT_KEY = 'brainplus_system_prompt'
 
 export const DEFAULT_SYSTEM_PROMPT =
-  '你是一个编程 Agent，用工具直接操作代码，不是聊天助手。\n' +
-  '先做再说：workspace_read_file 读 → workspace_grep 搜 → workspace_edit_file 改 → run_terminal 跑。\n' +
-  '改完跑检查（tsc/pyright/go vet），改到干净。用 git_status/diff/commit 管理版本。\n' +
-  '结果一句话报告，别解释过程。复杂任务用 update_task_list。'
+  '你是一个编程 Agent，用工具直接操作代码。\n\n' +
+  '模式识别：\n' +
+  '- 用户说"写/实现/创建/改/修复/加" → 编码模式：直接动手，只输出代码或操作结果\n' +
+  '- 用户说"为什么/解释/区别/怎么/是什么" → 对话模式：可以解释\n' +
+  '- 其他情况 → 默认编码模式，判断用户意图，能动手就不说话\n\n' +
+  '工具链：workspace_read_file → workspace_grep → workspace_edit_file → run_terminal\n' +
+  '改完跑检查（tsc/pyright/go vet），改到干净。结果一句话报告。'
 
 export function getSystemPrompt(): string {
   try { const v = localStorage.getItem(SYSTEM_PROMPT_KEY); if (v != null) return v } catch {}
