@@ -33,32 +33,23 @@ export function registerTerminalTool(tools: ToolMap) {
       const id = 'term_' + Math.random().toString(36).slice(2, 8)
       const isAsync = mode === 'async'
       const term = createTerminal(id, command, cwd || undefined, isAsync)
+      const permApi = (window as any).electronAPI?.perm
+      const cmdPattern = command.split(/\s+/)[0] || command
 
       // 权限预检：已授权则跳过确认
       let alreadyAllowed = false
-      try {
-        const { isAllowed, terminalPattern } = await import('@/lib/permissionStore')
-        if (isAllowed(_termWorkspaceRoot, 'terminal', terminalPattern(command))) {
-          alreadyAllowed = true
-        }
-      } catch {}
+      try { if (permApi) alreadyAllowed = await permApi.check(_termWorkspaceRoot, 'terminal', cmdPattern) } catch {}
 
       let confirmed = alreadyAllowed
       if (!alreadyAllowed) {
         notifyUI({ type: 'terminal_created', terminal: { ...term } })
         confirmed = await new Promise<boolean>((resolve) => {
-          setResolver(id, (ok, persist) => {
-            if (persist) {
-              try {
-                const { grantPermission, terminalPattern } = await import('@/lib/permissionStore')
-                grantPermission(_termWorkspaceRoot, { type: 'terminal', pattern: terminalPattern(command) })
-              } catch {}
-            }
+          setResolver(id, async (ok, persist) => {
+            if (persist) try { await permApi?.grant(_termWorkspaceRoot, 'terminal', cmdPattern) } catch {}
             resolve(ok)
           })
           notifyUI({ type: 'terminal_confirm', terminal: { ...term } })
         })
-
         if (!confirmed) {
           updateTerminal(id, { status: 'cancelled', endTime: Date.now() })
           notifyUI({ type: 'terminal_updated', terminal: { ...getTerminal(id)! } })

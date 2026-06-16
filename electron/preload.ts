@@ -242,4 +242,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return () => { ipcRenderer.removeListener('terminal:output', handler) }
     },
   },
+
+  perm: {
+    check: (workspaceRoot: string, type: string, value: string) => ipcRenderer.invoke('perm:check', workspaceRoot, type, value),
+    grant: (workspaceRoot: string, type: string, pattern: string) => ipcRenderer.invoke('perm:grant', workspaceRoot, type, pattern),
+  },
 })
