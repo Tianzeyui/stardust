@@ -35,8 +35,16 @@ function tokenize(text: string): string[] {
   tokens.push(...words)
   // 中文字符连续段
   const chinese = lower.match(/[一-鿿]+/g) || []
-  // 中文按单字拆分（简单但有效）
-  tokens.push(...chinese.flatMap(s => s.split('')))
+  // 中文整段作为关键词（如"修改页面"）
+  for (const seg of chinese) {
+    tokens.push(seg)  // 整段
+    if (seg.length > 2) {
+      // 双字滑动窗口
+      for (let i = 0; i < seg.length - 1; i++) {
+        tokens.push(seg.slice(i, i + 2))
+      }
+    }
+  }
   // 去重
   return [...new Set(tokens)]
 }

@@ -11,8 +11,8 @@ import { getAIModels, getCompressThreshold, getCtxWindow } from './config'
 import { estimateTokens } from './observability'
 
 const PER_MESSAGE_OVERHEAD = 4
-const MIN_RECENT = 6
-const MAX_RECENT = 30
+const MIN_RECENT = 4
+const MAX_RECENT = 20
 
 const SUMMARY_SYSTEM_PROMPT =
   'You are a conversation summarizer. Summarize the core information below concisely. Retain key decisions, user preferences, and important facts. Under 200 chars.\n\n' +
