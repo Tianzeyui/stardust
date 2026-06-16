@@ -290,9 +290,35 @@ export async function chat(
     }
   }
 
-  // Agent 行为规则（从配置读取，用户可在设置→Agent 中自定义）
+  // Agent 行为规则（从配置读取）+ 自动注入 .brainplus/rules.md
   const { getSystemPrompt } = await import('@/lib/config')
-  const agentRules = getSystemPrompt()
+  let agentRules = getSystemPrompt()
+
+  // 读取项目级和全局 rules.md
+  try {
+    const rulesParts: string[] = []
+    const fsApi = (window as any).electronAPI?.fs
+    // 读项目级 .brainplus/rules.md 和根目录 rules.md
+    let wsRoot = ''
+    try {
+      const wsApi = (window as any).electronAPI?.workspace
+      if (wsApi) { const info = await wsApi.getPaths(); wsRoot = info.root }
+    } catch {}
+    if (wsRoot && fsApi) {
+      const projectRules = await fsApi.readFile(`${wsRoot}/.brainplus/rules.md`).catch(() => null)
+      if (projectRules?.success && projectRules.content) {
+        rulesParts.push(`[项目规则 (.brainplus/rules.md)]\n${projectRules.content}`)
+      }
+      // 读工作区根目录的 rules.md（项目根）
+      const rootRules = await fsApi.readFile(`${wsRoot}/rules.md`).catch(() => null)
+      if (rootRules?.success && rootRules.content) {
+        rulesParts.push(`[项目规则 (rules.md)]\n${rootRules.content}`)
+      }
+    }
+    if (rulesParts.length > 0) {
+      agentRules = rulesParts.join('\n\n') + '\n\n' + agentRules
+    }
+  } catch {}
 
   // 渐进式披露：只筛选 MCP 业务工具（含 __ 分隔符），内建工具始终全部预加载
   const threshold = getDisclosureThreshold()
