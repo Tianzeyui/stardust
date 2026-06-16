@@ -862,20 +862,29 @@ export function ChatPage() {
             if (tokMatch) agentTotalTokensRef.current += parseInt(tokMatch[1])
           }
           // 更新 batch 中对应工具的状态（原地修改，保持引用稳定）
+          const MAX_RESULT = 30000
           const batch = toolBatchRef.current
           for (const t of batch) {
             if (t.name === matchName || t.name === sdkName) {
               t.status = ok ? 'done' : 'error'
-              t.result = String(event.toolOutput ?? '')
+              const raw = String(event.toolOutput ?? '')
+              if (raw.length > MAX_RESULT) {
+                t.result = raw.slice(0, MAX_RESULT) + `\n\n... (result truncated, ${raw.length} chars total)`
+                ;(t as any).fullResult = raw
+              } else {
+                t.result = raw
+              }
             }
           }
           setMessages(prev => prev.map(m => {
             if (m.role === 'tool' && (m as any).toolBatch) {
               return { ...m, toolBatch: batch as any }
             }
-            // 兼容旧的 toolCall 模式
+            // 兼容旧的 toolCall 模式 + 超大结果截断
             if (m.role === 'tool' && m.toolCall && (m.toolCall.name === matchName || m.toolCall.name === sdkName) && m.toolCall.status === 'running') {
-              return { ...m, content: String(event.toolOutput ?? ''), toolCall: { ...m.toolCall, status: ok ? 'done' : 'error', result: String(event.toolOutput ?? '') } }
+              const raw = String(event.toolOutput ?? '')
+              const truncated = raw.length > 30000 ? raw.slice(0, 30000) + `\n... (${raw.length} chars)` : raw
+              return { ...m, content: truncated, toolCall: { ...m.toolCall, status: ok ? 'done' : 'error', result: raw.length > 50000 ? raw.slice(0, 50000) + `\n... (${raw.length} chars)` : raw } }
             }
             return m
           }))
