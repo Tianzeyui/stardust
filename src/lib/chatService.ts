@@ -472,17 +472,11 @@ export async function chat(
     onEvent?.({ type: 'system-log', text: '🧠 无记忆（对话中提取后将在此显示）' })
   }
 
-  // 动静分离：静态块可缓存，动态块每轮重算
-  const systemBlocks: Array<{ type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }> = []
-  if (staticPart.trim()) {
-    systemBlocks.push({ type: 'text', text: staticPart.trim(), cache_control: { type: 'ephemeral' } })
-  }
-  if (dynamicPart.trim()) {
-    systemBlocks.push({ type: 'text', text: dynamicPart.trim() })
-  }
+  // 动静分离：静态在前，动态追加。缓存通过beta header处理
+  let finalSystem = staticPart.trim()
+  if (dynamicPart.trim()) finalSystem += '\n\n' + dynamicPart.trim()
 
-  const totalSystem = staticPart + (dynamicPart ? '\n\n' + dynamicPart : '')
-  onEvent?.({ type: 'system-log', text: `📋 系统提示词 (${totalSystem.length}字):\n${totalSystem.slice(0, 500)}${totalSystem.length > 500 ? '...(截断)' : ''}` })
+  onEvent?.({ type: 'system-log', text: `📋 系统提示词 (${finalSystem.length}字):\n${finalSystem.slice(0, 500)}${finalSystem.length > 500 ? '...(截断)' : ''}` })
 
   // rules.md 作为 user message（attention weight 高于 system prompt）
   const finalMessages = projectInstructions
@@ -491,7 +485,7 @@ export async function chat(
 
   const result = streamText({
     model: model.instance,
-    system: systemBlocks.length > 0 ? systemBlocks : undefined,
+    system: finalSystem || undefined,
     messages: finalMessages,
     tools: Object.keys(filteredTools).length > 0 ? filteredTools : undefined,
     stopWhen: stepCountIs(getAgentMaxSteps()),
