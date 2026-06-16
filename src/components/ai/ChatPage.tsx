@@ -1141,22 +1141,17 @@ export function ChatPage() {
               onToggleAuto={() => setAutoMode(!autoMode)}
               onSelectCloud={(m) => { setActiveModel(m); setShowModelPicker(false) }}
               onClose={() => setShowModelPicker(false)} pickerRef={pickerRef}
+              routeLabel={(() => {
+                if (!autoMode) return undefined
+                let s = 0
+                if (input.length > 200) s += 2; else if (input.length > 80) s += 1
+                const rt = messages.filter(m => m.role === 'tool').length
+                if (rt > 5) s += 3; else if (rt > 2) s += 2; else if (rt > 0) s += 1
+                if (currentProjectId) s += 1
+                return `${s >= 5 ? 'Pro' : s >= 3 ? 'Std' : 'Fast'} ${s}`
+              })()}
             />
           </div>
-          {autoMode && (() => {
-            // 实时评分预览
-            let s = 0
-            if (input.length > 200) s += 2; else if (input.length > 80) s += 1
-            const rt = messages.filter(m => m.role === 'tool').length
-            if (rt > 5) s += 3; else if (rt > 2) s += 2; else if (rt > 0) s += 1
-            if (currentProjectId) s += 1
-            const t: string = s >= 5 ? 'Pro' : s >= 3 ? 'Std' : 'Fast'
-            return (
-              <span className="text-[9px] text-muted-foreground/40 shrink-0 ml-0.5" title={`复杂度 ${s}→${t}`}>
-                {t} {s}
-              </span>
-            )
-          })()}
           <MemoryPopup
             manager={memoryManager}
             enabled={sessionMemoryEnabled}

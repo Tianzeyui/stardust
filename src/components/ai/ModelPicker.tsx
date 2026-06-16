@@ -9,13 +9,14 @@ interface ModelPickerProps {
   onSelectCloud: (model: AIModelConfig) => void
   onClose: () => void
   pickerRef: React.Ref<HTMLDivElement>
+  routeLabel?: string // 路由信息，如 "Fast 1"
 }
 
 export function ModelPicker({
   show, autoMode, activeModel,
   configuredModels,
   onToggleAuto, onSelectCloud, onClose,
-  pickerRef,
+  pickerRef, routeLabel,
 }: ModelPickerProps) {
   if (!show) return null
 
@@ -26,9 +27,14 @@ export function ModelPicker({
         onClick={onToggleAuto}
       >
         <span className="text-xs">Auto 自动调配</span>
-        <span className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${autoMode ? 'bg-primary' : 'bg-muted'}`}>
-          <span className={`inline-block h-3 w-3 rounded-full bg-white transition-transform ${autoMode ? 'translate-x-3' : 'translate-x-0.5'}`} />
-        </span>
+        <div className="flex items-center gap-2">
+          {autoMode && routeLabel && (
+            <span className="text-[9px] text-muted-foreground/50">{routeLabel}</span>
+          )}
+          <span className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${autoMode ? 'bg-primary' : 'bg-muted'}`}>
+            <span className={`inline-block h-3 w-3 rounded-full bg-white transition-transform ${autoMode ? 'translate-x-3' : 'translate-x-0.5'}`} />
+          </span>
+        </div>
       </div>
 
       <div className="max-h-64 overflow-auto p-1">
