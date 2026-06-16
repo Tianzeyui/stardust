@@ -527,15 +527,28 @@ export function ChatPage() {
     if (sendingRef.current || loading || !input.trim() || !activeModel) return
     sendingRef.current = true
 
-    // 动态路由：根据用户意图选 tier
+    // 动态路由：基于任务复杂度评分选 tier
     let usedModel = activeModel
     if (autoMode && configuredModels.length > 0) {
-      const msg = input.trim().toLowerCase()
-      let tier: 'fast' | 'balanced' | 'powerful' = 'balanced'
-      const codeWords = ['写', '实现', '创建', '改', '修复', '加', '删', '优化', '重构', 'fix', 'create', 'implement', 'write', 'add', 'remove', 'refactor', 'optimize', 'edit', 'build', 'code', '编程', '开发', 'bug', '报错', '错误']
-      if (codeWords.some(w => msg.includes(w))) tier = 'powerful'
-      const chatWords = ['为什么', '解释', '区别', '怎么', '是什么', '介绍', '原因', '分析', 'what', 'why', 'how', 'explain', 'describe', '文档', '笔记', '记录']
-      if (chatWords.some(w => msg.includes(w))) tier = 'fast'
+      let score = 0
+      // 消息长度
+      if (input.length > 200) score += 2
+      else if (input.length > 80) score += 1
+      // 工具调用历史
+      const recentTools = messages.filter(m => m.role === 'tool').length
+      if (recentTools > 5) score += 3
+      else if (recentTools > 2) score += 2
+      else if (recentTools > 0) score += 1
+      // 编码项目
+      if (currentProjectId) score += 1
+      // 最近有文件编辑
+      const hasEdit = messages.slice(-5).some(m =>
+        (m as any).toolCall?.name?.includes('write') ||
+        m.content?.includes('已写入') || m.content?.includes('已编辑'))
+      if (hasEdit) score += 2
+
+      const tier: 'fast' | 'balanced' | 'powerful' =
+        score >= 5 ? 'powerful' : score >= 3 ? 'balanced' : 'fast'
       try {
         const { getModelTier } = await import('@/lib/config')
         for (const provider of configuredModels) {
