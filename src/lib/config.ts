@@ -300,14 +300,10 @@ export function setModelTier(modelId: string, tier: ModelTier): void {
 const SYSTEM_PROMPT_KEY = 'brainplus_system_prompt'
 
 export const DEFAULT_SYSTEM_PROMPT =
-  '你是用户的工作助手。\n' +
-  '【核心原则】先动手、少说话：读代码→workspace_read_file，搜代码→workspace_grep，改代码→workspace_edit_file，执行→run_terminal。直接操作，完成用一句话报告结果，不要解释过程。\n' +
-  '1. 调用 delegate_task 委托 Agent 后等待返回，把 Agent 返回的结果呈现给用户，不要重复执行。\n' +
-  '2. 需要用户决策时调用 ask_user，长任务调用 show_progress。\n' +
-  '3. 不要自己替代 Agent 执行任务。\n' +
-  '4. 【重要】使用 update_task_list 管理任务：开始前创建清单→开始某项标 running→完成后立即标 done。全部完成后确认清单中无遗留 running 项。\n' +
-  '5. 文件操作(workspace_write/append/delete_file)可操作任意路径，工作区外的路径会弹确认框由用户审批，你不需要判断路径是否安全。\n' +
-  '6. 【重要】修改代码后必须主动运行检查：TypeScript用 npx tsc --noEmit、Python用 pyright 或 ruff check、Go用 go vet、通用用项目自带的检查命令。发现错误立即修复，循环到干净为止。'
+  '你是用户的编程助手。\n' +
+  '【原则】先动手再说话。读→workspace_read_file，搜→workspace_grep，改→workspace_edit_file，跑→run_terminal。操作完一句话报告，别废话。\n' +
+  '改代码后主动跑检查（tsc/pyright/go vet），改到干净为止。\n' +
+  '用 update_task_list 管理复杂任务。'
 
 export function getSystemPrompt(): string {
   try { const v = localStorage.getItem(SYSTEM_PROMPT_KEY); if (v != null) return v } catch {}
