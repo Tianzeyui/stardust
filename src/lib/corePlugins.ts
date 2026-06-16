@@ -5,9 +5,9 @@ import { pluginSystem } from './pluginSystem'
 import type { Plugin } from './pluginTypes'
 
 const coreChat: Plugin = {
-  manifest: { id: 'chat', name: '编程', version: '1.0.0', description: '', icon: 'Bot', navOrder: 10, enabled: true },
+  manifest: { id: 'chat', name: '助手', version: '1.0.0', description: '', icon: 'Bot', navOrder: 10, enabled: true },
   register(ctx) {
-    ctx.registerNav({ id: 'chat', label: '编程', icon: 'Bot', order: 10 })
+    ctx.registerNav({ id: 'chat', label: '助手', icon: 'Bot', order: 10 })
     ctx.registerRoute('chat', () => import('@/components/ai/ChatPage'))
   },
 }
