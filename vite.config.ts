@@ -32,6 +32,7 @@ export default defineConfig({
                 /^@node-llama-cpp\//,
                 'mammoth',
                 'esbuild',
+                'node-pty',
               ],
             },
           },
