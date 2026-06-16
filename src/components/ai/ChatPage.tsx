@@ -19,7 +19,7 @@ import { ConversationBar, type ConvInfo } from './ConversationBar'
 import { SkillPicker } from './SkillPicker'
 import { MCPToolPicker } from './MCPToolPicker'
 import type { DisclosureResult } from '@/lib/toolDisclosure'
-import { getDisclosureThreshold, saveDisclosureThreshold, getCtxWindow } from '@/lib/config'
+import { getDisclosureThreshold, saveDisclosureThreshold, getCtxWindow, getModelTier } from '@/lib/config'
 import { MemoryManager } from '@/lib/memory/manager'
 import { createLocalMemoryStore } from '@/lib/memory/store-local'
 import { createSupabaseMemoryStore } from '@/lib/memory/store-supabase'
@@ -1148,7 +1148,16 @@ export function ChatPage() {
                 const rt = messages.filter(m => m.role === 'tool').length
                 if (rt > 5) s += 3; else if (rt > 2) s += 2; else if (rt > 0) s += 1
                 if (currentProjectId) s += 1
-                return `${s >= 5 ? 'Pro' : s >= 3 ? 'Std' : 'Fast'} ${s}`
+                const tier = s >= 5 ? 'powerful' : s >= 3 ? 'balanced' : 'fast'
+                const label = s >= 5 ? 'Pro' : s >= 3 ? 'Std' : 'Fast'
+                let modelName = ''
+                for (const p of configuredModels) {
+                  for (const sm of p.availableModels || []) {
+                    if (getModelTier(sm.id) === tier) { modelName = sm.id; break }
+                  }
+                  if (modelName) break
+                }
+                return modelName ? `${label} ${s} → ${modelName}` : `${label} ${s}`
               })()}
             />
           </div>
