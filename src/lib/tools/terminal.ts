@@ -95,7 +95,7 @@ export function registerTerminalTool(tools: ToolMap) {
             if (data.done) unsub?.()
           }
         })
-        return `交互终端已启动。用户正在 $ 输入框中操作。STOP——不要再回复，不要调用工具，等用户说"可以了"或"帮我看看"再继续。`
+        return `交互终端已启动 (terminal_id: ${id})。用户正在 $ 输入框中操作。记住此 ID，用户结束后用 check_terminal("${id}") 查看输出历史。`
       }
 
       if (isAsync) {
