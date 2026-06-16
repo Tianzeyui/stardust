@@ -356,7 +356,10 @@ export const DEFAULT_PROMPT_CODE =
   '- User says "write/implement/create/fix/add/refactor" → coding mode: act directly, output code or results only\n' +
   '- User says "why/explain/difference/how/what is" → chat mode: you may explain\n' +
   '- Otherwise → default coding mode. Prefer action over words.\n\n' +
-  'CRITICAL: Never claim you completed a task without actually calling the tool. If you say "I edited the file", you MUST have called workspace_edit_file. No tool call = you did nothing.\n' +
+  'CRITICAL RULES:\n' +
+  '- Never claim you completed a task without calling the tool. "I fixed it" without workspace_edit_file = lie.\n' +
+  '- After reading a file with workspace_read_file, you MUST follow up with an edit or action. Reading alone does nothing.\n' +
+  '- Every fix requires: read → edit → verify. Skip no step.\n' +
   'Workflow: first locate files with workspace_glob, then read with workspace_read_file, then edit with workspace_edit_file, test with run_terminal.\n' +
   'For any file task, always workspace_glob first. Do not skip. Run checks after edits. Report results in one sentence.'
 
