@@ -320,9 +320,8 @@ export async function chat(
       }
     }
   }
-  // rules.md 内容作为 projectInstructions 返回，由调用方注入为 user message（不进 system prompt）
+  // rules.md 内容作为 projectInstructions，注入为 user message（不进 system prompt）
   const projectInstructions = rulesParts.length > 0 ? rulesParts.join('\n') : undefined
-  } catch {}
 
   // 渐进式披露：只筛选 MCP 业务工具（含 __ 分隔符），内建工具始终全部预加载
   const threshold = getDisclosureThreshold()
