@@ -75,7 +75,8 @@ export class ContextWindowManager {
 
     // 未超过阈值（且非强制），直接返回
     const threshold = getCompressThreshold() / 100
-    if (!opts?.force && originalTokens <= limit * threshold) {
+    // 小模型保护：至少超过 2000 token 才触发压缩
+    if (!opts?.force && (originalTokens <= limit * threshold || originalTokens < 2000)) {
       return { messages, wasCompressed: false, originalTokens, compressedTokens: originalTokens, limit }
     }
 
