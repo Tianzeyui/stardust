@@ -980,6 +980,38 @@ ipcMain.handle('search:brave', async (_e, query: string, apiKey: string) => {
   } catch (e: any) { return { success: false, error: e.message } }
 })
 
+ipcMain.handle('search:ddg', async (_e, query: string) => {
+  try {
+    const res = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1`)
+    const json = await res.json()
+    if (json.Results) return { success: true, data: json.Results.slice(0, 10).map((i: any) => ({ title: i.Text || i.FirstURL, url: i.FirstURL, snippet: i.Text })) }
+    if (json.RelatedTopics) {
+      const items = json.RelatedTopics.filter((t: any) => t.FirstURL).slice(0, 10)
+      return { success: true, data: items.map((i: any) => ({ title: i.Text?.slice(0, 80), url: i.FirstURL, snippet: i.Text?.slice(0, 200) })) }
+    }
+    return { success: true, data: [] }
+  } catch (e: any) { return { success: false, error: e.message } }
+})
+
+ipcMain.handle('search:bing', async (_e, query: string, count: number) => {
+  try {
+    const res = await fetch(`https://www.bing.com/search?q=${encodeURIComponent(query)}&count=${count || 10}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; BrainPlus/1.0)' },
+    })
+    const html = await res.text()
+    const results: { title: string; url: string; snippet: string }[] = []
+    const itemRe = /<li class="b_algo"[^>]*>[\s\S]*?<\/li>/gi
+    const matches = html.match(itemRe) || []
+    for (const m of matches.slice(0, 10)) {
+      const title = (m.match(/<h2[^>]*>[\s\S]*?<\/h2>/i)?.[0] || '').replace(/<[^>]+>/g, '').trim()
+      const url = (m.match(/href="(https?:\/\/[^"]+)"/)?.[1] || '').replace(/&amp;/g, '&')
+      const snippet = (m.match(/<p[^>]*>[\s\S]*?<\/p>/i)?.[0] || '').replace(/<[^>]+>/g, '').trim()
+      if (title && url) results.push({ title, url, snippet })
+    }
+    return { success: true, data: results }
+  } catch (e: any) { return { success: false, error: e.message } }
+})
+
 ipcMain.handle('search:fetch', async (_e, url: string, timeout: number) => {
   try {
     const controller = new AbortController()
