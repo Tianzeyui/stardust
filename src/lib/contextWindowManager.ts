@@ -8,7 +8,7 @@
  */
 
 import type { ModelMessage } from 'ai'
-import { getAIModels, getCompressThreshold, getTokenLimit, getDefaultCtxWindow } from './config'
+import { getAIModels, getCompressThreshold, getCtxWindow } from './config'
 import { estimateTokens } from './observability'
 
 // ====== 类型 ======
@@ -74,19 +74,16 @@ export class ContextWindowManager {
    * 回退到 8192（安全默认值）。
    */
   getContextWindowForModel(): number {
-    const manual = getTokenLimit()
-    if (manual > 0) return manual  // 用户手动配置的上限优先
     try {
       const models = getAIModels()
       const enabled = models.find(m => m.enabled && m.apiKey)
-      if (!enabled) return getDefaultCtxWindow()
-
-      const selectedId = enabled.selectedModel
-      const selectedModel = enabled.availableModels?.find(m => m.id === selectedId)
-      return selectedModel?.contextWindow || getDefaultCtxWindow()
-    } catch {
-      return getDefaultCtxWindow()
-    }
+      if (enabled) {
+        const selectedId = enabled.selectedModel
+        const model = enabled.availableModels?.find(m => m.id === selectedId)
+        if (model?.contextWindow) return model.contextWindow
+      }
+    } catch {}
+    return getCtxWindow()
   }
 
   /**
@@ -103,7 +100,7 @@ export class ContextWindowManager {
   ): Promise<CompressResult> {
     const messageTokens = this.estimateMessagesTokens(messages)
     const originalTokens = messageTokens + (opts?.extraTokens || 0)
-    const limit = contextWindow || getDefaultCtxWindow()
+    const limit = contextWindow || getCtxWindow()
 
     // 未超过阈值（且非强制），直接返回
     const threshold = getCompressThreshold() / 100

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { getMemoryEnabled, saveMemoryEnabled, getAgentMaxSteps, saveAgentMaxSteps, getCompressThreshold, saveCompressThreshold, getTokenLimit, saveTokenLimit, getDefaultCtxWindow, saveDefaultCtxWindow, DEFAULT_CTX_WINDOW } from '@/lib/config'
+import { getMemoryEnabled, saveMemoryEnabled, getAgentMaxSteps, saveAgentMaxSteps, getCompressThreshold, saveCompressThreshold, getCtxWindow, saveCtxWindow, DEFAULT_CTX_WINDOW } from '@/lib/config'
 import { MemoryPanel } from '../MemoryPanel'
 import { MemoryManager } from '@/lib/memory/manager'
 import { createLocalMemoryStore } from '@/lib/memory/store-local'
@@ -14,8 +14,7 @@ export function AgentTab() {
   const [memoryEnabled, setMemoryEnabled] = useState(getMemoryEnabled)
   const [maxSteps, setMaxSteps] = useState(getAgentMaxSteps)
   const [compressThreshold, setCompressThreshold] = useState(getCompressThreshold)
-  const [tokenLimit, setTokenLimit] = useState(getTokenLimit)
-  const [defaultCtxWin, setDefaultCtxWin] = useState(getDefaultCtxWindow)
+  const [ctxWindow, setCtxWindow] = useState(getCtxWindow)
   const manager = new MemoryManager(createLocalMemoryStore('settings'), createSupabaseMemoryStore(() => user?.id ?? null))
 
   return (
@@ -42,10 +41,9 @@ export function AgentTab() {
       </fieldset>
       <fieldset className="rounded-lg border border-border p-4">
         <legend className="px-2 text-sm font-semibold">上下文压缩</legend>
-        <div className="grid grid-cols-3 gap-3">
-          <div><Label className="text-xs">默认上下文</Label><p className="text-[10px] text-muted-foreground/50 mb-1">模型无数据时用此值</p><div className="flex items-center gap-1"><Input type="number" min={4096} step={1024} value={defaultCtxWin} onChange={e => { const v = parseInt(e.target.value) || DEFAULT_CTX_WINDOW; setDefaultCtxWin(v); saveDefaultCtxWindow(v) }} className="h-8 w-24 text-center text-sm" /><span className="text-xs text-muted-foreground">tok</span></div></div>
-          <div><Label className="text-xs">Token 上限</Label><p className="text-[10px] text-muted-foreground/50 mb-1">0=自动</p><div className="flex items-center gap-1"><Input type="number" min={0} step={1024} value={tokenLimit} onChange={e => { const v = parseInt(e.target.value) || 0; setTokenLimit(v); saveTokenLimit(v) }} className="h-8 w-20 text-center text-sm" /><span className="text-xs text-muted-foreground">tok</span></div></div>
-          <div><Label className="text-xs">压缩阈值</Label><p className="text-[10px] text-muted-foreground/50 mb-1">达到上限的%</p><div className="flex items-center gap-1"><Input type="number" min={30} max={95} value={compressThreshold} onChange={e => { const v = parseInt(e.target.value); if (v >= 30 && v <= 95) { setCompressThreshold(v); saveCompressThreshold(v) } }} className="h-8 w-20 text-center text-sm" /><span className="text-xs text-muted-foreground">%</span></div></div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><Label className="text-xs">上下文窗口</Label><p className="text-[10px] text-muted-foreground/50 mb-1">模型有数据时自动覆盖</p><div className="flex items-center gap-1"><Input type="number" min={4096} step={1024} value={ctxWindow} onChange={e => { const v = parseInt(e.target.value) || DEFAULT_CTX_WINDOW; setCtxWindow(v); saveCtxWindow(v) }} className="h-8 w-24 text-center text-sm" /><span className="text-xs text-muted-foreground">tok</span></div></div>
+          <div><Label className="text-xs">压缩阈值</Label><p className="text-[10px] text-muted-foreground/50 mb-1">达到上限的%时触发</p><div className="flex items-center gap-1"><Input type="number" min={30} max={95} value={compressThreshold} onChange={e => { const v = parseInt(e.target.value); if (v >= 30 && v <= 95) { setCompressThreshold(v); saveCompressThreshold(v) } }} className="h-8 w-20 text-center text-sm" /><span className="text-xs text-muted-foreground">%</span></div></div>
         </div>
       </fieldset>
       <MemoryPanel manager={manager} />
