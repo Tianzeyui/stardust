@@ -362,17 +362,9 @@ function AgentToolCallItem({ tc }: { tc: AgentToolCallEntry }) {
   )
 }
 
-/** 思考过程区块：可折叠，默认展开（流式时）/ 默认折叠（完成后） */
+/** 思考区块：默认折叠 */
 function ThinkingBlock({ thinking, loading }: { thinking: string; loading?: boolean }) {
-  const [expanded, setExpanded] = useState(loading ?? true)
-
-  // 思考内容变化时自动展开（流式跟随），完成后默认折叠
-  useEffect(() => {
-    if (loading) {
-      setExpanded(true)
-    }
-  }, [thinking, loading])
-
+  const [expanded, setExpanded] = useState(false)
   if (!thinking) return null
 
   return (
@@ -382,7 +374,7 @@ function ThinkingBlock({ thinking, loading }: { thinking: string; loading?: bool
         onClick={() => setExpanded(!expanded)}
       >
         <Brain className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
-        <span className="text-[11px] font-medium text-muted-foreground/60">思考过程</span>
+        <span className="text-[11px] font-medium text-muted-foreground/60">思考</span>
         {loading && (
           <>
             <Loader2 className="h-3 w-3 text-muted-foreground/40 animate-spin shrink-0" />
