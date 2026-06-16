@@ -236,7 +236,7 @@ export function getCompressThreshold(): number {
     const v = localStorage.getItem(COMPRESS_THRESHOLD_KEY)
     if (v) { const n = parseInt(v); if (n >= 30 && n <= 95) return n }
   } catch {}
-  return 80  // 默认 80%
+  return 70  // 默认 70%（更激进，减少上下文溢出）
 }
 
 export function saveCompressThreshold(pct: number): void {
