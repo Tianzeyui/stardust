@@ -75,6 +75,8 @@ export function ChatPage() {
   })()
   const [showModelPicker, setShowModelPicker] = useState(false)
   const [autoMode, setAutoMode] = useState(true)
+  const [routeScore, setRouteScore] = useState(0)
+  const [routeModel, setRouteModel] = useState('')
   const [outputFiles, setOutputFiles] = useState<Array<{ name: string; path: string; size: number }>>([])
   const [statusText, setStatusText] = useState('')
   const [consoleLog, setConsoleLog] = useState<ConsoleLine[]>([])
@@ -549,6 +551,8 @@ export function ChatPage() {
 
       const tier: 'fast' | 'balanced' | 'powerful' =
         score >= 5 ? 'powerful' : score >= 3 ? 'balanced' : 'fast'
+      setRouteScore(score)
+      setRouteModel(tier)
       try {
         const { getModelTier } = await import('@/lib/config')
         for (const provider of configuredModels) {
@@ -1133,6 +1137,11 @@ export function ChatPage() {
               onClose={() => setShowModelPicker(false)} pickerRef={pickerRef}
             />
           </div>
+          {autoMode && routeScore > 0 && (
+            <span className="text-[9px] text-muted-foreground/50 shrink-0 ml-0.5" title={`复杂度 ${routeScore}`}>
+              {routeModel === 'fast' ? '⚡' : routeModel === 'powerful' ? '💪' : '⚖'} {routeScore}
+            </span>
+          )}
           <MemoryPopup
             manager={memoryManager}
             enabled={sessionMemoryEnabled}
