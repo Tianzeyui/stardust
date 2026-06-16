@@ -234,6 +234,8 @@ export interface ChatStreamEvent {
   reasoningId?: string
 }
 
+let _lastCompressionSummary = ''
+
 export async function chat(
   messages: ModelMessage[],
   onEvent?: (event: ChatStreamEvent) => void,
@@ -397,16 +399,19 @@ export async function chat(
 
   const systemPrompt = [agentRules, toolCatalog, skillInjection].filter(Boolean).join('\n\n') || undefined
 
-  // 上下文窗口压缩
+  // 上下文窗口压缩（摘要堆叠：传递上轮摘要）
   const cwm = new ContextWindowManager()
   const contextWindow = cwm.getContextWindowForModel()
 
-  // 估算消息之外的固定 token 开销：system prompt + 工具定义
   let overheadTokens = estimateTokens(systemPrompt || '')
   for (const [name, tool] of Object.entries(filteredTools)) {
     overheadTokens += estimateTokens(name + (tool as any).description || '')
   }
-  const compressOpt = { ...(opts?.forceCompression ? { force: true } : {}), extraTokens: overheadTokens }
+  const compressOpt = {
+    ...(opts?.forceCompression ? { force: true } : {}),
+    extraTokens: overheadTokens,
+    previousSummary: _lastCompressionSummary || undefined,
+  }
 
   const {
     messages: compressedMessages,
@@ -417,6 +422,7 @@ export async function chat(
   } = await cwm.compress(messages, contextWindow, compressOpt)
 
   if (wasCompressed) {
+    _lastCompressionSummary = summary || ''
     onEvent?.({
       type: 'compression',
       originalTokens,
