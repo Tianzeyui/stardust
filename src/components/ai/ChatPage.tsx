@@ -1127,12 +1127,12 @@ export function ChatPage() {
         <div className="flex items-center gap-1 px-2 pb-1.5">
           <div className="relative shrink-0">
             <button
-              className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] transition-colors ${autoMode ? 'text-muted-foreground/30 cursor-default' : 'text-muted-foreground/60 hover:bg-muted hover:text-muted-foreground'}`}
-              onClick={() => !autoMode && setShowModelPicker(!showModelPicker)}
-              title={autoMode ? 'Auto 模式下自动调配' : activeModel ? `${activeModel.displayName} / ${activeModel.selectedModel}` : '选择模型'}
+              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground/60 hover:bg-muted hover:text-muted-foreground transition-colors"
+              onClick={() => setShowModelPicker(!showModelPicker)}
+              title={autoMode ? 'Auto 自动调配' : activeModel ? `${activeModel.displayName} / ${activeModel.selectedModel}` : '选择模型'}
             >
               <Bot className="h-3 w-3" />
-              <span className="max-w-[60px] truncate">{autoMode ? 'Auto' : activeModel?.displayName || '模型'}</span>
+              <span className={`max-w-[60px] truncate ${autoMode ? 'text-primary/60' : ''}`}>{autoMode ? 'Auto' : activeModel?.displayName || '模型'}</span>
             </button>
             <ModelPicker
               show={showModelPicker} autoMode={autoMode}
