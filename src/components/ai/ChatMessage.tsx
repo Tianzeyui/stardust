@@ -69,7 +69,7 @@ function ChatMessageInner({ msg }: ChatMessageProps) {
   if (msg.role === 'tool' && (msg as any).toolBatch) {
     const batch = (msg as any).toolBatch as ToolCallStatus[]
     return (
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex flex-col gap-1">
         {batch.map(tc => (
           tc.name === 'run_terminal' ? null : <ToolBubble key={tc.id} tc={tc} />
         ))}

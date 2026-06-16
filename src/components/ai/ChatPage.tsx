@@ -789,8 +789,7 @@ export function ChatPage() {
             setMessages(prev => {
               const n = [...prev]; const l = n[n.length - 1]
               if (l?.role === 'assistant' && l.streaming) {
-                if (textBeforeTool) { l.content = textBeforeTool; l.streaming = false }
-                else n.pop()
+                l.content = textBeforeTool; l.streaming = false
               }
               // 创建并行工具组消息
               n.push({ role: 'tool', content: '', toolBatch: toolBatchRef.current as any })
