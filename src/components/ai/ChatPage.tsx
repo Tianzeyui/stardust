@@ -527,6 +527,28 @@ export function ChatPage() {
     if (sendingRef.current || loading || !input.trim() || !activeModel) return
     sendingRef.current = true
 
+    // 动态路由：根据用户意图选 tier
+    let usedModel = activeModel
+    if (autoMode && configuredModels.length > 0) {
+      const msg = input.trim().toLowerCase()
+      let tier: 'fast' | 'balanced' | 'powerful' = 'balanced'
+      const codeWords = ['写', '实现', '创建', '改', '修复', '加', '删', '优化', '重构', 'fix', 'create', 'implement', 'write', 'add', 'remove', 'refactor', 'optimize', 'edit', 'build', 'code', '编程', '开发', 'bug', '报错', '错误']
+      if (codeWords.some(w => msg.includes(w))) tier = 'powerful'
+      const chatWords = ['为什么', '解释', '区别', '怎么', '是什么', '介绍', '原因', '分析', 'what', 'why', 'how', 'explain', 'describe', '文档', '笔记', '记录']
+      if (chatWords.some(w => msg.includes(w))) tier = 'fast'
+      try {
+        const { getModelTier } = await import('@/lib/config')
+        for (const provider of configuredModels) {
+          for (const sm of provider.availableModels || []) {
+            if (getModelTier(sm.id) === tier) {
+              usedModel = { ...provider, selectedModel: sm.id }
+              break
+            }
+          }
+        }
+      } catch {}
+    }
+
     // 确保有对话
     let cid = convId
     if (!cid && window.electronAPI?.conv) {
@@ -563,7 +585,7 @@ export function ChatPage() {
 
     const displaySummary = [input.trim(), images.length > 0 ? `[${images.length}张图片]` : '', docs.length > 0 ? `[${docs.length}个文档]` : '', failedDocs.length > 0 ? `[${failedDocs.length}个转换失败]` : ''].filter(Boolean).join(' ')
 
-    const modelName = activeModel ? `${activeModel.displayName} / ${activeModel.selectedModel}` : undefined
+    const modelName = usedModel ? `${usedModel.displayName} / ${usedModel.selectedModel}` : undefined
 
     const userMsg: UIMessage = { role: 'user', content: displaySummary, attachments: attachments.length > 0 ? attachments.map(a => ({ name: a.name, type: a.type, status: a.status === 'error' ? 'error' as const : 'done' as const, error: a.error })) : undefined }
     setMessages(prev => [...prev, userMsg, { role: 'assistant', content: '', streaming: true, modelName }])
@@ -897,6 +919,7 @@ export function ChatPage() {
       }, {
         abortSignal: controller.signal,
         autoMode,
+        modelOverride: usedModel !== activeModel ? { provider: usedModel.name, modelId: usedModel.selectedModel } : undefined,
         forceCompression: forceCompressRef.current ? true : undefined,
         selectedTools: selectedMCPTools,
         memoryInjection: sessionMemoryEnabled

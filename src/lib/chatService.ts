@@ -239,15 +239,19 @@ let _lastCompressionSummary = ''
 export async function chat(
   messages: ModelMessage[],
   onEvent?: (event: ChatStreamEvent) => void,
-  opts?: { abortSignal?: AbortSignal; autoMode?: boolean; localModelId?: string; forceCompression?: boolean; selectedTools?: Set<string> | null; memoryInjection?: string; userId?: string },
+  opts?: { abortSignal?: AbortSignal; autoMode?: boolean; localModelId?: string; forceCompression?: boolean; selectedTools?: Set<string> | null; memoryInjection?: string; userId?: string; modelOverride?: { provider: string; modelId: string } },
 ) {
   // 本地模型路径
   if (opts?.localModelId) {
     return chatLocalViaIpc(messages, onEvent, opts.localModelId, opts?.abortSignal)
   }
 
-  const model = getChatModel()
+  let model = getChatModel()
   if (!model) throw new Error('请先在设置中启用一个 AI 模型')
+  // 动态路由：覆盖模型选择
+  if (opts?.modelOverride) {
+    model = { ...model, selectedModel: opts.modelOverride.modelId }
+  }
 
   // 注入 Agent 流式回调，让 delegate_task 能把 Agent 执行过程"开窗"到主对话
   const { setAgentStreamHandler } = await import('./tools/agent')
