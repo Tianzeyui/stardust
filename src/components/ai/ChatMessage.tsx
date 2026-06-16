@@ -722,7 +722,7 @@ export function TerminalBubble({ ts, onConfirm, onReject }: {
           )}
 
           {/* 交互输入（PTY 模式） */}
-          {ts.status === 'running' && ts.stdout && (
+          {ts.status === 'running' && (
             <PtyInput terminalId={ts.id} />
           )}
         </div>
