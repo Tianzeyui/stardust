@@ -42,7 +42,7 @@ export function AgentTab() {
       <fieldset className="rounded-lg border border-border p-4">
         <legend className="px-2 text-sm font-semibold">上下文压缩</legend>
         <div className="grid grid-cols-2 gap-3">
-          <div><Label className="text-xs">上下文窗口</Label><p className="text-[10px] text-muted-foreground/50 mb-1">模型有数据时自动覆盖</p><div className="flex items-center gap-1"><Input type="number" min={4096} step={1024} value={ctxWindow} onChange={e => { const v = parseInt(e.target.value) || DEFAULT_CTX_WINDOW; setCtxWindow(v); saveCtxWindow(v) }} className="h-8 w-24 text-center text-sm" /><span className="text-xs text-muted-foreground">tok</span></div></div>
+          <div><Label className="text-xs">上下文窗口</Label><p className="text-[10px] text-muted-foreground/50 mb-1">兜底值：模型列表中有contextWindow字段时优先用它，否则用此值</p><div className="flex items-center gap-1"><Input type="number" min={4096} step={1024} value={ctxWindow} onChange={e => { const v = parseInt(e.target.value) || DEFAULT_CTX_WINDOW; setCtxWindow(v); saveCtxWindow(v) }} className="h-8 w-24 text-center text-sm" /><span className="text-xs text-muted-foreground">tok</span></div></div>
           <div><Label className="text-xs">压缩阈值</Label><p className="text-[10px] text-muted-foreground/50 mb-1">达到上限的%时触发</p><div className="flex items-center gap-1"><Input type="number" min={30} max={95} value={compressThreshold} onChange={e => { const v = parseInt(e.target.value); if (v >= 30 && v <= 95) { setCompressThreshold(v); saveCompressThreshold(v) } }} className="h-8 w-20 text-center text-sm" /><span className="text-xs text-muted-foreground">%</span></div></div>
         </div>
       </fieldset>
