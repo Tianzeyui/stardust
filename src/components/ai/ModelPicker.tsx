@@ -1,22 +1,26 @@
 import type { AIModelConfig } from '@/lib/config'
 
+type PromptMode = 'code' | 'chat'
+
 interface ModelPickerProps {
   show: boolean
   autoMode: boolean
+  promptMode: PromptMode
   activeModel: AIModelConfig | null
   configuredModels: AIModelConfig[]
   onToggleAuto: () => void
+  onTogglePromptMode: () => void
   onSelectCloud: (model: AIModelConfig) => void
   onClose: () => void
   pickerRef: React.Ref<HTMLDivElement>
   routeLabel?: string
-  autoModelId?: string // Auto模式下的目标模型ID
+  autoModelId?: string
 }
 
 export function ModelPicker({
-  show, autoMode, activeModel,
+  show, autoMode, promptMode, activeModel,
   configuredModels,
-  onToggleAuto, onSelectCloud, onClose,
+  onToggleAuto, onTogglePromptMode, onSelectCloud, onClose,
   pickerRef, routeLabel, autoModelId,
 }: ModelPickerProps) {
   if (!show) return null
@@ -24,7 +28,7 @@ export function ModelPicker({
   return (
     <div ref={pickerRef} className="absolute left-0 bottom-full z-50 mb-1 w-72 rounded-lg border border-border bg-card shadow-lg">
       <div
-        className="flex items-center justify-between px-3 py-2 border-b border-border cursor-pointer hover:bg-muted/50 rounded-t-lg"
+        className="flex items-center justify-between px-3 py-2 border-b border-border cursor-pointer hover:bg-muted/50"
         onClick={onToggleAuto}
       >
         <span className="text-xs">Auto 自动调配</span>
@@ -36,6 +40,16 @@ export function ModelPicker({
             <span className={`inline-block h-3 w-3 rounded-full bg-white transition-transform ${autoMode ? 'translate-x-3' : 'translate-x-0.5'}`} />
           </span>
         </div>
+      </div>
+
+      <div
+        className="flex items-center justify-between px-3 py-2 border-b border-border cursor-pointer hover:bg-muted/50"
+        onClick={onTogglePromptMode}
+      >
+        <span className="text-xs">模式: {promptMode === 'code' ? '编码' : '对话'}</span>
+        <span className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${promptMode === 'code' ? 'bg-primary' : 'bg-muted'}`}>
+          <span className={`inline-block h-3 w-3 rounded-full bg-white transition-transform ${promptMode === 'code' ? 'translate-x-3' : 'translate-x-0.5'}`} />
+        </span>
       </div>
 
       <div className="max-h-64 overflow-auto p-1">

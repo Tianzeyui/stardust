@@ -75,6 +75,7 @@ export function ChatPage() {
   })()
   const [showModelPicker, setShowModelPicker] = useState(false)
   const [autoMode, setAutoMode] = useState(true)
+  const [promptMode, setPromptMode] = useState<'code' | 'chat'>('code')
   const [routeScore, setRouteScore] = useState(0)
   const [routeModel, setRouteModel] = useState('')
   const [outputFiles, setOutputFiles] = useState<Array<{ name: string; path: string; size: number }>>([])
@@ -942,6 +943,7 @@ export function ChatPage() {
       }, {
         abortSignal: controller.signal,
         autoMode,
+        promptMode,
         modelOverride: usedModel !== activeModel ? { provider: usedModel.name, modelId: usedModel.selectedModel } : undefined,
         forceCompression: forceCompressRef.current ? true : undefined,
         selectedTools: selectedMCPTools,
@@ -1135,10 +1137,11 @@ export function ChatPage() {
               <span className={`max-w-[60px] truncate ${autoMode ? 'text-primary/60' : ''}`}>{autoMode ? 'Auto' : activeModel?.displayName || '模型'}</span>
             </button>
             <ModelPicker
-              show={showModelPicker} autoMode={autoMode}
+              show={showModelPicker} autoMode={autoMode} promptMode={promptMode}
               activeModel={activeModel}
               configuredModels={configuredModels}
               onToggleAuto={() => setAutoMode(!autoMode)}
+              onTogglePromptMode={() => setPromptMode(m => m === 'code' ? 'chat' : 'code')}
               onSelectCloud={(m) => { setActiveModel(m); setShowModelPicker(false) }}
               onClose={() => setShowModelPicker(false)} pickerRef={pickerRef}
               routeLabel={(() => {
