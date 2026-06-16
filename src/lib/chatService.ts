@@ -319,7 +319,7 @@ export async function chat(
         rulesParts.push(`[项目规则 (rules.md)]\n${rootRules.content}`)
       }
     }
-  }
+  } catch {}
   // rules.md 内容作为 projectInstructions，注入为 user message（不进 system prompt）
   const projectInstructions = rulesParts.length > 0 ? rulesParts.join('\n') : undefined
 
