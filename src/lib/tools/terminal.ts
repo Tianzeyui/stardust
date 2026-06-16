@@ -42,7 +42,10 @@ export function registerTerminalTool(tools: ToolMap) {
       try { if (permApi) alreadyAllowed = await permApi.check(_termWorkspaceRoot, 'terminal', cmdPattern) } catch {}
 
       let confirmed = alreadyAllowed
-      if (!alreadyAllowed) {
+      if (alreadyAllowed) {
+        // 已授权也发 created 事件，否则 UI 没有终端气泡
+        notifyUI({ type: 'terminal_created', terminal: { ...term } })
+      } else {
         notifyUI({ type: 'terminal_created', terminal: { ...term } })
         confirmed = await new Promise<boolean>((resolve) => {
           setResolver(id, async (ok, persist) => {
