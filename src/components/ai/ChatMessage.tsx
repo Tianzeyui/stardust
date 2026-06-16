@@ -78,7 +78,7 @@ function ChatMessageInner({ msg }: ChatMessageProps) {
   }
 
   if (msg.role === 'tool' && msg.toolCall) {
-    if (msg.toolCall.name === 'run_terminal') return null
+    if (msg.toolCall.name === 'run_terminal' || msg.toolCall.name === 'run_terminal_input') return null
     return msg.parentAgent ? (
       <div className="ml-4 border-l-2 border-primary/20 pl-3 my-1">
         <ToolBubble tc={msg.toolCall} />

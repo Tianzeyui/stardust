@@ -23,7 +23,7 @@ export function registerTerminalTool(tools: ToolMap) {
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
-        command: { type: 'string', description: '要执行的 shell 命令。交互式程序(npm init/python REPL等)用 interactive=true' },
+        command: { type: 'string', description: '要执行的 shell 命令。需要用户参与输入的程序(npm init/python REPL/ssh等)用 interactive=true。交互模式下不要调用 run_terminal_input，用户自己在终端输入。' },
         cwd: { type: 'string', description: '工作目录。默认项目根目录' },
         mode: { type: 'string', description: 'sync=等待完成, async=后台执行, interactive=PTY交互。默认sync' },
         input: { type: 'string', description: '交互模式下发送给进程的输入（仅 interactive=true 时有效）' },
