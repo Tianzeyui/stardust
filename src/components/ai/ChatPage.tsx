@@ -1127,12 +1127,12 @@ export function ChatPage() {
         <div className="flex items-center gap-1 px-2 pb-1.5">
           <div className="relative shrink-0">
             <button
-              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground/60 hover:bg-muted hover:text-muted-foreground transition-colors"
-              onClick={() => setShowModelPicker(!showModelPicker)}
-              title={activeModel ? `${activeModel.displayName} / ${activeModel.selectedModel}` : '选择模型'}
+              className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] transition-colors ${autoMode ? 'text-muted-foreground/30 cursor-default' : 'text-muted-foreground/60 hover:bg-muted hover:text-muted-foreground'}`}
+              onClick={() => !autoMode && setShowModelPicker(!showModelPicker)}
+              title={autoMode ? 'Auto 模式下自动调配' : activeModel ? `${activeModel.displayName} / ${activeModel.selectedModel}` : '选择模型'}
             >
               <Bot className="h-3 w-3" />
-              <span className="max-w-[60px] truncate">{activeModel?.displayName || '模型'}</span>
+              <span className="max-w-[60px] truncate">{autoMode ? 'Auto' : activeModel?.displayName || '模型'}</span>
             </button>
             <ModelPicker
               show={showModelPicker} autoMode={autoMode}
@@ -1143,11 +1143,20 @@ export function ChatPage() {
               onClose={() => setShowModelPicker(false)} pickerRef={pickerRef}
             />
           </div>
-          {autoMode && routeScore > 0 && (
-            <span className="text-[9px] text-muted-foreground/50 shrink-0 ml-0.5" title={`复杂度 ${routeScore}`}>
-              {routeModel === 'fast' ? 'Fast' : routeModel === 'powerful' ? 'Pro' : 'Std'} {routeScore}
-            </span>
-          )}
+          {autoMode && (() => {
+            // 实时评分预览
+            let s = 0
+            if (input.length > 200) s += 2; else if (input.length > 80) s += 1
+            const rt = messages.filter(m => m.role === 'tool').length
+            if (rt > 5) s += 3; else if (rt > 2) s += 2; else if (rt > 0) s += 1
+            if (currentProjectId) s += 1
+            const t: string = s >= 5 ? 'Pro' : s >= 3 ? 'Std' : 'Fast'
+            return (
+              <span className="text-[9px] text-muted-foreground/40 shrink-0 ml-0.5" title={`复杂度 ${s}→${t}`}>
+                {t} {s}
+              </span>
+            )
+          })()}
           <MemoryPopup
             manager={memoryManager}
             enabled={sessionMemoryEnabled}
