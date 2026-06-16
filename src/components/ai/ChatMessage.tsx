@@ -503,10 +503,14 @@ function FileOpBubble({ fo }: { fo: FileOpRequest }) {
           </div>
 
           {fo.status === 'pending_confirm' && (
-            <div className="flex items-center gap-2 mt-2">
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
               <button className="flex items-center gap-1 rounded bg-primary px-2.5 py-1 text-[10px] text-primary-foreground hover:bg-primary/90 transition-colors"
                 onClick={async () => { const { confirmFileOp } = await import('@/lib/fileOpManager'); confirmFileOp(fo.id) }}>
-                <Check className="h-3 w-3" />确认
+                <Check className="h-3 w-3" />允许本次
+              </button>
+              <button className="flex items-center gap-1 rounded bg-primary/80 px-2.5 py-1 text-[10px] text-primary-foreground hover:bg-primary/70 transition-colors"
+                onClick={async () => { const { confirmFileOp } = await import('@/lib/fileOpManager'); confirmFileOp(fo.id, true) }}>
+                <Check className="h-3 w-3" />总是允许
               </button>
               <button className="flex items-center gap-1 rounded bg-muted px-2.5 py-1 text-[10px] text-muted-foreground hover:bg-muted/80 transition-colors"
                 onClick={async () => { const { rejectFileOp } = await import('@/lib/fileOpManager'); rejectFileOp(fo.id) }}>

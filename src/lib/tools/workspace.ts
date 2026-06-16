@@ -30,10 +30,22 @@ function notifyUI(event: any) {
 
 /** 确认流程：工作区外操作需用户确认。返回 { confirmed, id }，调用方用 id 更新状态 */
 async function confirmOutside(opType: 'write' | 'delete', absPath: string, content?: string): Promise<{ confirmed: boolean; id: string }> {
+  // 权限预检
+  const permType = opType === 'write' ? 'file_write' : 'file_delete'
+  try {
+    const already = await (window as any).electronAPI?.perm?.check(getRoot(), permType, absPath)
+    if (already) return { confirmed: true, id: 'perm_' + Date.now() }
+  } catch {}
+
   const id = 'fop_' + Math.random().toString(36).slice(2, 8)
   const op = createFileOp(id, opType, absPath, content)
   notifyUI({ type: 'fileop_created', fileOp: { ...op } })
-  const confirmed = await new Promise<boolean>(resolve => { setFileOpResolver(id, resolve) })
+  const confirmed = await new Promise<boolean>(resolve => {
+    setFileOpResolver(id, async (ok, persist) => {
+      if (persist) try { await (window as any).electronAPI?.perm?.grant(getRoot(), permType, absPath) } catch {}
+      resolve(ok)
+    })
+  })
   if (!confirmed) {
     updateFileOp(id, { status: 'rejected' })
     notifyUI({ type: 'fileop_updated', fileOp: { ...getFileOp(id)! } })

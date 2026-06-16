@@ -12,7 +12,7 @@ export interface FileOpRequest {
 }
 
 const ops = new Map<string, FileOpRequest>()
-const resolvers = new Map<string, (confirmed: boolean) => void>()
+const resolvers = new Map<string, (confirmed: boolean, persist?: boolean) => void>()
 
 export function createFileOp(id: string, type: 'write' | 'delete', path: string, content?: string): FileOpRequest {
   const op: FileOpRequest = { id, type, path, content, status: 'pending_confirm' }
@@ -29,8 +29,8 @@ export function setFileOpResolver(id: string, resolve: (c: boolean) => void): vo
   resolvers.set(id, resolve)
 }
 
-export function confirmFileOp(id: string): void {
-  resolvers.get(id)?.(true); resolvers.delete(id)
+export function confirmFileOp(id: string, persist?: boolean): void {
+  resolvers.get(id)?.(true, persist); resolvers.delete(id)
 }
 
 export function rejectFileOp(id: string): void {
