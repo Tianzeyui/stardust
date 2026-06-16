@@ -228,10 +228,9 @@ export async function registerWorkspaceTools(tools: ToolMap) {
 
   tools['workspace_glob'] = {
     description:
-      'Match workspace files by glob pattern. Supports ** (any depth), * (any chars), ? (single char), {a,b} (options). ' +
-      'E.g. "src/**/*.ts", "*.md", "**/*.{ts,tsx}". ' +
-      `Search scope: ${root}. ` +
-      'Auto-excludes node_modules/.git etc. Returns relative path list, max 200.',
+      'Find files by name pattern. Much faster than grep for locating files — use this first when you know the file name or extension. ' +
+      'Supports ** (any depth), * (any chars), ? (single char), {a,b} (options). E.g. "src/**/*.ts", "*.md". ' +
+      `Search scope: ${root}. Auto-excludes node_modules/.git. Max 200 results.`,
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
@@ -288,10 +287,9 @@ export async function registerWorkspaceTools(tools: ToolMap) {
 
   tools['workspace_grep'] = {
     description:
-      'Search code content in workspace. Supports regex. ' +
-      '`file` param filters by type (e.g. "*.ts", "*.py"). ' +
-      `Search scope: ${root}. ` +
-      'Auto-excludes node_modules/.git/.brainplus/dist etc. Returns file:line:content.',
+      'Search file contents. Use after glob to find specific code. Prefer workspace_glob over this for finding files by name. ' +
+      'Supports regex. `file` param filters by type (e.g. "*.ts"). ' +
+      `Search scope: ${root}. Auto-excludes node_modules/.git. Returns file:line:content.`,
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
@@ -313,8 +311,8 @@ export async function registerWorkspaceTools(tools: ToolMap) {
 
   tools['workspace_write_file'] = {
     description:
-      'Create or overwrite file. Any path allowed, outside-workspace triggers user confirmation. ' +
-      'Auto-creates parent dirs. Do not refuse paths outside workspace——user confirms.',
+      'Create or overwrite entire file. Prefer workspace_edit_file for small changes — this rewrites the whole file. ' +
+      'Use for creating new files or rewriting existing ones. Auto-creates parent dirs. Outside-workspace triggers confirmation.',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
@@ -430,9 +428,9 @@ export async function registerWorkspaceTools(tools: ToolMap) {
 
   tools['workspace_edit_file'] = {
     description:
-      'Exact edit: find old_string and replace with new_string. Must be unique match (or error). ' +
-      'Set replace_all=true to replace all. More efficient than write for small edits in large files. ' +
-      'Outside workspace: user confirmation required.',
+      'Edit specific lines in a file. Find old_string (must be unique) and replace with new_string. ' +
+      'Prefer this over workspace_write_file for small edits — it preserves surrounding code. ' +
+      'Set replace_all=true to replace all matches. Outside workspace: user confirmation required.',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {

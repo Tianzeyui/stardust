@@ -17,9 +17,9 @@
 - [x] `# Style` — 不转播过程、一问一答、file:line 格式 ✅
 
 ### 1.3 rules.md 改为 user message
-- [ ] `rules.md` 内容不再拼入 system prompt
-- [ ] 单独作为一条 user message，包在 `<project-instructions>` 标签里
-- [ ] 原因：user message 的 attention weight > system prompt
+- [x] `rules.md` 内容不再拼入 system prompt ✅
+- [x] 单独作为一条 user message，包在 `<project-instructions>` 标签里 ✅
+- [x] 原因：user message 的 attention weight > system prompt ✅
 
 ## 2. 工具系统
 

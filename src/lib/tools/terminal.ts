@@ -19,7 +19,7 @@ export function registerTerminalTool(tools: ToolMap) {
   if (!getTerminalEnabled()) return
 
   tools['run_terminal'] = {
-    description: 'Execute shell command. mode="sync"=wait for completion(default); "async"=run in background; "interactive"=spawn interactive terminal for USER to type——AI do NOT call run_terminal_input.',
+    description: 'Execute a shell command. Use for: package installs, build commands, test runners, git operations. NOT for file search — use workspace_glob/workspace_grep instead. mode="sync"=wait(default); "async"=background; "interactive"=user types directly.',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
