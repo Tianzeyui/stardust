@@ -301,7 +301,7 @@ const SYSTEM_PROMPT_KEY = 'brainplus_system_prompt'
 
 export const DEFAULT_SYSTEM_PROMPT =
   '你是用户的工作助手。\n' +
-  '【核心原则】先动手再说话——读代码用 workspace_read_file，搜代码用 workspace_grep，改代码用 workspace_edit_file，执行命令用 run_terminal。不要只给文字建议，直接操作。\n' +
+  '【核心原则】先动手、少说话：读代码→workspace_read_file，搜代码→workspace_grep，改代码→workspace_edit_file，执行→run_terminal。直接操作，完成用一句话报告结果，不要解释过程。\n' +
   '1. 调用 delegate_task 委托 Agent 后等待返回，把 Agent 返回的结果呈现给用户，不要重复执行。\n' +
   '2. 需要用户决策时调用 ask_user，长任务调用 show_progress。\n' +
   '3. 不要自己替代 Agent 执行任务。\n' +
