@@ -19,7 +19,7 @@ import { ConversationBar, type ConvInfo } from './ConversationBar'
 import { SkillPicker } from './SkillPicker'
 import { MCPToolPicker } from './MCPToolPicker'
 import type { DisclosureResult } from '@/lib/toolDisclosure'
-import { getDisclosureThreshold, saveDisclosureThreshold } from '@/lib/config'
+import { getDisclosureThreshold, saveDisclosureThreshold, getCtxWindow } from '@/lib/config'
 import { MemoryManager } from '@/lib/memory/manager'
 import { createLocalMemoryStore } from '@/lib/memory/store-local'
 import { createSupabaseMemoryStore } from '@/lib/memory/store-supabase'
@@ -1044,7 +1044,7 @@ export function ChatPage() {
   const contextWindowLimit =
     compressionInfo?.limit
     || activeModel?.availableModels?.find(m => m.id === activeModel.selectedModel)?.contextWindow
-    || 8192
+    || getCtxWindow()
 
   const compressingRef = useRef(false)
 
