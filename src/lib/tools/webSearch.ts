@@ -55,21 +55,44 @@ async function searchAll(query: string): Promise<SearchResult[]> {
 
 export function registerWebSearchTool(tools: ToolMap) {
   tools['web_search'] = {
-    description: 'Search the web. Uses Google→Brave→Bing→DuckDuckGo fallback. Returns title, URL and snippet for each result. Max 10 results.',
+    description: 'Search the web (Google→Brave→Bing→DDG fallback). Set fetch=true to auto-fetch and summarize top results. Returns title, URL and snippet.',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
         query: { type: 'string', description: 'Search query' },
-        count: { type: 'number', description: 'Max results, default 5' },
+        count: { type: 'number', description: 'Max results, default from settings (usually 5)' },
+        fetch: { type: 'boolean', description: 'Auto-fetch and summarize top 3 results (saves manual web_fetch calls)' },
       },
       required: ['query'],
     }),
-    execute: async ({ query, count }: { query: string; count?: number }) => {
+    execute: async ({ query, count, fetch: doFetch }: { query: string; count?: number; fetch?: boolean }) => {
       const { getSearchCount } = await import('@/lib/config')
       const results = await searchAll(query)
       if (results.length === 0) return 'No results found. Try a different query.'
       const max = Math.min(count || getSearchCount(), results.length)
-      return results.slice(0, max).map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet}`).join('\n\n')
+      const list = results.slice(0, max).map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet}`).join('\n\n')
+
+      if (!doFetch) return list
+
+      // Auto-fetch top 3
+      const top3 = results.slice(0, 3)
+      let summaries = ''
+      for (const r of top3) {
+        try {
+          const api = (window as any).electronAPI?.http
+          const res = api ? await api.fetch(r.url, { timeout: 10000 }) : null
+          if (res?.success) {
+            const text = (res.data || '').replace(/<[^>]+>/g, '').slice(0, 3000)
+            const { delegateToModel } = await import('../chatService')
+            const { result: sum } = await delegateToModel('fast',
+              `Summarize this page in 2-3 sentences focusing on the query "${query}":\n\n${text}`,
+              'Be concise. Return only the summary.'
+            )
+            summaries += `\n\n📄 ${r.title}: ${sum || text.slice(0, 200) + '...'}`
+          }
+        } catch { summaries += `\n\n📄 ${r.title}: (fetch failed)` }
+      }
+      return list + `\n\n--- Auto-summaries ---${summaries}`
     },
   }
 }
