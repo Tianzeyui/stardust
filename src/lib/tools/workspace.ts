@@ -202,7 +202,7 @@ export async function registerWorkspaceTools(tools: ToolMap) {
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
-        query: { type: 'string', description: "Search keyword or wildcard, e.g. "*.pptx""' },
+        query: { type: 'string', description: 'Search keyword or wildcard, e.g. *.pptx' },
         path: { type: 'string', description: 'Search start path, default workspace root' },
       },
       required: ['query'],
