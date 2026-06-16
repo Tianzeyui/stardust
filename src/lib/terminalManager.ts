@@ -4,7 +4,7 @@
 import type { TerminalStatus } from '@/types/chat'
 
 const processes = new Map<string, TerminalStatus>()
-const resolvers = new Map<string, (confirmed: boolean) => void>()
+const resolvers = new Map<string, (confirmed: boolean, persist?: boolean) => void>()
 
 export function createTerminal(id: string, command: string, cwd?: string, isAsync?: boolean): TerminalStatus {
   const status: TerminalStatus = {
@@ -34,8 +34,8 @@ export function setResolver(id: string, resolve: (confirmed: boolean) => void): 
   resolvers.set(id, resolve)
 }
 
-export function confirm(id: string): void {
-  resolvers.get(id)?.(true)
+export function confirm(id: string, persist?: boolean): void {
+  resolvers.get(id)?.(true, persist)
   resolvers.delete(id)
 }
 

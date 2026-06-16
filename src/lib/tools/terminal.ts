@@ -8,6 +8,9 @@ import { getTerminalEnabled } from '@/lib/config'
 import { createTerminal, updateTerminal, getTerminal, setResolver } from '@/lib/terminalManager'
 import { getTerminalUIHandler } from '@/lib/chatService'
 
+let _termWorkspaceRoot = ''
+export function setTermWorkspaceRoot(root: string) { _termWorkspaceRoot = root }
+
 function notifyUI(event: any) {
   getTerminalUIHandler()?.(event)
 }
@@ -31,17 +34,36 @@ export function registerTerminalTool(tools: ToolMap) {
       const isAsync = mode === 'async'
       const term = createTerminal(id, command, cwd || undefined, isAsync)
 
-      notifyUI({ type: 'terminal_created', terminal: { ...term } })
+      // 权限预检：已授权则跳过确认
+      let alreadyAllowed = false
+      try {
+        const { isAllowed, terminalPattern } = await import('@/lib/permissionStore')
+        if (isAllowed(_termWorkspaceRoot, 'terminal', terminalPattern(command))) {
+          alreadyAllowed = true
+        }
+      } catch {}
 
-      const confirmed = await new Promise<boolean>((resolve) => {
-        setResolver(id, resolve)
-        notifyUI({ type: 'terminal_confirm', terminal: { ...term } })
-      })
+      let confirmed = alreadyAllowed
+      if (!alreadyAllowed) {
+        notifyUI({ type: 'terminal_created', terminal: { ...term } })
+        confirmed = await new Promise<boolean>((resolve) => {
+          setResolver(id, (ok, persist) => {
+            if (persist) {
+              try {
+                const { grantPermission, terminalPattern } = await import('@/lib/permissionStore')
+                grantPermission(_termWorkspaceRoot, { type: 'terminal', pattern: terminalPattern(command) })
+              } catch {}
+            }
+            resolve(ok)
+          })
+          notifyUI({ type: 'terminal_confirm', terminal: { ...term } })
+        })
 
-      if (!confirmed) {
-        updateTerminal(id, { status: 'cancelled', endTime: Date.now() })
-        notifyUI({ type: 'terminal_updated', terminal: { ...getTerminal(id)! } })
-        return `命令已被用户取消。`
+        if (!confirmed) {
+          updateTerminal(id, { status: 'cancelled', endTime: Date.now() })
+          notifyUI({ type: 'terminal_updated', terminal: { ...getTerminal(id)! } })
+          return `命令已被用户取消。`
+        }
       }
 
       updateTerminal(id, { status: 'running' })

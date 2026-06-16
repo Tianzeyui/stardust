@@ -30,6 +30,7 @@ import { pluginSystem } from '@/lib/pluginSystem'
 import { setSandboxOutputDir } from '@/lib/tools/sandbox'
 import { setWorkspaceRoots } from '@/lib/tools/workspace'
 import { setGitWorkspaceRoot } from '@/lib/tools/git'
+import { setTermWorkspaceRoot } from '@/lib/tools/terminal'
 import { MemoryPopup } from './MemoryPopup'
 import { AgentPicker } from './AgentPicker'
 import { agentDisplayNames } from '@/lib/tools/agentRegistry'
@@ -306,7 +307,7 @@ export function ChatPage() {
 
   // 同步当前工作区到沙箱
   useEffect(() => { setSandboxOutputDir(workspace.output || undefined) }, [workspace.output])
-  useEffect(() => { setWorkspaceRoots(workspace.root, workspace.output); setGitWorkspaceRoot(workspace.root) }, [workspace.root, workspace.output])
+  useEffect(() => { setWorkspaceRoots(workspace.root, workspace.output); setGitWorkspaceRoot(workspace.root); setTermWorkspaceRoot(workspace.root) }, [workspace.root, workspace.output])
 
   // 展开选择器时刷新 + 外部点击关闭
   useEffect(() => {

@@ -48,9 +48,9 @@ function ChatMessageInner({ msg }: ChatMessageProps) {
     return (
       <TerminalBubble
         ts={msg.terminal}
-        onConfirm={async (id) => {
+        onConfirm={async (id, persist) => {
           const { confirm } = await import('@/lib/terminalManager')
-          confirm(id)
+          confirm(id, persist)
         }}
         onReject={async (id) => {
           const { reject } = await import('@/lib/terminalManager')
@@ -661,7 +661,7 @@ function ContentBlock({ source, style }: { source: string; style?: any }) {
 /** 终端命令气泡 */
 export function TerminalBubble({ ts, onConfirm, onReject }: {
   ts: TerminalStatus
-  onConfirm: (id: string) => void
+  onConfirm: (id: string, persist: boolean) => void
   onReject: (id: string) => void
 }) {
   const iconCls = ts.status === 'done' ? 'text-green-400'
@@ -694,8 +694,12 @@ export function TerminalBubble({ ts, onConfirm, onReject }: {
           {ts.status === 'pending_confirm' && (
             <div className="flex items-center gap-2 mt-2">
               <button className="flex items-center gap-1 rounded bg-green-700 px-2.5 py-1 text-[10px] text-green-100 hover:bg-green-600 transition-colors"
-                onClick={() => onConfirm(ts.id)}>
-                <Check className="h-3 w-3" />确认执行
+                onClick={() => onConfirm(ts.id, false)}>
+                <Check className="h-3 w-3" />允许本次
+              </button>
+              <button className="flex items-center gap-1 rounded bg-green-800 px-2.5 py-1 text-[10px] text-green-100 hover:bg-green-700 transition-colors"
+                onClick={() => onConfirm(ts.id, true)}>
+                <Check className="h-3 w-3" />总是允许
               </button>
               <button className="flex items-center gap-1 rounded bg-zinc-700 px-2.5 py-1 text-[10px] text-zinc-300 hover:bg-zinc-600 transition-colors"
                 onClick={() => onReject(ts.id)}>
