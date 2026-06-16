@@ -887,6 +887,7 @@ export function ChatPage() {
               modelName,
               inputTokens: t.inputTokens,
               outputTokens: t.outputTokens,
+              cachedTokens: t.cachedInputTokens,
               agentTokens: agentTotalTokensRef.current,
               toolCalls: t.toolCalls.length,
               duration: t.totalDuration,

@@ -522,6 +522,16 @@ export async function chat(
   }
 
   const turnTrace = trace.finish()
+  // 捕获真实 API usage（覆盖估算值）
+  try {
+    const usage = await result.usage
+    if (usage) {
+      turnTrace.inputTokens = (usage as any).inputTokens || (usage as any).promptTokens || turnTrace.inputTokens
+      turnTrace.outputTokens = (usage as any).outputTokens || (usage as any).completionTokens || turnTrace.outputTokens
+      const cached = (usage as any).cachedInputTokens || (usage as any).cacheReadInputTokens || 0
+      if (cached > 0) turnTrace.cachedInputTokens = cached
+    }
+  } catch {}
   onEvent?.({ type: 'done', trace: turnTrace })
   return fullText
 }

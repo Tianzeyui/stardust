@@ -9,9 +9,10 @@ export interface TraceRecord {
   modelName?: string
   inputTokens: number
   outputTokens: number
-  agentTokens: number  // 子Agent累计
+  cachedTokens?: number  // 缓存命中
+  agentTokens: number
   toolCalls: number
-  duration: number     // ms
+  duration: number
 }
 
 const KEY = 'brainplus_traces'

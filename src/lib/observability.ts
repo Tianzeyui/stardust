@@ -13,6 +13,7 @@ export interface TurnTrace {
   outputTokens: number
   totalDuration: number  // ms
   toolCalls: ToolCallRecord[]
+  cachedInputTokens?: number  // 缓存命中的 input token 数（API 报告）
 }
 
 /** 模型定价 ($/1M tokens) — 近似值 */
