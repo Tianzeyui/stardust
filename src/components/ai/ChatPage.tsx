@@ -740,13 +740,19 @@ export function ChatPage() {
             mainTimelineRef.current.push({ type: 'text', content: event.text || '' })
           }
           const tl = mainTimelineRef.current.map(t => ({ ...t }))
+          // 如果上一个消息是 tool batch，关闭它并开始新 assistant
+          const hadBatch = toolBatchRef.current.length > 0
+          toolBatchRef.current = []
           setMessages(prev => {
             const n = prev.map(m => ({ ...m }))
             const l = n[n.length - 1]
             if (l?.role === 'assistant' && l.streaming) {
               n[n.length - 1] = { ...l, content: streamed, thinking: thinkingRef.current, thinkingLoading: false, mainTimeline: tl }
+            } else if (l?.role === 'assistant') {
+              n[n.length - 1] = { ...l, streaming: false }
+              n.push({ role: 'assistant', content: streamed, streaming: true, modelName, thinking: thinkingRef.current, thinkingLoading: false, mainTimeline: tl })
             } else {
-              if (l?.role === 'assistant') n[n.length - 1] = { ...l, streaming: false }
+              // tool batch 后面：创建新的 assistant
               n.push({ role: 'assistant', content: streamed, streaming: true, modelName, thinking: thinkingRef.current, thinkingLoading: false, mainTimeline: tl })
             }
             return n
@@ -851,6 +857,7 @@ export function ChatPage() {
         } else if (event.type === 'done') {
           pushLog('DONE', `回复 (${streamed.length}字)`, streamed ? 'ok' : 'info')
           mainTimelineRef.current = []
+          toolBatchRef.current = []
           // AI 回复结束，未完成的任务自动标记为完成
           setTaskList(prev => prev.map(t => t.status === 'running' ? { ...t, status: 'done' } : t))
           if (event.trace) {
