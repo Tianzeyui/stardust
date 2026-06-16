@@ -1,4 +1,4 @@
-import { useState, useEffect, memo } from 'react'
+import { useState, useEffect, useRef, memo } from 'react'
 import { Check, X, Shield, ShieldCheck, Cable, BookOpen, MessageSquare, FileText, Image, Zap, FolderOpen, Loader2, ChevronDown, IdCard, ExternalLink, Brain, Terminal } from 'lucide-react'
 import MarkdownPreview from '@uiw/react-markdown-preview'
 import type { UIMessage, ToolCallStatus, MessageAttachment, AgentToolCallEntry, AgentTimelineItem, TerminalStatus } from '@/types/chat'
@@ -720,8 +720,42 @@ export function TerminalBubble({ ts, onConfirm, onReject }: {
               {ts.stdout}{ts.stderr && `\n\x1b[31m${ts.stderr}\x1b[0m`}
             </pre>
           )}
+
+          {/* 交互输入（PTY 模式） */}
+          {ts.status === 'running' && ts.stdout && (
+            <PtyInput terminalId={ts.id} />
+          )}
         </div>
       </div>
+    </div>
+  )
+}
+
+/** PTY 交互输入框 */
+function PtyInput({ terminalId }: { terminalId: string }) {
+  const [val, setVal] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const send = () => {
+    if (!val) return
+    const api = (window as any).electronAPI?.terminal
+    api?.ptyWrite(terminalId, val + '\n')
+    setVal('')
+    inputRef.current?.focus()
+  }
+
+  return (
+    <div className="flex items-center gap-1 mt-1.5">
+      <span className="text-green-400 text-[10px] font-mono shrink-0">$</span>
+      <input
+        ref={inputRef}
+        className="flex-1 bg-transparent border-none outline-none text-zinc-200 font-mono text-[11px] py-0.5"
+        value={val}
+        onChange={e => setVal(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') send() }}
+        placeholder="输入并回车发送..."
+        autoFocus
+      />
     </div>
   )
 }
