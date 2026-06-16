@@ -241,6 +241,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('terminal:output', handler)
       return () => { ipcRenderer.removeListener('terminal:output', handler) }
     },
+    ptySpawn: (id: string, command: string, cwd: string) =>
+      ipcRenderer.invoke('terminal:ptySpawn', id, command, cwd),
+    ptyWrite: (id: string, data: string) =>
+      ipcRenderer.invoke('terminal:ptyWrite', id, data),
+    ptyResize: (id: string, cols: number, rows: number) =>
+      ipcRenderer.invoke('terminal:ptyResize', id, cols, rows),
+    onPtyOutput: (cb: (data: { id: string; data: string; done?: boolean; exitCode?: number }) => void) => {
+      const handler = (_event: any, data: any) => cb(data)
+      ipcRenderer.on('terminal:ptyOutput', handler)
+      return () => { ipcRenderer.removeListener('terminal:ptyOutput', handler) }
+    },
   },
 
   perm: {

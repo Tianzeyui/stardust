@@ -23,9 +23,10 @@ export function registerTerminalTool(tools: ToolMap) {
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
-        command: { type: 'string', description: '要执行的 shell 命令' },
+        command: { type: 'string', description: '要执行的 shell 命令。交互式程序(npm init/python REPL等)用 interactive=true' },
         cwd: { type: 'string', description: '工作目录。默认项目根目录' },
-        mode: { type: 'string', description: 'sync=等待完成, async=后台执行。默认sync' },
+        mode: { type: 'string', description: 'sync=等待完成, async=后台执行, interactive=PTY交互。默认sync' },
+        input: { type: 'string', description: '交互模式下发送给进程的输入（仅 interactive=true 时有效）' },
       },
       required: ['command'],
     }),
@@ -65,6 +66,33 @@ export function registerTerminalTool(tools: ToolMap) {
         updateTerminal(id, { status: 'error', stderr: '终端 API 不可用', endTime: Date.now() })
         notifyUI({ type: 'terminal_updated', terminal: { ...getTerminal(id)! } })
         return '终端命令仅在桌面版本可用。'
+      }
+
+      // 交互模式（PTY）
+      if (mode === 'interactive') {
+        const result = await api.ptySpawn(id, command, cwd || '')
+        if (!result.success) {
+          updateTerminal(id, { status: 'error', stderr: result.error || 'PTY启动失败', endTime: Date.now() })
+          notifyUI({ type: 'terminal_updated', terminal: { ...getTerminal(id)! } })
+          return `交互终端启动失败: ${result.error}`
+        }
+        updateTerminal(id, { status: 'running' })
+        notifyUI({ type: 'terminal_updated', terminal: { ...getTerminal(id)! } })
+        const unsub = api.onPtyOutput?.((data: any) => {
+          if (data.id !== id) return
+          const t = getTerminal(id)
+          if (t) {
+            updateTerminal(id, {
+              stdout: (t.stdout || '') + data.data,
+              status: data.done ? (data.exitCode === 0 ? 'done' : 'error') : 'running',
+              exitCode: data.exitCode,
+              endTime: data.done ? Date.now() : undefined,
+            })
+            notifyUI({ type: 'terminal_updated', terminal: { ...getTerminal(id)! } })
+            if (data.done) unsub?.()
+          }
+        })
+        return `交互终端已启动 (terminal_id: ${id})。用 run_terminal_input("${id}", "你的输入") 发送输入。`
       }
 
       if (isAsync) {
@@ -127,6 +155,24 @@ export function registerTerminalTool(tools: ToolMap) {
         }
       }
       return `未找到终端 ${terminal_id}。`
+    },
+  }
+
+  tools['run_terminal_input'] = {
+    description: '向交互式终端发送输入。terminal_id 是 run_terminal(interactive=true) 返回的 ID。',
+    inputSchema: jsonSchema({
+      type: 'object',
+      properties: {
+        terminal_id: { type: 'string', description: '交互终端的 ID' },
+        input: { type: 'string', description: '要发送的文本，自动追加换行' },
+      },
+      required: ['terminal_id', 'input'],
+    }),
+    execute: async ({ terminal_id, input }: { terminal_id: string; input: string }) => {
+      const api = (window as any).electronAPI?.terminal
+      if (!api?.ptyWrite) return 'PTY API 不可用'
+      await api.ptyWrite(terminal_id, input + '\n')
+      return `✅ 已发送 "${input}" 到终端 ${terminal_id}`
     },
   }
 }

@@ -1126,7 +1126,57 @@ ipcMain.handle('perm:grant', async (_event, workspaceRoot: string, type: string,
 ipcMain.handle('terminal:kill', async (_event, id: string) => {
   const p = terminalProcesses.get(id)
   if (p && !p.done) { p.child.kill(); p.done = true }
+  // 也 kill PTY 进程
+  const pty = ptyProcesses.get(id)
+  if (pty) { pty.kill(); ptyProcesses.delete(id) }
   return { success: true }
+})
+
+// ====== PTY 终端（交互式） ======
+import { spawn as spawnPty } from 'node-pty'
+
+const ptyProcesses = new Map<string, any>()
+
+ipcMain.handle('terminal:ptySpawn', async (_event, id: string, command: string, cwd: string) => {
+  try {
+    const shell = process.platform === 'win32' ? 'powershell.exe' : process.env.SHELL || '/bin/bash'
+    const shellArgs = process.platform === 'win32' ? ['-Command', command] : ['-c', command]
+    const workDir = cwd || app.getPath('home')
+
+    const pty = spawnPty(shell, shellArgs, {
+      cwd: workDir,
+      env: process.env as any,
+      cols: 120,
+      rows: 30,
+    })
+
+    ptyProcesses.set(id, pty)
+
+    pty.onData((data: string) => {
+      mainWindow?.webContents.send('terminal:ptyOutput', { id, data })
+    })
+
+    pty.onExit(({ exitCode }: { exitCode: number }) => {
+      mainWindow?.webContents.send('terminal:ptyOutput', { id, data: `\n\x1b[33m[进程退出，exit code: ${exitCode}]\x1b[0m\n`, done: true, exitCode })
+      ptyProcesses.delete(id)
+    })
+
+    return { success: true }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+ipcMain.handle('terminal:ptyWrite', async (_event, id: string, data: string) => {
+  const pty = ptyProcesses.get(id)
+  if (!pty) return { success: false, error: '进程不存在' }
+  pty.write(data)
+  return { success: true }
+})
+
+ipcMain.handle('terminal:ptyResize', async (_event, id: string, cols: number, rows: number) => {
+  const pty = ptyProcesses.get(id)
+  if (pty) pty.resize(cols, rows)
 })
 
 // ====== Git 命令执行 ======
