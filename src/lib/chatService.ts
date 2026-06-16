@@ -141,7 +141,7 @@ export async function delegateToModel(
   try {
     const result = await generateText({
       model: provider(modelId),
-      system: systemContext || '你是编程 Agent。用工具直接操作，做完一句话报告。',
+      system: systemContext || 'You are a coding agent. Use tools directly. Report in one sentence.',
       prompt: task,
     })
     return { modelName: `${enabled.displayName} / ${modelId}`, result: result.text }

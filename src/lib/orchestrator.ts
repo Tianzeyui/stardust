@@ -63,7 +63,7 @@ export async function delegateToAgent(
     ? '\n能力:\n' + agent.skills.map(s => `- ${s.name}: ${s.description}`).join('\n')
     : ''
   const systemPrompt = agent.systemPrompt
-    || `你是"${agent.name}"，一个编程 Agent。${agent.description}${skillDesc}\n\n用工具直接操作代码，做完一句话报告，别解释过程。`
+    || `You are "${agent.name}", a coding agent. ${agent.description}${skillDesc}\n\nUse tools directly. Report in one sentence. Do not explain.`
   const messages: ModelMessage[] = [{ role: 'user', content: taskInput }]
   const toolCalls: string[] = []
 

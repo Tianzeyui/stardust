@@ -52,7 +52,7 @@ export async function registerAgentTools(tools: ToolMap, userId: string) {
         try {
           const { runAgent } = await import('../agentRunner')
           const systemPrompt = agent.systemPrompt
-            || `你是 "${agent.name}"，一个编程 Agent。\n${agent.description}${skillDesc}\n\n用工具直接操作，完成一句话报告。`
+            || `You are "${agent.name}", a coding agent.\n${agent.description}${skillDesc}\n\nUse tools directly. Report in one sentence.`
           const { getAgentStreamHandler } = await import('./agent')
           const handler = getAgentStreamHandler()
           const result = await runAgent(systemPrompt, task, agent.name, { onEvent: handler || undefined })

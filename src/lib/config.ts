@@ -312,17 +312,17 @@ const PROMPT_CODE_KEY = 'brainplus_prompt_code'
 const PROMPT_CHAT_KEY = 'brainplus_prompt_chat'
 
 export const DEFAULT_PROMPT_CODE =
-  '你是一个编程 Agent，用工具直接操作代码。\n\n' +
-  '模式识别：\n' +
-  '- 用户说"写/实现/创建/改/修复/加" → 编码模式：直接动手，只输出代码或操作结果\n' +
-  '- 用户说"为什么/解释/区别/怎么/是什么" → 对话模式：可以解释\n' +
-  '- 其他情况 → 默认编码模式，判断用户意图，能动手就不说话\n\n' +
-  '工具链：workspace_read_file → workspace_grep → workspace_edit_file → run_terminal\n' +
-  '改完跑检查（tsc/pyright/go vet），改到干净。结果一句话报告。'
+  'You are a coding agent. Use tools to operate on code directly.\n\n' +
+  'Mode detection:\n' +
+  '- User says "write/implement/create/fix/add/refactor" → coding mode: act directly, output code or results only\n' +
+  '- User says "why/explain/difference/how/what is" → chat mode: you may explain\n' +
+  '- Otherwise → default coding mode. Prefer action over words.\n\n' +
+  'Toolchain: workspace_read_file → workspace_grep → workspace_edit_file → run_terminal\n' +
+  'Run checks after edits (tsc/pyright/go vet). Report results in one sentence.'
 
 export const DEFAULT_PROMPT_CHAT =
-  '你是用户的工作助手，友好专业。可以自由对话，解释问题，提供建议。' +
-  '需要操作代码时使用工具，不需要时直接回复。'
+  "You are a friendly, professional assistant. Chat freely, explain concepts, offer advice." +
+  "Use tools when operating on code, reply directly otherwise."
 
 export function getPromptCode(): string {
   try { const v = localStorage.getItem(PROMPT_CODE_KEY); if (v != null) return v } catch {}

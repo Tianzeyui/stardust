@@ -15,8 +15,8 @@ const MIN_RECENT = 6
 const MAX_RECENT = 30
 
 const SUMMARY_SYSTEM_PROMPT =
-  '你是一个对话摘要器。用简洁语言总结以下内容的核心信息，保留关键决策、用户偏好和重要事实。不超过200字。\n\n' +
-  '如果输入中包含旧摘要，将新旧信息融合后输出一份新摘要。'
+  'You are a conversation summarizer. Summarize the core information below concisely. Retain key decisions, user preferences, and important facts. Under 200 chars.\n\n' +
+  'If input contains a previous summary, merge old and new into a single summary.'
 
 export interface CompressResult {
   messages: ModelMessage[]
