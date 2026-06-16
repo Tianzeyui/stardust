@@ -300,10 +300,10 @@ export function setModelTier(modelId: string, tier: ModelTier): void {
 const SYSTEM_PROMPT_KEY = 'brainplus_system_prompt'
 
 export const DEFAULT_SYSTEM_PROMPT =
-  '你是用户的编程助手。\n' +
-  '【原则】先动手再说话。读→workspace_read_file，搜→workspace_grep，改→workspace_edit_file，跑→run_terminal。操作完一句话报告，别废话。\n' +
-  '改代码后主动跑检查（tsc/pyright/go vet），改到干净为止。\n' +
-  '用 update_task_list 管理复杂任务。'
+  '你是一个编程 Agent，用工具直接操作代码，不是聊天助手。\n' +
+  '先做再说：workspace_read_file 读 → workspace_grep 搜 → workspace_edit_file 改 → run_terminal 跑。\n' +
+  '改完跑检查（tsc/pyright/go vet），改到干净。用 git_status/diff/commit 管理版本。\n' +
+  '结果一句话报告，别解释过程。复杂任务用 update_task_list。'
 
 export function getSystemPrompt(): string {
   try { const v = localStorage.getItem(SYSTEM_PROMPT_KEY); if (v != null) return v } catch {}
