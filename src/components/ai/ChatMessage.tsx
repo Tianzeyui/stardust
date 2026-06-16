@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, memo } from 'react'
-import { Check, X, Shield, ShieldCheck, Cable, BookOpen, MessageSquare, FileText, Image, Zap, FolderOpen, Loader2, ChevronDown, IdCard, ExternalLink, Brain, Terminal } from 'lucide-react'
+import { Check, X, Shield, ShieldCheck, Cable, BookOpen, MessageSquare, FileText, Image, Zap, FolderOpen, Loader2, ChevronDown, IdCard, ExternalLink, Brain, Terminal, Search, Globe } from 'lucide-react'
 import MarkdownPreview from '@uiw/react-markdown-preview'
 import type { UIMessage, ToolCallStatus, MessageAttachment, AgentToolCallEntry, AgentTimelineItem, TerminalStatus } from '@/types/chat'
 import { useAuth } from '@/contexts/AuthContext'
@@ -79,6 +79,9 @@ function ChatMessageInner({ msg }: ChatMessageProps) {
 
   if (msg.role === 'tool' && msg.toolCall) {
     if (msg.toolCall.name === 'run_terminal' || msg.toolCall.name === 'run_terminal_input') return null
+    // 搜索/抓取用自定义样式
+    if (msg.toolCall.name === 'web_search') return <SearchBubble tc={msg.toolCall} />
+    if (msg.toolCall.name === 'web_fetch') return <FetchBubble tc={msg.toolCall} />
     return msg.parentAgent ? (
       <div className="ml-4 border-l-2 border-primary/20 pl-3 my-1">
         <ToolBubble tc={msg.toolCall} />
@@ -661,6 +664,66 @@ function ContentBlock({ source, style }: { source: string; style?: any }) {
           : <MarkdownPreview key={i} source={stripHtml(b.content)} style={style} />
       )}
     </>
+  )
+}
+
+/** 搜索气泡 */
+function SearchBubble({ tc }: { tc: ToolCallStatus }) {
+  const query = typeof tc.input === 'object' && tc.input ? (tc.input as any).query || '' : ''
+  const [expanded, setExpanded] = useState(tc.status === 'running')
+  return (
+    <div className="flex gap-3 max-w-full">
+      <div className="min-w-0 flex-1">
+        <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs overflow-hidden">
+          <div className="flex items-center gap-2">
+            <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <span className="font-medium truncate">Search: {query}</span>
+            <span className="text-[10px] text-muted-foreground/50 shrink-0">{tc.status === 'done' ? 'Done' : tc.status}</span>
+          </div>
+          {tc.result && (
+            <>
+              <button className="flex items-center gap-1 mt-1.5 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                onClick={() => setExpanded(!expanded)}>
+                <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />{expanded ? 'Collapse' : `Results (${(tc.result.length / 1000).toFixed(1)}k)`}
+              </button>
+              {expanded && (
+                <div className="mt-1 max-h-48 overflow-auto rounded border border-border/50 p-2 text-[11px] whitespace-pre-wrap leading-relaxed text-muted-foreground">{tc.result}</div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** 抓取气泡 */
+function FetchBubble({ tc }: { tc: ToolCallStatus }) {
+  const url = typeof tc.input === 'object' && tc.input ? (tc.input as any).url || '' : ''
+  const [expanded, setExpanded] = useState(tc.status === 'running')
+  return (
+    <div className="flex gap-3 max-w-full">
+      <div className="min-w-0 flex-1">
+        <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs overflow-hidden">
+          <div className="flex items-center gap-2">
+            <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <span className="font-medium truncate">Fetch: {url}</span>
+            <span className="text-[10px] text-muted-foreground/50 shrink-0">{tc.status === 'done' ? 'Done' : tc.status}</span>
+          </div>
+          {tc.result && (
+            <>
+              <button className="flex items-center gap-1 mt-1.5 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                onClick={() => setExpanded(!expanded)}>
+                <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />{expanded ? 'Collapse' : `Content (${(tc.result.length / 1000).toFixed(1)}k)`}
+              </button>
+              {expanded && (
+                <div className="mt-1 max-h-48 overflow-auto rounded border border-border/50 p-2 text-[11px] whitespace-pre-wrap leading-relaxed text-muted-foreground">{tc.result}</div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
 
