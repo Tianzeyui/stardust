@@ -462,24 +462,32 @@ export async function chat(
     })
   }
 
-  // 项目 PROMPT.md + 记忆 注入 system prompt
-  let finalSystem = systemPrompt || ''
+  // 动静分离 system prompt（静态部分可缓存）
+  const staticPart = (systemPrompt || '') + (summary ? `\n\n[Conversation summary]\n${summary}` : '')
+  const dynamicPart = opts?.memoryInjection || ''
+
   if (opts?.memoryInjection) {
     console.log('[memory] 本轮注入记忆:\n' + opts.memoryInjection)
     onEvent?.({ type: 'system-log', text: `🧠 记忆注入:\n${opts.memoryInjection}` })
-    finalSystem = `${opts.memoryInjection}\n\n${finalSystem}`
   } else {
-    console.log('[memory] 本轮无记忆注入（记忆为空或未开启）')
     onEvent?.({ type: 'system-log', text: '🧠 无记忆（对话中提取后将在此显示）' })
   }
-  // 输出逐轮 system prompt 到控制台
-  onEvent?.({ type: 'system-log', text: `📋 系统提示词 (${finalSystem.length}字):\n${finalSystem.slice(0, 500)}${finalSystem.length > 500 ? '...(截断)' : ''}` })
-  if (summary) finalSystem = `${finalSystem}\n\n[对话历史摘要]\n${summary}`
-  finalSystem = finalSystem.trim()
+
+  // 动静分离：静态块可缓存，动态块每轮重算
+  const systemBlocks: Array<{ type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }> = []
+  if (staticPart.trim()) {
+    systemBlocks.push({ type: 'text', text: staticPart.trim(), cache_control: { type: 'ephemeral' } })
+  }
+  if (dynamicPart.trim()) {
+    systemBlocks.push({ type: 'text', text: dynamicPart.trim() })
+  }
+
+  const totalSystem = staticPart + (dynamicPart ? '\n\n' + dynamicPart : '')
+  onEvent?.({ type: 'system-log', text: `📋 系统提示词 (${totalSystem.length}字):\n${totalSystem.slice(0, 500)}${totalSystem.length > 500 ? '...(截断)' : ''}` })
 
   const result = streamText({
     model: model.instance,
-    system: finalSystem || undefined,
+    system: systemBlocks.length > 0 ? systemBlocks : undefined,
     messages: compressedMessages,
     tools: Object.keys(filteredTools).length > 0 ? filteredTools : undefined,
     stopWhen: stepCountIs(getAgentMaxSteps()),
