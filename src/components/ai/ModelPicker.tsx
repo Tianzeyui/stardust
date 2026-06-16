@@ -9,14 +9,15 @@ interface ModelPickerProps {
   onSelectCloud: (model: AIModelConfig) => void
   onClose: () => void
   pickerRef: React.Ref<HTMLDivElement>
-  routeLabel?: string // 路由信息，如 "Fast 1"
+  routeLabel?: string
+  autoModelId?: string // Auto模式下的目标模型ID
 }
 
 export function ModelPicker({
   show, autoMode, activeModel,
   configuredModels,
   onToggleAuto, onSelectCloud, onClose,
-  pickerRef, routeLabel,
+  pickerRef, routeLabel, autoModelId,
 }: ModelPickerProps) {
   if (!show) return null
 
@@ -50,7 +51,9 @@ export function ModelPicker({
               </div>
               {provider.availableModels?.length > 0 ? (
                 provider.availableModels.map((m) => {
-                  const isActive = activeModel?.id === provider.id && activeModel?.selectedModel === m.id
+                  const isActive = autoMode
+                    ? m.id === autoModelId
+                    : activeModel?.id === provider.id && activeModel?.selectedModel === m.id
                   return (
                     <button key={m.id}
                       className={`flex items-center gap-2 w-full text-left px-2 py-1 rounded text-xs transition-colors ${isActive ? 'bg-accent' : 'hover:bg-muted/50'}`}

@@ -1159,6 +1159,21 @@ export function ChatPage() {
                 }
                 return modelName ? `${label} ${s} → ${modelName}` : `${label} ${s}`
               })()}
+              autoModelId={(() => {
+                if (!autoMode) return undefined
+                let s = 0
+                if (input.length > 200) s += 2; else if (input.length > 80) s += 1
+                const rt = messages.filter(m => m.role === 'tool').length
+                if (rt > 5) s += 3; else if (rt > 2) s += 2; else if (rt > 0) s += 1
+                if (currentProjectId) s += 1
+                const tier = s >= 5 ? 'powerful' : s >= 3 ? 'balanced' : 'fast'
+                for (const p of configuredModels) {
+                  for (const sm of p.availableModels || []) {
+                    if (getModelTier(sm.id) === tier) return sm.id
+                  }
+                }
+                return undefined
+              })()}
             />
           </div>
           <MemoryPopup
