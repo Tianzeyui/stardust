@@ -29,6 +29,7 @@ export function ProjectsPage() {
   const [newName, setNewName] = useState('')
   const [newDesc, setNewDesc] = useState('')
   const [newPath, setNewPath] = useState('')
+  const [createRules, setCreateRules] = useState(true)
   const [migrateTarget, setMigrateTarget] = useState<Project | null>(null)
   const [migratePath, setMigratePath] = useState('')
   const [migrateCopy, setMigrateCopy] = useState(true)
@@ -78,6 +79,11 @@ export function ProjectsPage() {
     if (!newName.trim()) return
     const p = await projectStore.create(newName.trim(), newDesc.trim(), newPath.trim() || undefined)
     if (p) {
+      // 自动创建 .brainplus/rules.md
+      if (createRules && window.electronAPI?.fs) {
+        const content = `# ${newName.trim()}\n\n${newDesc.trim() || '项目规则文件。AI 每次对话自动读取。'}`
+        await window.electronAPI.fs.writeFile(`${p.path}/.brainplus/rules.md`, content).catch(() => {})
+      }
       setNewName(''); setNewDesc(''); setNewPath(''); setShowCreate(false)
       setSelectedId(p.id)
     }
@@ -186,6 +192,15 @@ export function ProjectsPage() {
                     <FolderSearch className="h-3.5 w-3.5" />
                   </Button>
                 </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${createRules ? 'bg-primary' : 'bg-muted'}`}
+                  onClick={() => setCreateRules(!createRules)}
+                >
+                  <span className={`inline-block h-3 w-3 rounded-full bg-white transition-transform ${createRules ? 'translate-x-3' : 'translate-x-0.5'}`} />
+                </button>
+                <span className="text-[10px] text-muted-foreground">自动创建 .brainplus/rules.md</span>
               </div>
               <div className="flex gap-2">
                 <Button size="sm" onClick={handleCreate} disabled={!newName.trim()}>创建</Button>
