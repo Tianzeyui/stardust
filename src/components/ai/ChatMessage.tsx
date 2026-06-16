@@ -716,7 +716,7 @@ export function TerminalBubble({ ts, onConfirm, onReject }: {
 
           {/* 输出 */}
           {(ts.stdout || ts.stderr) && (
-            <pre className="mt-2 max-h-40 overflow-auto custom-scrollbar rounded bg-zinc-950 px-2 py-1.5 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-all text-zinc-300">
+            <pre className="mt-2 max-h-96 overflow-auto custom-scrollbar rounded bg-zinc-950 px-2 py-1.5 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-all text-zinc-300" ref={el => { if (el) el.scrollTop = el.scrollHeight }}>
               {ts.stdout}{ts.stderr && `\n\x1b[31m${ts.stderr}\x1b[0m`}
             </pre>
           )}
