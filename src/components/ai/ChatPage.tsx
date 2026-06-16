@@ -75,6 +75,7 @@ export function ChatPage() {
   })()
   const [showModelPicker, setShowModelPicker] = useState(false)
   const [autoMode, setAutoMode] = useState(true)
+  const [codingMode, setCodingMode] = useState(true) // true=编码, false=对话
   const [routeScore, setRouteScore] = useState(0)
   const [routeModel, setRouteModel] = useState('')
   const [outputFiles, setOutputFiles] = useState<Array<{ name: string; path: string; size: number }>>([])
@@ -942,6 +943,7 @@ export function ChatPage() {
       }, {
         abortSignal: controller.signal,
         autoMode,
+        codingMode,
         modelOverride: usedModel !== activeModel ? { provider: usedModel.name, modelId: usedModel.selectedModel } : undefined,
         forceCompression: forceCompressRef.current ? true : undefined,
         selectedTools: selectedMCPTools,
@@ -1176,6 +1178,14 @@ export function ChatPage() {
               })()}
             />
           </div>
+          {/* 编码/对话模式切换 */}
+          <button
+            className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] transition-colors ${codingMode ? 'text-primary/70 hover:text-primary' : 'text-muted-foreground/40 hover:text-muted-foreground'}`}
+            onClick={() => setCodingMode(!codingMode)}
+            title={codingMode ? '编码模式' : '对话模式'}
+          >
+            {codingMode ? 'Code' : 'Chat'}
+          </button>
           <MemoryPopup
             manager={memoryManager}
             enabled={sessionMemoryEnabled}

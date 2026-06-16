@@ -239,7 +239,7 @@ let _lastCompressionSummary = ''
 export async function chat(
   messages: ModelMessage[],
   onEvent?: (event: ChatStreamEvent) => void,
-  opts?: { abortSignal?: AbortSignal; autoMode?: boolean; localModelId?: string; forceCompression?: boolean; selectedTools?: Set<string> | null; memoryInjection?: string; userId?: string; modelOverride?: { provider: string; modelId: string } },
+  opts?: { abortSignal?: AbortSignal; autoMode?: boolean; codingMode?: boolean; localModelId?: string; forceCompression?: boolean; selectedTools?: Set<string> | null; memoryInjection?: string; userId?: string; modelOverride?: { provider: string; modelId: string } },
 ) {
   // 本地模型路径
   if (opts?.localModelId) {
@@ -320,9 +320,9 @@ export async function chat(
     }
   }
 
-  // Agent 行为规则（从配置读取）+ 自动注入 .brainplus/rules.md
-  const { getSystemPrompt } = await import('@/lib/config')
-  let agentRules = getSystemPrompt()
+  // Agent 行为规则：根据模式选编码/对话提示词
+  const { getPromptCode, getPromptChat } = await import('@/lib/config')
+  let agentRules = opts?.codingMode === false ? getPromptChat() : getPromptCode()
 
   // 读取项目级 rules.md（文件优先于设置中的 PROMPT.md）
   const rulesParts: string[] = []
