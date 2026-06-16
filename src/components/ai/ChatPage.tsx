@@ -220,11 +220,21 @@ export function ChatPage() {
     if (el) el.scrollTop = el.scrollHeight
   }, [messages])
 
-  // 流式结束时重置
+  // 流式结束时重置 + 旧工具结果清理
   useEffect(() => {
-    if (!messages.some(m => m.streaming) && messages.length > 0) {
+    const streaming = messages.some(m => m.streaming)
+    if (!streaming && messages.length > 0) {
       userPausedRef.current = false
       setShowScrollBtn(false)
+      // 清理前20条之外的旧工具消息内容
+      if (messages.length > 30) {
+        setMessages(prev => prev.map((m, i) => {
+          if (m.role === 'tool' && i < prev.length - 25 && m.content && m.content.length > 100) {
+            return { ...m, content: '[Content cleared]' }
+          }
+          return m
+        }))
+      }
     }
   }, [messages])
 
