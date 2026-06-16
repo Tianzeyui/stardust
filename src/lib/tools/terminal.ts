@@ -19,7 +19,7 @@ export function registerTerminalTool(tools: ToolMap) {
   if (!getTerminalEnabled()) return
 
   tools['run_terminal'] = {
-    description: '执行终端命令。需用户确认后执行。mode="sync"(默认)等待完成返回结果；mode="async"立即返回terminal_id，长任务推荐async，稍后用 check_terminal 查看输出。',
+    description: '执行终端命令。mode="sync"等待完成(默认)；mode="async"后台执行；mode="interactive"给用户开交互终端——终端气泡出现$输入框，用户在框里自己打字，AI不要调用run_terminal_input。',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
@@ -162,7 +162,7 @@ export function registerTerminalTool(tools: ToolMap) {
   }
 
   tools['run_terminal_input'] = {
-    description: '向交互式终端发送输入。terminal_id 是 run_terminal(interactive=true) 返回的 ID。',
+    description: '向交互终端发送输入。仅在用户明确要求"帮我发命令"时使用。正常情况下用户自己在$输入框打字，AI不要调用此工具。',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
