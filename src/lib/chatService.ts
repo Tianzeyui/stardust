@@ -71,6 +71,7 @@ export function getChatModel(): ProviderConfig | null {
   if (!enabled) return null
 
   const providerName = (enabled.name || enabled.id).toLowerCase()
+  console.log('[getChatModel] 选中模型:', enabled.name, '| provider:', providerName, '| baseUrl:', enabled.baseUrl)
   return {
     provider: providerName,
     modelId: enabled.selectedModel || 'gpt-4o',
@@ -262,7 +263,7 @@ async function chatViaSidecar(
     api.sidecar.onEvent('event.chat.error', (p: any) => { console.error('[RustEngine] error:', p.error) }),
   ]
   try {
-  console.log('[RustEngine] chat.send 已发送, 等待结果...')
+  console.log('[RustEngine] chat.send → provider=${config.provider} model=${config.modelId}')
   const result = await api.sidecar.call('chat.send', {
     provider: config.provider,
     modelId: config.modelId,
