@@ -2,6 +2,7 @@
 
 pub mod chat;
 pub mod fs;
+pub mod mcp;
 pub mod git;
 pub mod terminal;
 pub mod search;
@@ -78,6 +79,9 @@ pub fn register_all() -> Registry {
 
     // ====== AI Chat ======
     chat::register(&mut registry);
+
+    // ====== MCP 客户端 ======
+    mcp::register(&mut registry);
 
     // ====== fs 操作 ======
     fs::register(&mut registry);

@@ -271,8 +271,73 @@ async fn run_tool_loop(
     }
 }
 
+// ====== 上下文压缩 ======
+
+fn estimate_tokens(text: &str) -> usize { text.len() / 4 }
+
+async fn chat_compress(req: crate::protocol::Request, _tx: mpsc::Sender<OutputLine>) -> HandlerResult {
+    let messages: Vec<ChatMessage> = req.params.get("messages")
+        .and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default();
+    let context_window: usize = req.params.get("contextWindow").and_then(|v| v.as_u64()).unwrap_or(100000) as usize;
+    let system_prompt: Option<String> = req.params.get("systemPrompt").and_then(|v| v.as_str()).map(String::from);
+
+    let overhead = estimate_tokens(&system_prompt.unwrap_or_default()) + 2000; // tool overhead
+    let limit = context_window.saturating_sub(overhead);
+
+    let total: usize = messages.iter().map(|m| estimate_tokens(&m.content)).sum();
+    if total <= limit {
+        return Ok(serde_json::json!({"wasCompressed": false, "messages": messages, "originalTokens": total, "compressedTokens": total}));
+    }
+
+    // 保留最后几条消息，其余生成摘要占位
+    let keep = 4usize;
+    if messages.len() <= keep {
+        return Ok(serde_json::json!({"wasCompressed": false, "messages": messages, "originalTokens": total, "compressedTokens": total}));
+    }
+
+    let split = messages.len() - keep;
+    let early = &messages[..split];
+    let recent = &messages[split..];
+
+    // 生成简单摘要
+    let mut summary = String::from("<summary>\n对话早期内容摘要（已压缩）:\n");
+    for (i, m) in early.iter().enumerate() {
+        if m.role == "user" {
+            let preview: String = m.content.chars().take(200).collect();
+            summary.push_str(&format!("用户: {preview}\n"));
+        } else if m.role == "assistant" && !m.content.is_empty() && m.content != "(tool calls)" {
+            let preview: String = m.content.chars().take(200).collect();
+            summary.push_str(&format!("助手: {preview}\n"));
+        }
+    }
+    summary.push_str("</summary>");
+
+    let mut compressed: Vec<ChatMessage> = vec![ChatMessage {
+        role: "user".into(),
+        content: summary,
+        tool_calls: None,
+        tool_call_id: None,
+    }];
+    compressed.extend_from_slice(recent);
+
+    let new_tokens: usize = compressed.iter().map(|m| estimate_tokens(&m.content)).sum();
+    Ok(serde_json::json!({
+        "wasCompressed": true,
+        "messages": compressed,
+        "originalTokens": total,
+        "compressedTokens": new_tokens,
+        "summary": format!("对话已压缩：{} → {} tokens", total, new_tokens),
+    }))
+}
+
 // ====== 注册 ======
 
 pub fn register(registry: &mut Registry) {
     registry.register("chat.send", |req, tx| Box::pin(chat_send(req, tx)));
+    registry.register("chat.compress", |req, tx| Box::pin(chat_compress(req, tx)));
+    registry.register("chat.estimateTokens", |_req, _tx| {
+        Box::pin(async move {
+            Ok(serde_json::json!({"tokensPerChar": 0.25}))
+        })
+    });
 }

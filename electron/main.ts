@@ -5,7 +5,6 @@ import { exec } from 'child_process'
 import { fileURLToPath } from 'url'
 import { initSidecar, getSidecar } from './main/sidecarManager.js'
 import { forwardToSidecar, forwardStreamToSidecar, forwardMany, mapPath, mapPathContent, mapCwdArgs, mapGrep } from './main/ipcForwarder.js'
-import { mcpService, type MCPServer } from './main/mcp/MCPService.js'
 import { startA2AServer, stopA2AServer, completeA2ATask, getA2ATask, syncAgents, setA2AToken } from './main/a2aServer.js'
 // sandboxService → Rust Sidecar (sandbox.preInit / sandbox.executeJS / sandbox.executePython)
 import { initWorkspace, getWorkspacePaths, getWorkspaceInfo, listOutputFiles, openFile, deleteFile, clearOutputFiles, setWorkspaceRoot, pickWorkspaceRoot, resetWorkspaceRoot, isBrainPlusWorkspace } from './main/workspace.js'
@@ -64,85 +63,7 @@ function createWindow() {
   })
 }
 
-// ==================== MCP IPC Handlers ====================
-
-// 服务器 CRUD
-ipcMain.handle('mcp:getServers', () => mcpService.getServers())
-
-ipcMain.handle('mcp:addServer', (_event, config: MCPServer) => {
-  mcpService.addServer(config)
-  return { success: true }
-})
-
-ipcMain.handle('mcp:removeServer', (_event, serverId: string) => {
-  mcpService.removeServer(serverId)
-  return { success: true }
-})
-
-ipcMain.handle('mcp:updateServer', (_event, serverId: string, patch: Partial<MCPServer>) => {
-  mcpService.updateServer(serverId, patch)
-  return { success: true }
-})
-
-// 连接
-ipcMain.handle('mcp:connect', async (_event, serverId: string) => {
-  const server = mcpService.getServer(serverId)
-  if (!server) throw new Error('服务器不存在')
-  try {
-    await mcpService.connect(server)
-    return { success: true }
-  } catch (e: any) {
-    console.error('[MCP IPC] connect error:', e.message, e.stack)
-    return { success: false, error: e.message }
-  }
-})
-
-ipcMain.handle('mcp:disconnect', async (_event, serverId: string) => {
-  await mcpService.disconnect(serverId)
-  return { success: true }
-})
-
-// 工具
-ipcMain.handle('mcp:listTools', async (_event, serverId: string) => {
-  try {
-    return await mcpService.listTools(serverId)
-  } catch (e: any) {
-    console.error('[MCP IPC] listTools error:', e.message)
-    throw e  // 向上传播，前端可 catch 并展示错误
-  }
-})
-
-ipcMain.handle('mcp:getAllTools', async () => {
-  return mcpService.getAllTools()
-})
-
-ipcMain.handle('mcp:callTool', async (_event, serverId: string, toolName: string, args: Record<string, unknown>) => {
-  return mcpService.callTool(serverId, toolName, args)
-})
-
-// 资源
-ipcMain.handle('mcp:listResources', async (_event, serverId: string) => {
-  return mcpService.listResources(serverId)
-})
-ipcMain.handle('mcp:getAllResources', async () => {
-  return mcpService.getAllResources()
-})
-
-ipcMain.handle('mcp:readResource', async (_event, serverId: string, uri: string) => {
-  return mcpService.readResource(serverId, uri)
-})
-
-// 提示
-ipcMain.handle('mcp:listPrompts', async (_event, serverId: string) => {
-  return mcpService.listPrompts(serverId)
-})
-ipcMain.handle('mcp:getAllPrompts', async () => {
-  return mcpService.getAllPrompts()
-})
-
-ipcMain.handle('mcp:getPrompt', async (_event, serverId: string, promptName: string, args: Record<string, unknown>) => {
-  return mcpService.getPrompt(serverId, promptName, args)
-})
+// MCP → Rust Sidecar (mcp.* handlers via forwardMany)
 
 // ==================== Dialog IPC ====================
 
@@ -286,6 +207,16 @@ forwardToSidecar('model:openDir', 'model.openDir')
 forwardToSidecar('model:load', 'model.load', (args) => ({ id: args[0] }))
 forwardToSidecar('model:download', 'model.download', (args) => ({ id: args[0] }))
 forwardToSidecar('model:unload', 'model.unload')
+
+// ==================== MCP → Rust Sidecar ====================
+
+forwardMany([
+  'mcp:getServers', 'mcp:addServer', 'mcp:removeServer',
+  'mcp:connect', 'mcp:disconnect', 'mcp:listTools', 'mcp:callTool',
+  'mcp:getAllTools', 'mcp:getAllResources', 'mcp:getAllPrompts',
+  'mcp:updateServer', 'mcp:listResources', 'mcp:readResource',
+  'mcp:listPrompts', 'mcp:getPrompt',
+])
 
 // ==================== AI Chat → Rust Sidecar (Phase 5) ====================
 
@@ -854,7 +785,7 @@ ipcMain.handle('perm:grant', async (_event, workspaceRoot: string, type: string,
 })
 
 app.on('before-quit', async () => {
-  await mcpService.cleanup()
+  try { await getSidecar().call('mcp.disconnectAll', {}, 1000) } catch {}
   try { await getSidecar().call('graph.close', {}, 1000) } catch {}
   try { await getSidecar().stop() } catch {}
 })
