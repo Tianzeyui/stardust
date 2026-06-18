@@ -97,20 +97,24 @@ TS 工具 (`src/lib/tools/*.ts`) 保持现有函数签名不变，内部从 `win
 
 ### 2.1 文件搜索系统 ✅ 已完成
 
-### 2.2 通用 IPC 转发层 ⏳
+### 2.2 通用 IPC 转发层 ✅ 已完成
 
-- [ ] `electron/main/ipcForwarder.ts`
-  - `forwardToSidecar(channel, method?)` — 普通调用自动转发
-  - `forwardStreamToSidecar(channel, method, events)` — 流式调用
-  - 自动参数映射（IPC 参数 → sidecar.call params）
-- [ ] 所有已迁移 handler 改用 `forwardToSidecar()`
+- [x] `electron/main/ipcForwarder.ts`
+  - `forwardToSidecar()` — 普通调用 + 参数映射 + 结果转换
+  - `forwardStreamToSidecar()` — 流式调用 + 事件收集
+  - `forwardMany()` — 批量按约定注册
+  - `mapPath` / `mapPathContent` / `mapCwdArgs` / `mapGrep` — 内置参数映射器
+- [x] `electron/main.ts` 中所有 fs/git handler 改用转发层
 
-### 2.3 Git 操作 ⏳
+### 2.3 Git 操作 ✅ 已完成
 
-- [ ] `src/handlers/git.rs`
-- [ ] `git.exec(cwd, args)` → `tokio::process::Command`
-- [ ] 替换 `spawnSync` → 异步非阻塞
-- [ ] `electron/main.ts` 的 `git:exec` → `forwardToSidecar('git:exec')`
+- [x] `src/handlers/git.rs`
+- [x] `git.exec(cwd, args)` → `tokio::process::Command` 异步
+- [x] `git.status(cwd)` → `git status --porcelain` 解析
+- [x] `git.diff(cwd, staged?)` → `git diff [--staged]`
+- [x] `git.log(cwd, n)` → `git log --oneline -n`
+- [x] 替换 `spawnSync` → 异步非阻塞
+- [x] `electron/main.ts` 的 `git:exec` → `forwardToSidecar('git:exec')`
 
 ### 2.4 终端/PTY 管理 ⏳
 
@@ -238,7 +242,7 @@ src/lib/contextWindowManager.ts       → Rust 上下文管理
 
 ```
 Phase 1  ██████████ ✅           已完成   Rust 骨架 + 通信桥 + 12 fs handler
-Phase 2  ████████████            3-4 周   转发层 + Git + 终端 + 搜索
+Phase 2  ████████████🟢          进行中   转发层 ✅ | Git ✅ | 终端 ⏳ | 搜索 ⏳
 Phase 3  ████████████            3-4 周   沙箱 (JS/Python) + 文档转换
 Phase 4  ████████████            3-4 周   MCP + 本地模型 + Neo4j
 Phase 5  ████████████████████    5-6 周   🤖 AI 引擎（最后一块拼图）
@@ -261,5 +265,7 @@ Phase 6  ████                    1-2 周   清理
 ## 当前状态
 
 - ✅ **Phase 1**：Rust Sidecar 骨架 + JSON-RPC + 12 fs handler + Electron 集成
-- ⏳ **下一步**：Phase 2.3 Git handler — 替换 `spawnSync`
-- ⏳ **随后**：Phase 2.4 终端/PTY — 替换 `node-pty`
+- ✅ **Phase 2.2**：IPC 转发层（`forwardToSidecar` / `forwardStreamToSidecar` / `forwardMany`）
+- ✅ **Phase 2.3**：Git handler（`git.exec` / `git.status` / `git.diff` / `git.log`）— spawnSync 已删除
+- ⏳ **下一步**：Phase 2.4 终端/PTY — 替换 `node-pty`
+- ⏳ **随后**：Phase 2.5 搜索/HTTP — `reqwest` 替换浏览器 fetch

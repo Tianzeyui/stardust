@@ -1,6 +1,7 @@
 //! Handler 注册表 & 方法路由
 
 pub mod fs;
+pub mod git;
 
 use crate::protocol::{HandlerResult, Request};
 use std::collections::HashMap;
@@ -70,6 +71,9 @@ pub fn register_all() -> Registry {
 
     // ====== fs 操作 ======
     fs::register(&mut registry);
+
+    // ====== git 操作 ======
+    git::register(&mut registry);
 
     // 内建方法
     registry.register("ping", |_req, _tx| async move {

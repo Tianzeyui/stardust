@@ -4,6 +4,7 @@ import fs from 'fs'
 import { exec } from 'child_process'
 import { fileURLToPath } from 'url'
 import { initSidecar, getSidecar } from './main/sidecarManager.js'
+import { forwardToSidecar, forwardStreamToSidecar, forwardMany, mapPath, mapPathContent, mapCwdArgs, mapGrep } from './main/ipcForwarder.js'
 import { mcpService, type MCPServer } from './main/mcp/MCPService.js'
 import { startA2AServer, stopA2AServer, completeA2ATask, getA2ATask, syncAgents, setA2AToken } from './main/a2aServer.js'
 import { executeJS, executePython, preInit } from './main/sandboxService.js'
@@ -206,82 +207,33 @@ ipcMain.handle('file:convert', async (event, filePath: string) => {
 
 // ==================== File System IPC → Rust Sidecar ====================
 
-ipcMain.handle('fs:readFile', async (_event, filePath: string) => {
-  try { return await getSidecar().call('fs.readFile', { path: filePath }) }
-  catch (e: any) { return { success: false, error: e.message } }
-})
+// 简单转发（单 path 参数）
+forwardMany(['fs:readFile', 'fs:readFileBase64', 'fs:exists', 'fs:listDir', 'fs:stat', 'fs:mkdir', 'fs:unlink'])
+forwardToSidecar('fs:writeFile', 'fs.writeFile', mapPathContent)
+forwardToSidecar('fs:copyDir', 'fs.copyDir', (args) => ({ src: args[0], dest: args[1] }))
 
-ipcMain.handle('fs:readFileBase64', async (_event, filePath: string) => {
-  try { return await getSidecar().call('fs.readFileBase64', { path: filePath }) }
-  catch (e: any) { return { success: false, error: e.message } }
-})
-
-ipcMain.handle('fs:exists', async (_event, filePath: string) => {
-  try { return await getSidecar().call('fs.exists', { path: filePath }) }
-  catch { return false }
-})
-
-ipcMain.handle('fs:listDir', async (_event, dirPath: string) => {
-  try { return await getSidecar().call('fs.listDir', { path: dirPath }) }
-  catch (e: any) { return { success: false, error: e.message } }
-})
-
-ipcMain.handle('fs:stat', async (_event, filePath: string) => {
-  try { return await getSidecar().call('fs.stat', { path: filePath }) }
-  catch (e: any) { return { success: false, error: e.message } }
-})
-
-ipcMain.handle('fs:writeFile', async (_event, filePath: string, content: string) => {
-  try { return await getSidecar().call('fs.writeFile', { path: filePath, content }) }
-  catch (e: any) { return { success: false, error: e.message } }
-})
-
-ipcMain.handle('fs:mkdir', async (_event, dirPath: string) => {
-  try { return await getSidecar().call('fs.mkdir', { path: dirPath }) }
-  catch (e: any) { return { success: false, error: e.message } }
-})
-
-// ====== 流式文件搜索（Rust Sidecar — 不再阻塞主进程） ======
-
-ipcMain.handle('fs:find', async (_event, dirPath: string) => {
-  try {
-    const result = await getSidecar().callAndCollect(
-      'fs.find',
-      { path: dirPath },
-      ['event.fs.findResult', 'event.fs.findBatch', 'event.fs.findComplete'],
-    )
-    return { success: true, files: result._events?.map((e: any) => e.path).filter(Boolean) ?? [], count: result.count }
-  } catch (e: any) {
-    return { success: false, error: e.message }
-  }
-})
-
-ipcMain.handle('fs:grep', async (_event, dirPath: string, pattern: string, fileGlob?: string) => {
-  try {
-    const result = await getSidecar().callAndCollect(
-      'fs.grep',
-      { path: dirPath, pattern, fileGlob },
-      ['event.fs.grepResult', 'event.fs.grepBatch', 'event.fs.grepComplete'],
-      30000,
-    )
-    const matches = result._events
+// 流式转发（带结果转换以兼容已有前端接口）
+forwardStreamToSidecar(
+  'fs:find',
+  ['event.fs.findResult', 'event.fs.findBatch', 'event.fs.findComplete'],
+  'fs.find', mapPath,
+  (r) => ({ success: true, files: r._events?.map((e: any) => e.path).filter(Boolean) ?? [], count: r.count }),
+)
+forwardStreamToSidecar(
+  'fs:grep',
+  ['event.fs.grepResult', 'event.fs.grepBatch', 'event.fs.grepComplete'],
+  'fs.grep', mapGrep,
+  (r) => {
+    const lines = r._events
       ?.filter((e: any) => e.event === 'event.fs.grepResult')
       ?.map((e: any) => `${e.file}:${e.line}:${e.text}`) ?? []
-    return { success: true, output: matches.slice(0, 200).join('\n') || '(无匹配)', count: result.count }
-  } catch (e: any) {
-    return { success: false, error: e.message }
-  }
-})
+    return { success: true, output: lines.slice(0, 200).join('\n') || '(无匹配)', count: r.count }
+  },
+)
 
-ipcMain.handle('fs:copyDir', async (_event, src: string, dest: string) => {
-  try { return await getSidecar().call('fs.copyDir', { src, dest }) }
-  catch (e: any) { return { success: false, error: e.message } }
-})
+// ==================== Git IPC → Rust Sidecar ====================
 
-ipcMain.handle('fs:unlink', async (_event, filePath: string) => {
-  try { return await getSidecar().call('fs.unlink', { path: filePath }) }
-  catch (e: any) { return { success: false, error: e.message } }
-})
+forwardToSidecar('git:exec', 'git.exec', mapCwdArgs)
 
 // ==================== Skills Disk IPC ====================
 
@@ -1155,27 +1107,6 @@ ipcMain.handle('terminal:ptyWrite', async (_event, id: string, data: string) => 
 ipcMain.handle('terminal:ptyResize', async (_event, id: string, cols: number, rows: number) => {
   const pty = ptyProcesses.get(id)
   if (pty) pty.resize(cols, rows)
-})
-
-// ====== Git 命令执行 ======
-import { spawnSync } from 'child_process'
-
-ipcMain.handle('git:exec', async (_event, cwd: string, args: string[]) => {
-  try {
-    const result = spawnSync('git', args, {
-      cwd,
-      encoding: 'utf-8',
-      timeout: 30000,
-      maxBuffer: 500 * 1024,
-    })
-    const stdout = result.stdout || ''
-    const stderr = result.stderr || ''
-    if (result.error) return { success: false, error: result.error.message }
-    if (result.status !== 0) return { success: false, error: stderr.trim() || `exit ${result.status}`, output: stdout }
-    return { success: true, output: stdout.slice(0, 50000) }
-  } catch (e: any) {
-    return { success: false, error: e.message }
-  }
 })
 
 app.on('before-quit', async () => {
