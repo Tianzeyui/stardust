@@ -20,7 +20,7 @@ fn build_tool_registry() -> ToolRegistry {
 
     // 路径解析：相对路径 → 绝对路径
     fn resolve(p: &str) -> String {
-        if p.is_empty() { return ".".to_string(); }
+        if p.is_empty() { return String::new(); }
         let path = std::path::Path::new(p);
         if path.is_absolute() && path.exists() { return p.to_string(); }
         if path.exists() { return p.to_string(); }
@@ -35,7 +35,7 @@ fn build_tool_registry() -> ToolRegistry {
     }
 
     // —— 工作区 (对齐 TS workspace.ts) ——
-    r.register("workspace_read_file", "Read file content. path: relative or absolute.", json!({"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}), |i: Value| { let p=resolve(i["path"].as_str().unwrap_or("")); Box::pin(async move { tokio::fs::read_to_string(&p).await.map_err(|e|format!("读取 {p}: {e}")) }) });
+    r.register("workspace_read_file", "Read file content. path: relative or absolute.", json!({"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}), |i: Value| { let p=resolve(i["path"].as_str().unwrap_or("")); Box::pin(async move { if p.is_empty() { return Ok("请提供 path 参数（文件路径）。例如: {\"path\": \"package.json\"}".into()); } tokio::fs::read_to_string(&p).await.map_err(|e|format!("读取 {p}: {e}")) }) });
     r.register("workspace_write_file", "Write/create file. path, content.", json!({"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"}},"required":["path","content"]}), |i: Value| { let p=resolve(i["path"].as_str().unwrap_or("")); let c=i["content"].as_str().unwrap_or("").to_string(); Box::pin(async move { tokio::fs::write(&p,&c).await.map_err(|e|format!("{e}"))?; Ok("ok".into()) }) });
     r.register("workspace_edit_file", "Edit file (full replace). path, content.", json!({"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"}},"required":["path","content"]}), |i: Value| { let p=resolve(i["path"].as_str().unwrap_or("")); let c=i["content"].as_str().unwrap_or("").to_string(); Box::pin(async move { tokio::fs::write(&p,&c).await.map_err(|e|format!("{e}"))?; Ok("ok".into()) }) });
     r.register("workspace_append_file", "Append to file. path, content.", json!({"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"}},"required":["path","content"]}), |i: Value| { let p=resolve(i["path"].as_str().unwrap_or("")); let c=i["content"].as_str().unwrap_or("").to_string(); Box::pin(async move { use std::io::Write; let mut f=std::fs::OpenOptions::new().append(true).create(true).open(&p).map_err(|e|format!("{e}"))?; f.write_all(c.as_bytes()).map_err(|e|format!("{e}"))?; Ok("ok".into()) }) });
