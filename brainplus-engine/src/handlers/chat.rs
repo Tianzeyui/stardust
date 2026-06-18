@@ -15,7 +15,6 @@ use tokio::sync::mpsc;
 /// 构建完整的工具注册表（所有已实现的 Rust 工具）
 fn build_tool_registry() -> ToolRegistry {
     let mut r = ToolRegistry::new();
-    let ok = |s: &str| { let s = s.to_string(); move || Ok(s.clone()) };
 
     // —— 工作区 (对齐 TS workspace.ts) ——
     r.register("workspace_read_file", "Read file content. path: absolute file path.", json!({"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}), |i: Value| { let p=i["path"].as_str().unwrap_or("").to_string(); Box::pin(async move { tokio::fs::read_to_string(&p).await.map_err(|e|format!("{e}")) }) });
