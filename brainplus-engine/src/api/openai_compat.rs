@@ -24,6 +24,7 @@ pub async fn stream_openai_compat(
     for m in messages {
         if m.role == "system" { continue; }
         let mut obj = serde_json::json!({"role": m.role, "content": m.content});
+        if let Some(ref rc) = m.reasoning_content { obj["reasoning_content"] = serde_json::json!(rc); }
 
         if let Some(ref tc) = m.tool_calls {
             obj["tool_calls"] = serde_json::json!(tc.iter().map(|c| {
