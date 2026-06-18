@@ -3,6 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import { exec } from 'child_process'
 import { fileURLToPath } from 'url'
+import { initSidecar, getSidecar } from './main/sidecarManager.js'
 import { mcpService, type MCPServer } from './main/mcp/MCPService.js'
 import { startA2AServer, stopA2AServer, completeA2ATask, getA2ATask, syncAgents, setA2AToken } from './main/a2aServer.js'
 import { executeJS, executePython, preInit } from './main/sandboxService.js'
@@ -203,89 +204,53 @@ ipcMain.handle('file:convert', async (event, filePath: string) => {
   return result
 })
 
-// ==================== File System IPC ====================
+// ==================== File System IPC → Rust Sidecar ====================
 
 ipcMain.handle('fs:readFile', async (_event, filePath: string) => {
-  try {
-    return { success: true, content: fs.readFileSync(filePath, 'utf-8') }
-  } catch (e: any) {
-    return { success: false, error: e.message }
-  }
+  try { return await getSidecar().call('fs.readFile', { path: filePath }) }
+  catch (e: any) { return { success: false, error: e.message } }
 })
 
 ipcMain.handle('fs:readFileBase64', async (_event, filePath: string) => {
-  try {
-    const buf = fs.readFileSync(filePath)
-    return { success: true, content: buf.toString('base64') }
-  } catch (e: any) {
-    return { success: false, error: e.message }
-  }
+  try { return await getSidecar().call('fs.readFileBase64', { path: filePath }) }
+  catch (e: any) { return { success: false, error: e.message } }
 })
 
 ipcMain.handle('fs:exists', async (_event, filePath: string) => {
-  return fs.existsSync(filePath)
+  try { return await getSidecar().call('fs.exists', { path: filePath }) }
+  catch { return false }
 })
 
 ipcMain.handle('fs:listDir', async (_event, dirPath: string) => {
-  try {
-    const files = fs.readdirSync(dirPath)
-    return { success: true, files }
-  } catch (e: any) {
-    return { success: false, error: e.message }
-  }
+  try { return await getSidecar().call('fs.listDir', { path: dirPath }) }
+  catch (e: any) { return { success: false, error: e.message } }
 })
 
 ipcMain.handle('fs:stat', async (_event, filePath: string) => {
-  try {
-    const stat = fs.statSync(filePath)
-    return {
-      success: true,
-      stat: {
-        isFile: stat.isFile(),
-        isDirectory: stat.isDirectory(),
-        size: stat.size,
-        mtime: stat.mtime.toISOString(),
-      },
-    }
-  } catch (e: any) {
-    return { success: false, error: e.message }
-  }
+  try { return await getSidecar().call('fs.stat', { path: filePath }) }
+  catch (e: any) { return { success: false, error: e.message } }
 })
 
 ipcMain.handle('fs:writeFile', async (_event, filePath: string, content: string) => {
-  try {
-    fs.mkdirSync(path.dirname(filePath), { recursive: true })
-    fs.writeFileSync(filePath, content, 'utf-8')
-    return { success: true }
-  } catch (e: any) {
-    return { success: false, error: e.message }
-  }
+  try { return await getSidecar().call('fs.writeFile', { path: filePath, content }) }
+  catch (e: any) { return { success: false, error: e.message } }
 })
 
 ipcMain.handle('fs:mkdir', async (_event, dirPath: string) => {
-  try {
-    fs.mkdirSync(dirPath, { recursive: true })
-    return { success: true }
-  } catch (e: any) {
-    return { success: false, error: e.message }
-  }
+  try { return await getSidecar().call('fs.mkdir', { path: dirPath }) }
+  catch (e: any) { return { success: false, error: e.message } }
 })
+
+// ====== 流式文件搜索（Rust Sidecar — 不再阻塞主进程） ======
 
 ipcMain.handle('fs:find', async (_event, dirPath: string) => {
   try {
-    const { execSync } = await import('child_process')
-    const excludes = ['node_modules', '.git', '.brainplus', 'dist', 'build', '.next', '__pycache__', '.DS_Store']
-    if (process.platform === 'win32') {
-      // Windows: dir /s /b
-      const stdout = execSync(`dir /s /b /a-d "${dirPath}"`, { encoding: 'utf-8', timeout: 10000, maxBuffer: 1024 * 1024 })
-      const lines = stdout.trim().split('\r\n').filter(Boolean)
-      const filtered = lines.filter(f => !excludes.some(e => f.includes(`\\${e}\\`)))
-      return { success: true, files: filtered }
-    }
-    // macOS/Linux: find
-    const args = excludes.map(d => `-not -path '*/${d}/*'`).join(' ')
-    const stdout = execSync(`find '${dirPath}' -type f ${args}`, { encoding: 'utf-8', timeout: 10000, maxBuffer: 1024 * 1024 })
-    return { success: true, files: stdout.trim().split('\n').filter(Boolean) }
+    const result = await getSidecar().callAndCollect(
+      'fs.find',
+      { path: dirPath },
+      ['event.fs.findResult', 'event.fs.findBatch', 'event.fs.findComplete'],
+    )
+    return { success: true, files: result._events?.map((e: any) => e.path).filter(Boolean) ?? [], count: result.count }
   } catch (e: any) {
     return { success: false, error: e.message }
   }
@@ -293,101 +258,29 @@ ipcMain.handle('fs:find', async (_event, dirPath: string) => {
 
 ipcMain.handle('fs:grep', async (_event, dirPath: string, pattern: string, fileGlob?: string) => {
   try {
-    const { execFile } = await import('child_process')
-    const args = ['-rni', '--include=' + (fileGlob || '*')]
-    const excludes = ['node_modules', '.git', '.brainplus', 'dist', 'build', '.next', '__pycache__']
-    for (const e of excludes) args.push('--exclude-dir=' + e)
-    args.push(pattern, dirPath)
-
-    // 异步执行 grep，不阻塞主进程
-    const stdout = await new Promise<string>((resolve, reject) => {
-      execFile('grep', args, {
-        encoding: 'utf-8',
-        timeout: 15000,
-        maxBuffer: 500 * 1024,
-      }, (error: any, stdout: string) => {
-        if (error) {
-          if (error.code === 'ENOENT') return reject(error) // grep 未安装
-          if (error.status === 1) return resolve('')         // 无匹配
-          return reject(error)
-        }
-        resolve(stdout)
-      })
-    })
-    return { success: true, output: stdout.slice(0, 50000) || '(无匹配)' }
+    const result = await getSidecar().callAndCollect(
+      'fs.grep',
+      { path: dirPath, pattern, fileGlob },
+      ['event.fs.grepResult', 'event.fs.grepBatch', 'event.fs.grepComplete'],
+      30000,
+    )
+    const matches = result._events
+      ?.filter((e: any) => e.event === 'event.fs.grepResult')
+      ?.map((e: any) => `${e.file}:${e.line}:${e.text}`) ?? []
+    return { success: true, output: matches.slice(0, 200).join('\n') || '(无匹配)', count: result.count }
   } catch (e: any) {
-    if (e.code === 'ENOENT' || e.message?.includes('ENOENT')) {
-      // 系统没有 grep，回退 Node.js 异步实现
-      try {
-        const fs = await import('fs/promises')
-        const path = await import('path')
-        const results: string[] = []
-        const skip = ['node_modules', '.git', '.brainplus', 'dist', 'build', '.next', '__pycache__']
-
-        async function walk(dir: string) {
-          let entries: string[] = []
-          try { entries = await fs.readdir(dir) } catch { return }
-          for (const entry of entries) {
-            if (skip.includes(entry)) continue
-            const full = path.join(dir, entry)
-            let stat: any
-            try { stat = await fs.stat(full) } catch { continue }
-            if (stat.isDirectory()) { await walk(full); continue }
-            if (fileGlob && !entry.match(fileGlob.replace(/\*/g, '.*'))) continue
-            try {
-              const content = await fs.readFile(full, 'utf-8')
-              const lines = content.split('\n')
-              const re = new RegExp(pattern, 'gi')
-              for (let i = 0; i < lines.length; i++) {
-                if (re.test(lines[i])) results.push(`${full}:${i + 1}:${lines[i].slice(0, 200)}`)
-              }
-            } catch {}
-          }
-        }
-        await walk(dirPath)
-        return { success: true, output: results.slice(0, 200).join('\n') || '(无匹配)' }
-      } catch (e2: any) {
-        return { success: false, error: e2.message }
-      }
-    }
     return { success: false, error: e.message }
   }
 })
 
 ipcMain.handle('fs:copyDir', async (_event, src: string, dest: string) => {
-  try {
-    if (!fs.existsSync(src)) return { success: false, error: '源目录不存在' }
-    fs.mkdirSync(dest, { recursive: true })
-    const entries = fs.readdirSync(src, { withFileTypes: true })
-    for (const entry of entries) {
-      const srcPath = path.join(src, entry.name)
-      const destPath = path.join(dest, entry.name)
-      if (entry.isDirectory()) {
-        fs.cpSync(srcPath, destPath, { recursive: true })
-      } else {
-        fs.copyFileSync(srcPath, destPath)
-      }
-    }
-    return { success: true }
-  } catch (e: any) {
-    return { success: false, error: e.message }
-  }
+  try { return await getSidecar().call('fs.copyDir', { src, dest }) }
+  catch (e: any) { return { success: false, error: e.message } }
 })
 
 ipcMain.handle('fs:unlink', async (_event, filePath: string) => {
-  try {
-    if (fs.existsSync(filePath)) {
-      const stat = fs.statSync(filePath)
-      if (stat.isDirectory()) {
-        fs.rmSync(filePath, { recursive: true, force: true })
-      } else {
-        fs.unlinkSync(filePath)
-      }
-    }
-    return { success: true }
-  } catch (e: any) {
-    return { success: false, error: e.message }
-  }
+  try { return await getSidecar().call('fs.unlink', { path: filePath }) }
+  catch (e: any) { return { success: false, error: e.message } }
 })
 
 // ==================== Skills Disk IPC ====================
@@ -633,10 +526,20 @@ function showAbout() {
 
 // ==================== App Lifecycle ====================
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   preInit()
   startA2AServer(9090)  // A2A HTTP Server
   initWorkspace()
+
+  // 启动 Rust Sidecar
+  try {
+    const sidecar = initSidecar()
+    await sidecar.start()
+    console.log('[main] 🦀 Rust Sidecar 已就绪')
+  } catch (e: any) {
+    console.error('[main] ⚠️ Rust Sidecar 启动失败，回退到 Node.js 模式:', e.message)
+  }
+
   createWindow()
   // macOS Dock 图标 + 关于信息
   if (process.platform === 'darwin' && appIcon && app.dock) {
@@ -1097,11 +1000,15 @@ ipcMain.handle('terminal:execute', async (_event, id: string, command: string, c
       child.stderr.on('data', (data: Buffer) => { stderr += data.toString() })
 
       child.on('close', (code: number | null) => {
+        terminalProcesses.set(id, { child, stdout, stderr, done: true, exitCode: code ?? undefined })
         resolve({ success: code === 0, stdout, stderr, exitCode: code })
       })
       child.on('error', (err: Error) => {
+        terminalProcesses.set(id, { child, stdout, stderr, done: true, exitCode: -1 })
         resolve({ success: false, stdout, stderr: err.message, exitCode: -1 })
       })
+
+      terminalProcesses.set(id, { child, stdout, stderr, done: false })
     })
   } catch (e: any) {
     return { success: false, error: e.message }
@@ -1193,8 +1100,11 @@ ipcMain.handle('perm:grant', async (_event, workspaceRoot: string, type: string,
 
 ipcMain.handle('terminal:kill', async (_event, id: string) => {
   const p = terminalProcesses.get(id)
-  if (p && !p.done) { p.child.kill(); p.done = true }
-  // 也 kill PTY 进程
+  if (p && !p.done) {
+    p.done = true
+    // SIGKILL 不可被捕获，确保进程立即终止
+    try { p.child.kill('SIGKILL') } catch {}
+  }
   const pty = ptyProcesses.get(id)
   if (pty) { pty.kill(); ptyProcesses.delete(id) }
   return { success: true }
@@ -1271,4 +1181,5 @@ ipcMain.handle('git:exec', async (_event, cwd: string, args: string[]) => {
 app.on('before-quit', async () => {
   await mcpService.cleanup()
   closeGraphDriver()
+  try { await getSidecar().stop() } catch {}
 })

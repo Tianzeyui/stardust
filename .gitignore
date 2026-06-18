@@ -6,6 +6,7 @@ dist-electron/
 .vite/
 originalBrainPlus/
 .claude/
-claude-code-admin/
-claude-code-admin/
-claude-code-main/
+cc-haha-main
+
+# Rust Sidecar
+brainplus-engine/target/
