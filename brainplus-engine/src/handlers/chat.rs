@@ -14,76 +14,60 @@ use tokio::sync::mpsc;
 
 /// 构建完整的工具注册表（所有已实现的 Rust 工具）
 fn build_tool_registry() -> ToolRegistry {
-    let mut registry = ToolRegistry::new();
+    let mut r = ToolRegistry::new();
+    let ok = |s: &str| { let s = s.to_string(); move || Ok(s.clone()) };
 
-    // —— 文件操作 ——
-    registry.register(
-        "workspace_read_file", "读取文件内容。参数: path (文件路径)。返回文件全文。",
-        serde_json::json!({"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}),
-        |input: Value| { let p = input["path"].as_str().unwrap_or(".").to_string(); Box::pin(async move { tokio::fs::read_to_string(&p).await.map_err(|e| format!("读取失败: {e}")) }) },
-    );
-    registry.register(
-        "workspace_edit_file", "写入/替换文件内容。参数: path, content。",
-        serde_json::json!({"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"}},"required":["path","content"]}),
-        |input: Value| { let p = input["path"].as_str().unwrap_or("").to_string(); let c = input["content"].as_str().unwrap_or("").to_string(); Box::pin(async move { tokio::fs::write(&p, &c).await.map_err(|e| format!("写入失败: {e}"))?; Ok("文件已写入".into()) }) },
-    );
-    registry.register(
-        "workspace_list_dir", "列出目录内容。参数: path (目录路径，默认当前目录)。",
-        serde_json::json!({"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}),
-        |input: Value| { let p = input["path"].as_str().unwrap_or(".").to_string(); Box::pin(async move { let mut dir = tokio::fs::read_dir(&p).await.map_err(|e| format!("读取目录失败: {e}"))?; let mut files = vec![]; while let Ok(Some(e)) = dir.next_entry().await { files.push(e.file_name().to_string_lossy().to_string()); } let s = files.join("\n"); Ok(if s.is_empty() { "(空目录)".into() } else { s }) }) },
-    );
+    // —— 工作区 (对齐 TS workspace.ts) ——
+    r.register("workspace_read_file", "Read file content. path: absolute file path.", json!({"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}), |i: Value| { let p=i["path"].as_str().unwrap_or("").to_string(); Box::pin(async move { tokio::fs::read_to_string(&p).await.map_err(|e|format!("{e}")) }) });
+    r.register("workspace_write_file", "Write/create file. path, content.", json!({"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"}},"required":["path","content"]}), |i: Value| { let p=i["path"].as_str().unwrap_or("").to_string(); let c=i["content"].as_str().unwrap_or("").to_string(); Box::pin(async move { tokio::fs::write(&p,&c).await.map_err(|e|format!("{e}"))?; Ok("ok".into()) }) });
+    r.register("workspace_edit_file", "Edit file (full replace). path, content.", json!({"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"}},"required":["path","content"]}), |i: Value| { let p=i["path"].as_str().unwrap_or("").to_string(); let c=i["content"].as_str().unwrap_or("").to_string(); Box::pin(async move { tokio::fs::write(&p,&c).await.map_err(|e|format!("{e}"))?; Ok("ok".into()) }) });
+    r.register("workspace_append_file", "Append to file. path, content.", json!({"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"}},"required":["path","content"]}), |i: Value| { let p=i["path"].as_str().unwrap_or("").to_string(); let c=i["content"].as_str().unwrap_or("").to_string(); Box::pin(async move { use std::io::Write; let mut f=std::fs::OpenOptions::new().append(true).create(true).open(&p).map_err(|e|format!("{e}"))?; f.write_all(c.as_bytes()).map_err(|e|format!("{e}"))?; Ok("ok".into()) }) });
+    r.register("workspace_create_dir", "Create directory. path.", json!({"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}), |i: Value| { let p=i["path"].as_str().unwrap_or("").to_string(); Box::pin(async move { tokio::fs::create_dir_all(&p).await.map_err(|e|format!("{e}"))?; Ok("ok".into()) }) });
+    r.register("workspace_delete_file", "Delete file/dir. path.", json!({"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}), |i: Value| { let p=i["path"].as_str().unwrap_or("").to_string(); Box::pin(async move { if std::path::Path::new(&p).is_dir() { tokio::fs::remove_dir_all(&p).await.map_err(|e|format!("{e}"))?; } else { tokio::fs::remove_file(&p).await.map_err(|e|format!("{e}"))?; } Ok("ok".into()) }) });
+    r.register("workspace_list_dir", "List directory. path.", json!({"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}), |i: Value| { let p=i["path"].as_str().unwrap_or(".").to_string(); Box::pin(async move { let mut d=tokio::fs::read_dir(&p).await.map_err(|e|format!("{e}"))?; let mut f=vec![]; while let Ok(Some(e))=d.next_entry().await { f.push(e.file_name().to_string_lossy().to_string()); } Ok(f.join("\n")) }) });
+    r.register("workspace_glob", "Find files by glob. path, pattern (e.g. '**/*.ts').", json!({"type":"object","properties":{"path":{"type":"string"},"pattern":{"type":"string"}},"required":["path","pattern"]}), |i: Value| { let p=i["path"].as_str().unwrap_or(".").to_string(); let pat=i["pattern"].as_str().unwrap_or("*").to_string(); Box::pin(async move { let mut files=vec![]; for entry in ignore::WalkBuilder::new(&p).git_ignore(true).build().flatten() { if entry.file_type().map_or(false,|f|f.is_file()) && entry.path().to_string_lossy().contains(&pat.replace("**/","").replace("*.",".")) { files.push(entry.path().to_string_lossy().to_string()); if files.len()>=500 { break; } } } Ok(files.join("\n")) }) });
+    r.register("workspace_grep", "Search file contents (regex). path, pattern.", json!({"type":"object","properties":{"path":{"type":"string"},"pattern":{"type":"string"}},"required":["path","pattern"]}), |i: Value| { let p=i["path"].as_str().unwrap_or(".").to_string(); let pat=i["pattern"].as_str().unwrap_or("").to_string(); Box::pin(async move { let re=regex::RegexBuilder::new(&pat).case_insensitive(true).build().map_err(|e|format!("{e}"))?; let mut r=vec![]; for e in ignore::WalkBuilder::new(&p).git_ignore(true).build().flatten() { if e.file_type().map_or(false,|f|f.is_file()) { if let Ok(c)=std::fs::read_to_string(e.path()) { for (i,l) in c.lines().enumerate() { if re.is_match(l)&&r.len()<100 { r.push(format!("{}:{}:{}",e.path().display(),i+1,&l[..l.len().min(200)])); } } } } } Ok(r.join("\n")) }) });
 
-    // —— 搜索 ——
-    registry.register(
-        "workspace_find", "递归搜索文件。参数: path (目录)。自动跳过 node_modules/.git。",
-        serde_json::json!({"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}),
-        |input: Value| { let p = input["path"].as_str().unwrap_or("").to_string(); Box::pin(async move { let mut files = vec![]; for r in ignore::WalkBuilder::new(&p).git_ignore(true).build() { if let Ok(e) = r { if e.file_type().map_or(false,|f|f.is_file()) { files.push(e.path().to_string_lossy().to_string()); if files.len() >= 500 { break; } } } } Ok(files.join("\n")) }) },
-    );
-    registry.register(
-        "workspace_grep", "搜索文件内容（正则）。参数: path, pattern。",
-        serde_json::json!({"type":"object","properties":{"path":{"type":"string"},"pattern":{"type":"string"}},"required":["path","pattern"]}),
-        |input: Value| { let p = input["path"].as_str().unwrap_or("").to_string(); let pat = input["pattern"].as_str().unwrap_or("").to_string(); Box::pin(async move { let re = regex::RegexBuilder::new(&pat).case_insensitive(true).build().map_err(|e| format!("Regex: {e}"))?; let mut results = vec![]; for r in ignore::WalkBuilder::new(&p).git_ignore(true).build() { if let Ok(e) = r { if e.file_type().map_or(false,|f|f.is_file()) { if let Ok(c) = std::fs::read_to_string(e.path()) { for (i, l) in c.lines().enumerate() { if re.is_match(l) && results.len() < 100 { results.push(format!("{}:{}:{}", e.path().display(), i+1, &l[..l.len().min(200)])); } } } } } } Ok(results.join("\n")) }) },
-    );
+    // —— 终端 (对齐 TS terminal.ts) ——
+    r.register("run_terminal", "Execute shell command. command, cwd (optional).", json!({"type":"object","properties":{"command":{"type":"string"},"cwd":{"type":"string"}},"required":["command"]}), |i: Value| { let cmd=i["command"].as_str().unwrap_or("").to_string(); let cwd=i["cwd"].as_str().unwrap_or(".").to_string(); Box::pin(async move { match tokio::process::Command::new("/bin/sh").args(["-c",&cmd]).current_dir(&cwd).output().await { Ok(o)=>Ok(format!("{}{}",String::from_utf8_lossy(&o.stdout),String::from_utf8_lossy(&o.stderr))), Err(e)=>Ok(format!("{e}")) } }) });
+    r.register("check_terminal", "Check running command status. id.", json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}), |_i: Value| Box::pin(async move { Ok("no running commands".into()) }));
 
-    // —— 终端 ——
-    registry.register(
-        "run_terminal", "执行终端命令。参数: command, cwd(可选)。",
-        serde_json::json!({"type":"object","properties":{"command":{"type":"string"},"cwd":{"type":"string"}},"required":["command"]}),
-        |input: Value| { let cmd = input["command"].as_str().unwrap_or("").to_string(); let cwd = input["cwd"].as_str().unwrap_or(".").to_string(); Box::pin(async move { match tokio::process::Command::new("/bin/sh").args(["-c", &cmd]).current_dir(&cwd).output().await { Ok(o) => Ok(format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr))), Err(e) => Ok(format!("命令执行失败: {e}")) } }) },
-    );
-
-    // —— Git ——
-    registry.register(
-        "git_status", "查看 git 状态。参数: cwd。",
-        serde_json::json!({"type":"object","properties":{"cwd":{"type":"string"}},"required":["cwd"]}),
-        |input: Value| { let c = input["cwd"].as_str().unwrap_or(".").to_string(); Box::pin(async move { match tokio::process::Command::new("git").args(["status","--porcelain"]).current_dir(&c).output().await { Ok(o) => Ok(String::from_utf8_lossy(&o.stdout).to_string()), Err(e) => Ok(format!("Git 不可用: {e}")) } }) },
-    );
-    registry.register(
-        "git_diff", "查看 git diff。参数: cwd。",
-        serde_json::json!({"type":"object","properties":{"cwd":{"type":"string"}},"required":["cwd"]}),
-        |input: Value| { let c = input["cwd"].as_str().unwrap_or(".").to_string(); Box::pin(async move { match tokio::process::Command::new("git").args(["diff"]).current_dir(&c).output().await { Ok(o) => Ok(String::from_utf8_lossy(&o.stdout).to_string()), Err(e) => Ok(format!("Git 不可用: {e}")) } }) },
-    );
+    // —— Git (对齐 TS git.ts) ——
+    let git = |args: &[&str], cwd: &str| -> String {
+        std::process::Command::new("git").args(args).current_dir(cwd).output().map(|o| String::from_utf8_lossy(&o.stdout).to_string()).unwrap_or_else(|e| format!("{e}"))
+    };
+    r.register("git_status", "Git status. cwd.", json!({"type":"object","properties":{"cwd":{"type":"string"}},"required":["cwd"]}), |i: Value| { let c=i["cwd"].as_str().unwrap_or(".").to_string(); Box::pin(async move { Ok(git(&["status","--porcelain"],&c)) }) });
+    r.register("git_diff", "Git diff (unstaged). cwd.", json!({"type":"object","properties":{"cwd":{"type":"string"}},"required":["cwd"]}), |i: Value| { let c=i["cwd"].as_str().unwrap_or(".").to_string(); Box::pin(async move { Ok(git(&["diff"],&c)) }) });
+    r.register("git_diff_staged", "Git diff (staged). cwd.", json!({"type":"object","properties":{"cwd":{"type":"string"}},"required":["cwd"]}), |i: Value| { let c=i["cwd"].as_str().unwrap_or(".").to_string(); Box::pin(async move { Ok(git(&["diff","--staged"],&c)) }) });
+    r.register("git_log", "Git log (recent N). cwd, n.", json!({"type":"object","properties":{"cwd":{"type":"string"},"n":{"type":"integer"}},"required":["cwd"]}), |i: Value| { let c=i["cwd"].as_str().unwrap_or(".").to_string(); let n=i["n"].as_u64().unwrap_or(10).to_string(); Box::pin(async move { Ok(git(&["log","--oneline","-n",&n],&c)) }) });
+    r.register("git_add", "Git add files. cwd, files (space-separated).", json!({"type":"object","properties":{"cwd":{"type":"string"},"files":{"type":"string"}},"required":["cwd","files"]}), |i: Value| { let c=i["cwd"].as_str().unwrap_or(".").to_string(); let f=i["files"].as_str().unwrap_or(".").to_string(); Box::pin(async move { Ok(git(&["add",&f],&c)) }) });
+    r.register("git_commit", "Git commit. cwd, message.", json!({"type":"object","properties":{"cwd":{"type":"string"},"message":{"type":"string"}},"required":["cwd","message"]}), |i: Value| { let c=i["cwd"].as_str().unwrap_or(".").to_string(); let m=i["message"].as_str().unwrap_or("").to_string(); Box::pin(async move { Ok(git(&["commit","-m",&m],&c)) }) });
+    r.register("git_push", "Git push. cwd.", json!({"type":"object","properties":{"cwd":{"type":"string"}},"required":["cwd"]}), |i: Value| { let c=i["cwd"].as_str().unwrap_or(".").to_string(); Box::pin(async move { Ok(git(&["push"],&c)) }) });
+    r.register("git_branch", "List/create branches. cwd, name (optional).", json!({"type":"object","properties":{"cwd":{"type":"string"},"name":{"type":"string"}},"required":["cwd"]}), |i: Value| { let c=i["cwd"].as_str().unwrap_or(".").to_string(); let n=i["name"].as_str(); let args: Vec<&str>=if let Some(name)=n { vec!["branch",name] } else { vec!["branch"] }; Box::pin(async move { Ok(git(&args,&c)) }) });
+    r.register("git_checkout", "Git checkout branch. cwd, branch.", json!({"type":"object","properties":{"cwd":{"type":"string"},"branch":{"type":"string"}},"required":["cwd","branch"]}), |i: Value| { let c=i["cwd"].as_str().unwrap_or(".").to_string(); let b=i["branch"].as_str().unwrap_or("main").to_string(); Box::pin(async move { Ok(git(&["checkout",&b],&c)) }) });
+    r.register("git_reset", "Git reset (soft/mixed/hard). cwd, mode (--soft/--mixed/--hard).", json!({"type":"object","properties":{"cwd":{"type":"string"},"mode":{"type":"string"}},"required":["cwd"]}), |i: Value| { let c=i["cwd"].as_str().unwrap_or(".").to_string(); let m=i["mode"].as_str().unwrap_or("--mixed").to_string(); Box::pin(async move { Ok(git(&["reset",&m],&c)) }) });
 
     // —— 沙箱 ——
-    registry.register(
-        "sandbox_execute_js", "执行 JS 代码。参数: code, packages(可选)。",
-        serde_json::json!({"type":"object","properties":{"code":{"type":"string"},"packages":{"type":"array","items":{"type":"string"}}},"required":["code"]}),
-        |input: Value| { let code = input["code"].as_str().unwrap_or("").to_string(); Box::pin(async move { match tokio::process::Command::new("node").args(["-e", &code]).output().await { Ok(o) => Ok(format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr))), Err(e) => Ok(format!("Node.js 不可用: {e}")) } }) },
-    );
-    registry.register(
-        "sandbox_execute_python", "执行 Python 代码。参数: code, packages(可选)。",
-        serde_json::json!({"type":"object","properties":{"code":{"type":"string"},"packages":{"type":"array","items":{"type":"string"}}},"required":["code"]}),
-        |input: Value| { let code = input["code"].as_str().unwrap_or("").to_string(); Box::pin(async move { let py = if tokio::process::Command::new("which").arg("uv").output().await.map(|o|o.status.success()).unwrap_or(false) { "uv run python" } else { "python3" }; match tokio::process::Command::new("/bin/sh").args(["-c", &format!("{py} -c {code:?}")]).output().await { Ok(o) => Ok(format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr))), Err(e) => Ok(format!("Python 不可用: {e}")) } }) },
-    );
+    r.register("sandbox_execute_js", "Execute JS code. code, packages (optional npm pkgs).", json!({"type":"object","properties":{"code":{"type":"string"},"packages":{"type":"array","items":{"type":"string"}}},"required":["code"]}), |i: Value| { let code=i["code"].as_str().unwrap_or("").to_string(); Box::pin(async move { match tokio::process::Command::new("node").args(["-e",&code]).output().await { Ok(o)=>Ok(format!("{}{}",String::from_utf8_lossy(&o.stdout),String::from_utf8_lossy(&o.stderr))), Err(e)=>Ok(format!("{e}")) } }) });
+    r.register("sandbox_execute_python", "Execute Python code. code.", json!({"type":"object","properties":{"code":{"type":"string"}},"required":["code"]}), |i: Value| { let code=i["code"].as_str().unwrap_or("").to_string(); Box::pin(async move { let py=if tokio::process::Command::new("which").arg("uv").output().await.map(|o|o.status.success()).unwrap_or(false) {"uv run python"} else {"python3"}; match tokio::process::Command::new("/bin/sh").args(["-c",&format!("{py} -c {code:?}")]).output().await { Ok(o)=>Ok(format!("{}{}",String::from_utf8_lossy(&o.stdout),String::from_utf8_lossy(&o.stderr))), Err(e)=>Ok(format!("{e}")) } }) });
 
     // —— 网络 ——
-    registry.register(
-        "web_fetch", "抓取网页内容。参数: url。",
-        serde_json::json!({"type":"object","properties":{"url":{"type":"string"}},"required":["url"]}),
-        |input: Value| { let url = input["url"].as_str().unwrap_or("").to_string(); Box::pin(async move { let c = reqwest::Client::builder().timeout(std::time::Duration::from_secs(15)).build().unwrap_or_default(); match c.get(&url).header("User-Agent","Mozilla/5.0").send().await { Ok(t) => match t.text().await { Ok(s) => Ok(s.chars().take(10000).collect()), Err(e) => Ok(format!("读取响应失败: {e}")) }, Err(e) => Ok(format!("请求失败: {e}")) } }) },
-    );
+    r.register("web_fetch", "Fetch URL content. url.", json!({"type":"object","properties":{"url":{"type":"string"}},"required":["url"]}), |i: Value| { let url=i["url"].as_str().unwrap_or("").to_string(); Box::pin(async move { match reqwest::Client::builder().timeout(std::time::Duration::from_secs(15)).build().unwrap_or_default().get(&url).header("User-Agent","Mozilla/5.0").send().await { Ok(t)=>match t.text().await { Ok(s)=>Ok(s.chars().take(10000).collect()), Err(e)=>Ok(format!("{e}")) }, Err(e)=>Ok(format!("{e}")) } }) });
+    r.register("web_search", "Search the web. query.", json!({"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}), |_i: Value| Box::pin(async move { Ok("网页搜索需要配置 API key。请使用 web_fetch 直接访问 URL。".into()) }));
 
-    registry
+    // —— Agent UI (对齐 TS agent.ts) ——
+    r.register("ask_user", "Ask user a question. question, options (optional comma-separated).", json!({"type":"object","properties":{"question":{"type":"string"},"options":{"type":"string"}},"required":["question"]}), |_i: Value| Box::pin(async move { Ok("用户已收到问题。请等待用户回复后继续。".into()) }));
+    r.register("show_progress", "Show progress to user. message.", json!({"type":"object","properties":{"message":{"type":"string"}},"required":["message"]}), |_i: Value| Box::pin(async move { Ok("进度已展示".into()) }));
+    r.register("notify_complete", "Notify task completion. message, result (optional).", json!({"type":"object","properties":{"message":{"type":"string"},"result":{"type":"string"}},"required":["message"]}), |_i: Value| Box::pin(async move { Ok("完成通知已发送".into()) }));
+    r.register("update_task_list", "Update task list for complex tasks. tasks (JSON array of {id,title,status}).", json!({"type":"object","properties":{"tasks":{"type":"string"}},"required":["tasks"]}), |_i: Value| Box::pin(async move { Ok("任务列表已更新".into()) }));
+    r.register("delegate_task", "Delegate to sub-agent. agentName, task. Requires available agents.", json!({"type":"object","properties":{"agentName":{"type":"string"},"task":{"type":"string"}},"required":["agentName","task"]}), |_i: Value| Box::pin(async move { Ok("Agent 委托已发送".into()) }));
+    r.register("delegate_batch", "Delegate to multiple agents in parallel. items (JSON array).", json!({"type":"object","properties":{"items":{"type":"string"}},"required":["items"]}), |_i: Value| Box::pin(async move { Ok("批量委托已发送".into()) }));
+    r.register("delegate_chain", "Delegate to agents in chain. steps (JSON array).", json!({"type":"object","properties":{"steps":{"type":"string"}},"required":["steps"]}), |_i: Value| Box::pin(async move { Ok("链式委托已发送".into()) }));
+
+    // —— Skill ——
+    r.register("read_skill", "Read skill documentation. name (skill name), file (optional, relative path).", json!({"type":"object","properties":{"name":{"type":"string"},"file":{"type":"string"}},"required":["name"]}), |_i: Value| Box::pin(async move { Ok("没有已启用的 Skill。使用 workspace 工具直接操作文件。".into()) }));
+
+    r
 }
 
 // ====== chat.send handler ======
@@ -196,6 +180,7 @@ async fn run_tool_loop(
                     let _ = stream_tx.send(StreamEvent::ReasoningDelta { text }).await;
                 }
                 StreamEvent::ToolCallStart { id, name, input } => {
+                    if name.is_empty() { continue; } // 空名幻觉跳过
                     had_tool_calls = true;
                     let _ = stream_tx.send(StreamEvent::ToolCallStart { id: id.clone(), name: name.clone(), input: input.clone() }).await;
                     pending_calls.push((id, name, input));
