@@ -247,6 +247,7 @@ async fn run_tool_loop(
                 content: output,
                 tool_calls: None,
                 tool_call_id: Some(id.clone()),
+                reasoning_content: None,
             });
         }
 
