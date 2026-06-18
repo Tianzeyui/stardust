@@ -246,36 +246,45 @@ async function chatViaSidecar(
   // 注册流式事件监听
   const unsubs = [
     api.sidecar.onEvent('event.chat.textDelta', (p: any) => {
+      console.log('[RustEngine] textDelta:', (p.text || '').slice(0, 50))
       fullText += p.text
       onEvent?.({ type: 'text-delta', text: p.text })
     }),
     api.sidecar.onEvent('event.chat.toolCall', (p: any) => {
+      console.log('[RustEngine] toolCall:', p.toolName)
       onEvent?.({ type: 'tool-call', toolName: p.toolName, toolInput: p.toolInput })
     }),
     api.sidecar.onEvent('event.chat.toolResult', (p: any) => {
+      console.log('[RustEngine] toolResult:', p.toolName)
       onEvent?.({ type: 'tool-result', toolName: p.toolName, toolOutput: p.toolOutput })
     }),
-    api.sidecar.onEvent('event.chat.done', () => { done = true }),
+    api.sidecar.onEvent('event.chat.done', () => { console.log('[RustEngine] done'); done = true }),
+    api.sidecar.onEvent('event.chat.error', (p: any) => { console.error('[RustEngine] error:', p.error) }),
   ]
 
-  try {
-    const result = await api.sidecar.call('chat.send', {
-      provider: config.provider,
-      modelId: config.modelId,
-      apiKey: config.apiKey,
-      baseUrl: config.baseUrl,
-      messages,
-      systemPrompt,
-      maxSteps: 25,
-    }, 180000) // 3 min timeout
+  console.log('[RustEngine] chat.send 已发送, 等待结果...')
+  const result = await api.sidecar.call('chat.send', {
+    provider: config.provider,
+    modelId: config.modelId,
+    apiKey: config.apiKey,
+    baseUrl: config.baseUrl,
+    messages,
+    systemPrompt,
+    maxSteps: 25,
+  }, 180000)
+  console.log('[RustEngine] chat.send 返回:', JSON.stringify(result).slice(0, 200))
 
-    // 等待 done 事件或超时
-    let wait = 0
-    while (!done && wait < 100) { await new Promise(r => setTimeout(r, 100)); wait++ }
+  // 等待 done 事件或超时
+  let wait = 0
+  while (!done && wait < 100) { await new Promise(r => setTimeout(r, 100)); wait++ }
 
-    onEvent?.({ type: 'done' })
-    if (!result.success) throw new Error(result.error || 'Sidecar 调用失败')
-    return fullText || '(无输出)'
+  onEvent?.({ type: 'done' })
+  if (!result.success) {
+    console.error('[RustEngine] 失败:', result.error)
+    throw new Error(result.error || 'Sidecar 调用失败')
+  }
+  console.log('[RustEngine] 成功, 累积文本:', fullText.length, '字')
+  return fullText || '(无输出)'
   } finally {
     unsubs.forEach(fn => fn())
   }
