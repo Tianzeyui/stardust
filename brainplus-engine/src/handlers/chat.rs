@@ -96,7 +96,7 @@ async fn chat_send(req: crate::protocol::Request, tx: mpsc::Sender<OutputLine>) 
     let messages: Vec<ChatMessage> = req.params.get("messages")
         .and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default();
     let system_prompt = req.params.get("systemPrompt").and_then(|v| v.as_str()).map(String::from);
-    let max_steps = req.params.get("maxSteps").and_then(|v| v.as_u64()).unwrap_or(5) as usize; // DeepSeek 容易死循环，限制 5 轮
+    let max_steps = req.params.get("maxSteps").and_then(|v| v.as_u64()).unwrap_or(25) as usize;
 
     let tools = build_tool_registry();
     let tool_defs = tools.definitions();
@@ -249,15 +249,6 @@ async fn run_tool_loop(
                 tool_calls: None,
                 tool_call_id: Some(id.clone()),
                 reasoning_content: None,
-            });
-        }
-
-        // 防止死循环：3 轮后强制要求回答
-        if steps >= 2 {
-            messages.push(ChatMessage {
-                role: "user".into(),
-                content: "你已经收集了足够信息。现在请用中文直接回答问题，不要再调工具。总结你的发现。".into(),
-                tool_calls: None, tool_call_id: None, reasoning_content: None,
             });
         }
 
