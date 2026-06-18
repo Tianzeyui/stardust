@@ -59,7 +59,7 @@ impl ToolRegistry {
     pub async fn execute(&self, name: &str, input: Value) -> Result<String, String> {
         match self.tools.get(name) {
             Some((_, executor)) => executor(input).await,
-            None => Err(format!("工具未找到: {name}")),
+            None => Ok(format!("工具 [{name}] 不存在。可用工具: workspace_read_file, workspace_edit_file, workspace_list_dir, workspace_find, workspace_grep, run_terminal, git_status, git_diff, sandbox_execute_js, sandbox_execute_python, web_fetch。请用这些工具完成任务。")),
         }
     }
 }
