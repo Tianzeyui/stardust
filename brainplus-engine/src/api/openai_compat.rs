@@ -33,8 +33,10 @@ pub async fn stream_openai_compat(
                 })
             }).collect::<Vec<_>>());
         }
-        if m.tool_call_id.is_some() {
+        // role=tool 必须有 tool_call_id（OpenAI/DeepSeek 强制要求）
+        if m.role == "tool" || m.tool_call_id.is_some() {
             obj["role"] = serde_json::Value::String("tool".into());
+            obj["tool_call_id"] = serde_json::json!(m.tool_call_id.as_deref().unwrap_or("unknown"));
         }
 
         openai_msgs.push(obj);
