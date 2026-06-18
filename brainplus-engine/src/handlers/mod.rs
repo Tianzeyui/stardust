@@ -6,6 +6,8 @@ pub mod terminal;
 pub mod search;
 pub mod sandbox;
 pub mod file_convert;
+pub mod graph;
+pub mod local_model;
 
 use crate::protocol::{HandlerResult, Request};
 use std::collections::HashMap;
@@ -90,6 +92,12 @@ pub fn register_all() -> Registry {
 
     // ====== 文件转换 ======
     file_convert::register(&mut registry);
+
+    // ====== 图数据库 ======
+    graph::register(&mut registry);
+
+    // ====== 本地模型 ======
+    local_model::register(&mut registry);
 
     // 内建方法
     registry.register("ping", |_req, _tx| async move {

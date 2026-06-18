@@ -269,5 +269,7 @@ Phase 6  ████                    1-2 周   清理
 - ✅ **Phase 2.3**：Git handler（`git.exec` / `git.status` / `git.diff` / `git.log`）— spawnSync 已删除
 - ✅ **Phase 2 (全部完成)**：转发层 + Git + 终端/PTY + 搜索/HTTP
 - ✅ **Phase 3 (全部完成)**：沙箱 (JS/Python) + 文档转换
-- ⏳ **下一步**：Phase 4 MCP 客户端 + 本地模型 + Neo4j
+- ✅ **Phase 4 (全部完成)**：Neo4j + 本地模型管理
+- ⚠️ **保留**：MCP Service (~15 handler) + model:chat 流式推理 — 需后续专项处理
+- ⏳ **下一步**：Phase 5 AI 引擎（核心）
 - ⏳ **随后**：Phase 2.5 搜索/HTTP — `reqwest` 替换浏览器 fetch

@@ -12,18 +12,9 @@ import { initWorkspace, getWorkspacePaths, getWorkspaceInfo, listOutputFiles, op
 import { writeSkillFiles, readSkillFile, deleteSkillFiles } from './main/skillDiskStore.js'
 import { downloadPluginFiles } from './main/pluginDownloader.js'
 import { cloneRepo, pullRepo, readRepoPluginsJson, parseGitHubUrl, cloneToTemp, removeTempDir } from './main/pluginRepoManager.js'
-import { configureGraph, graphQuery, testGraphConnection, getGraphConfig, closeGraphDriver } from './main/graphService.js'
+import { closeGraphDriver } from './main/graphService.js'
 // fileConvert → Rust Sidecar (file.checkType / file.convert)
-import {
-  getModelStatus,
-  getModelDir,
-  downloadModel,
-  deleteModel,
-  onModelEvent,
-  isModelInstalled,
-  setModelEnabled,
-} from './main/localModelManager.js'
-import { loadModel, chatLocal, unloadModel } from './main/localInference.js'
+// localModelManager + localInference → Rust Sidecar (model.* handlers)
 import {
   listConversations, getConversation, saveConversation,
   deleteConversation, createConversation,
@@ -273,6 +264,28 @@ forwardToSidecar('http:fetch', 'http.fetch',
   (args) => ({ url: args[0], method: args[1]?.method, headers: args[1]?.headers, body: args[1]?.body, timeout: args[1]?.timeout }),
 )
 
+// ==================== Graph → Rust Sidecar ====================
+
+forwardToSidecar('graph:configure', 'graph.configure',
+  (args) => ({ uri: args[0], username: args[1], password: args[2] }),
+)
+forwardToSidecar('graph:getConfig', 'graph.getConfig')
+forwardToSidecar('graph:testConnection', 'graph.testConnection')
+forwardToSidecar('graph:query', 'graph.query',
+  (args) => ({ cypher: args[0] }),
+)
+
+// ==================== Local Model → Rust Sidecar ====================
+
+forwardToSidecar('model:getStatus', 'model.getStatus')
+forwardToSidecar('model:isInstalled', 'model.isInstalled', (args) => ({ id: args[0] }))
+forwardToSidecar('model:delete', 'model.delete', (args) => ({ id: args[0] }))
+forwardToSidecar('model:toggleEnabled', 'model.toggleEnabled', (args) => ({ id: args[0], enabled: args[1] }))
+forwardToSidecar('model:openDir', 'model.openDir')
+forwardToSidecar('model:load', 'model.load', (args) => ({ id: args[0] }))
+forwardToSidecar('model:download', 'model.download', (args) => ({ id: args[0] }))
+forwardToSidecar('model:unload', 'model.unload')
+
 // ==================== Skills Disk IPC ====================
 
 ipcMain.handle('skills:writeFiles', async (_event, skillId: string, files: Record<string, string>) => {
@@ -376,86 +389,25 @@ ipcMain.handle('config:clearCloudinary', () => { clearCloudinaryCfg(); return tr
 ipcMain.handle('config:getAIModels', () => getAIModelsCfg())
 ipcMain.handle('config:saveAIModels', (_e, models: any[]) => saveAIModelsCfg(models))
 
-// ==================== Local Model IPC ====================
+// ==================== Local Model IPC (streaming inference via node-llama-cpp) ====================
 
-ipcMain.handle('model:getStatus', () => getModelStatus())
+import { loadModel, chatLocal, unloadModel } from './main/localInference.js'
 
-ipcMain.handle('model:download', async (_event, id: string) => {
-  return downloadModel(id)
-})
-
-ipcMain.handle('model:delete', async (_event, id: string) => {
-  return { success: deleteModel(id) }
-})
-
-ipcMain.handle('model:isInstalled', async (_event, id: string) => {
-  return isModelInstalled(id)
-})
-
-ipcMain.handle('model:toggleEnabled', async (_event, id: string, enabled: boolean) => {
-  setModelEnabled(id, enabled)
-  return true
-})
-
-ipcMain.handle('model:openDir', async () => {
-  shell.openPath(getModelDir())
-  return true
-})
-
-ipcMain.handle('model:load', async (_event, id: string) => {
-  return loadModel(id)
-})
-
-ipcMain.handle('model:unload', async () => {
-  await unloadModel()
-  return true
-})
-
-// 本地模型流式聊天
 ipcMain.on('model:chat', async (event, id: string, messages: Array<{ role: string; content: string }>) => {
   const win = BrowserWindow.fromWebContents(event.sender)
   if (!win) return
-
   try {
-    console.log('[model:chat] 加载模型:', id)
     const loadResult = await loadModel(id)
-    if (!loadResult.success) {
-      console.error('[model:chat] 加载失败:', loadResult.error)
-      win.webContents.send('model:chatError', { error: loadResult.error || '加载失败' })
-      return
-    }
-    console.log('[model:chat] 模型已加载，开始推理')
-
+    if (!loadResult.success) { win.webContents.send('model:chatError', { error: loadResult.error || '加载失败' }); return }
     const stream = chatLocal(messages)
     for await (const chunk of stream) {
       if (win.isDestroyed()) break
       win.webContents.send('model:chatChunk', { text: chunk })
     }
-    if (!win.isDestroyed()) {
-      win.webContents.send('model:chatDone', {})
-    }
+    if (!win.isDestroyed()) win.webContents.send('model:chatDone', {})
   } catch (e: any) {
-    console.error('[model:chat] 推理异常:', e.message, e.stack)
-    if (!win.isDestroyed()) {
-      win.webContents.send('model:chatError', { error: e.message || '推理异常' })
-    }
+    if (!win.isDestroyed()) win.webContents.send('model:chatError', { error: e.message || '推理异常' })
   }
-})
-
-// 模型事件 → 推送
-ipcMain.on('model:subscribe', (event) => {
-  const win = BrowserWindow.fromWebContents(event.sender)
-  if (!win) return
-
-  const unsubProgress = onModelEvent('download:progress', (id: string, loaded: number, total: number) => {
-    if (!win.isDestroyed()) win.webContents.send('model:downloadProgress', { id, loaded, total })
-  })
-  const unsubDone = onModelEvent('download:done', (id: string, success: boolean, error: string) => {
-    if (!win.isDestroyed()) win.webContents.send('model:downloadDone', { id, success, error })
-  })
-
-  event.sender.on('destroyed', () => { unsubProgress(); unsubDone() })
-  event.returnValue = true
 })
 
 // ==================== Conversation IPC ====================
@@ -855,15 +807,7 @@ ipcMain.handle('skill:cleanupTemp', async (_event, dirPath: string) => {
   }
 })
 
-// 图数据库
-ipcMain.handle('graph:configure', async (_event, uri: string, username: string, password: string) => {
-  return configureGraph(uri, username, password)
-})
-ipcMain.handle('graph:getConfig', async () => getGraphConfig())
-ipcMain.handle('graph:testConnection', async () => testGraphConnection())
-ipcMain.handle('graph:query', async (_event, cypher: string, pluginId: string) => {
-  return graphQuery(cypher, pluginId)
-})
+// graph → Rust Sidecar (graph.configure / graph.getConfig / graph.testConnection / graph.query)
 
 // ====== 权限管理 ======
 import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'fs'
