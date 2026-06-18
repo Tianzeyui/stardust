@@ -39,6 +39,9 @@ futures = "0.3"
 base64 = "0.22"
 humantime = "2"
 
+# PTY 终端（替代 node-pty）
+portable-pty = "0.8"
+
 [profile.release]
 opt-level = 3
 lto = true

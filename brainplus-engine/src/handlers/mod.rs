@@ -2,6 +2,7 @@
 
 pub mod fs;
 pub mod git;
+pub mod terminal;
 
 use crate::protocol::{HandlerResult, Request};
 use std::collections::HashMap;
@@ -74,6 +75,9 @@ pub fn register_all() -> Registry {
 
     // ====== git 操作 ======
     git::register(&mut registry);
+
+    // ====== 终端操作 ======
+    terminal::register(&mut registry);
 
     // 内建方法
     registry.register("ping", |_req, _tx| async move {

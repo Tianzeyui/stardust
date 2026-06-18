@@ -235,6 +235,31 @@ forwardStreamToSidecar(
 
 forwardToSidecar('git:exec', 'git.exec', mapCwdArgs)
 
+// ==================== Terminal IPC → Rust Sidecar ====================
+
+// terminal:execute(id, command, cwd) → terminal.exec({ id, command, cwd })
+forwardToSidecar('terminal:execute', 'terminal.exec',
+  (args) => ({ id: args[0], command: args[1], cwd: args[2] }),
+)
+// terminal:spawn(id, command, cwd) → terminal.spawn({ id, command, cwd })
+forwardToSidecar('terminal:spawn', 'terminal.spawn',
+  (args) => ({ id: args[0], command: args[1], cwd: args[2] }),
+)
+// terminal:kill(id) → terminal.kill({ id })
+forwardToSidecar('terminal:kill', 'terminal.kill', (args) => ({ id: args[0] }))
+// terminal:check(id) → terminal.check({ id })
+forwardToSidecar('terminal:check', 'terminal.check', (args) => ({ id: args[0] }))
+// PTY
+forwardToSidecar('terminal:ptySpawn', 'terminal.ptySpawn',
+  (args) => ({ id: args[0], command: args[1], cwd: args[2] }),
+)
+forwardToSidecar('terminal:ptyWrite', 'terminal.ptyWrite',
+  (args) => ({ id: args[0], data: args[1] }),
+)
+forwardToSidecar('terminal:ptyResize', 'terminal.ptyResize',
+  (args) => ({ id: args[0], cols: args[1], rows: args[2] }),
+)
+
 // ==================== Skills Disk IPC ====================
 
 ipcMain.handle('skills:writeFiles', async (_event, skillId: string, files: Record<string, string>) => {
@@ -927,92 +952,6 @@ ipcMain.handle('http:fetch', async (_e, url: string, opts?: { method?: string; h
   }
 })
 
-// ====== 终端命令执行 ======
-import { spawn, type ChildProcess } from 'child_process'
-
-const terminalProcesses = new Map<string, { child: ChildProcess; stdout: string; stderr: string; done: boolean; exitCode?: number }>()
-
-ipcMain.handle('terminal:execute', async (_event, id: string, command: string, cwd: string) => {
-  try {
-    const shell = process.platform === 'win32' ? 'cmd.exe' : '/bin/sh'
-    const shellArgs = process.platform === 'win32' ? ['/c', command] : ['-c', command]
-    const workDir = cwd || app.getPath('home')
-
-    return await new Promise((resolve) => {
-      const child = spawn(shell, shellArgs, {
-        cwd: workDir,
-        env: { ...process.env },
-        shell: false,
-      })
-
-      let stdout = ''
-      let stderr = ''
-
-      child.stdout.on('data', (data: Buffer) => { stdout += data.toString() })
-      child.stderr.on('data', (data: Buffer) => { stderr += data.toString() })
-
-      child.on('close', (code: number | null) => {
-        terminalProcesses.set(id, { child, stdout, stderr, done: true, exitCode: code ?? undefined })
-        resolve({ success: code === 0, stdout, stderr, exitCode: code })
-      })
-      child.on('error', (err: Error) => {
-        terminalProcesses.set(id, { child, stdout, stderr, done: true, exitCode: -1 })
-        resolve({ success: false, stdout, stderr: err.message, exitCode: -1 })
-      })
-
-      terminalProcesses.set(id, { child, stdout, stderr, done: false })
-    })
-  } catch (e: any) {
-    return { success: false, error: e.message }
-  }
-})
-
-// 异步执行：立刻返回，通过 terminal:output 事件推送输出
-ipcMain.handle('terminal:spawn', async (_event, id: string, command: string, cwd: string) => {
-  try {
-    const shell = process.platform === 'win32' ? 'cmd.exe' : '/bin/sh'
-    const shellArgs = process.platform === 'win32' ? ['/c', command] : ['-c', command]
-    const workDir = cwd || app.getPath('home')
-
-    const child = spawn(shell, shellArgs, {
-      cwd: workDir,
-      env: { ...process.env },
-      shell: false,
-    })
-
-    let stdout = ''
-    let stderr = ''
-
-    const send = (done: boolean, exitCode?: number) => {
-      mainWindow?.webContents.send('terminal:output', { id, stdout, stderr, done, exitCode })
-    }
-
-    child.stdout.on('data', (data: Buffer) => { stdout += data.toString(); send(false) })
-    child.stderr.on('data', (data: Buffer) => { stderr += data.toString(); send(false) })
-
-    child.on('close', (code: number | null) => {
-      terminalProcesses.set(id, { child, stdout, stderr, done: true, exitCode: code ?? undefined })
-      send(true, code ?? undefined)
-    })
-    child.on('error', (err: Error) => {
-      stderr = err.message
-      terminalProcesses.set(id, { child, stdout, stderr, done: true, exitCode: -1 })
-      send(true, -1)
-    })
-
-    terminalProcesses.set(id, { child, stdout, stderr, done: false })
-    return { success: true }
-  } catch (e: any) {
-    return { success: false, error: e.message }
-  }
-})
-
-ipcMain.handle('terminal:check', async (_event, id: string) => {
-  const p = terminalProcesses.get(id)
-  if (!p) return { found: false }
-  return { found: true, stdout: p.stdout, stderr: p.stderr, done: p.done, exitCode: p.exitCode }
-})
-
 // ====== 权限管理 ======
 import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'fs'
 import { join, dirname } from 'path'
@@ -1048,65 +987,6 @@ ipcMain.handle('perm:grant', async (_event, workspaceRoot: string, type: string,
     writeFileSync(f, JSON.stringify(data, null, 2), 'utf-8')
     return true
   } catch { return false }
-})
-
-ipcMain.handle('terminal:kill', async (_event, id: string) => {
-  const p = terminalProcesses.get(id)
-  if (p && !p.done) {
-    p.done = true
-    // SIGKILL 不可被捕获，确保进程立即终止
-    try { p.child.kill('SIGKILL') } catch {}
-  }
-  const pty = ptyProcesses.get(id)
-  if (pty) { pty.kill(); ptyProcesses.delete(id) }
-  return { success: true }
-})
-
-// ====== PTY 终端（交互式） ======
-import { spawn as spawnPty } from 'node-pty'
-
-const ptyProcesses = new Map<string, any>()
-
-ipcMain.handle('terminal:ptySpawn', async (_event, id: string, command: string, cwd: string) => {
-  try {
-    const shell = process.platform === 'win32' ? 'powershell.exe' : process.env.SHELL || '/bin/bash'
-    const shellArgs = process.platform === 'win32' ? ['-Command', command] : ['-c', command]
-    const workDir = cwd || app.getPath('home')
-
-    const pty = spawnPty(shell, shellArgs, {
-      cwd: workDir,
-      env: process.env as any,
-      cols: 120,
-      rows: 30,
-    })
-
-    ptyProcesses.set(id, pty)
-
-    pty.onData((data: string) => {
-      mainWindow?.webContents.send('terminal:ptyOutput', { id, data })
-    })
-
-    pty.onExit(({ exitCode }: { exitCode: number }) => {
-      mainWindow?.webContents.send('terminal:ptyOutput', { id, data: `\n\x1b[33m[进程退出，exit code: ${exitCode}]\x1b[0m\n`, done: true, exitCode })
-      ptyProcesses.delete(id)
-    })
-
-    return { success: true }
-  } catch (e: any) {
-    return { success: false, error: e.message }
-  }
-})
-
-ipcMain.handle('terminal:ptyWrite', async (_event, id: string, data: string) => {
-  const pty = ptyProcesses.get(id)
-  if (!pty) return { success: false, error: '进程不存在' }
-  pty.write(data)
-  return { success: true }
-})
-
-ipcMain.handle('terminal:ptyResize', async (_event, id: string, cols: number, rows: number) => {
-  const pty = ptyProcesses.get(id)
-  if (pty) pty.resize(cols, rows)
 })
 
 app.on('before-quit', async () => {
