@@ -12,7 +12,12 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
-/// 构建完整的工具注册表（所有已实现的 Rust 工具）
+fn run_git(args: &[&str], cwd: &str) -> String {
+    std::process::Command::new("git").args(args).current_dir(cwd)
+        .output().map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+        .unwrap_or_else(|e| format!("{e}"))
+}
+/// 构建完整的工具注册表
 fn build_tool_registry() -> ToolRegistry {
     let mut r = ToolRegistry::new();
 
@@ -32,19 +37,16 @@ fn build_tool_registry() -> ToolRegistry {
     r.register("check_terminal", "Check running command status. id.", json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}), |_i: Value| Box::pin(async move { Ok("no running commands".into()) }));
 
     // —— Git (对齐 TS git.ts) ——
-    let git = |args: &[&str], cwd: &str| -> String {
-        std::process::Command::new("git").args(args).current_dir(cwd).output().map(|o| String::from_utf8_lossy(&o.stdout).to_string()).unwrap_or_else(|e| format!("{e}"))
-    };
-    r.register("git_status", "Git status. cwd.", json!({"type":"object","properties":{"cwd":{"type":"string"}},"required":["cwd"]}), |i: Value| { let c=i["cwd"].as_str().unwrap_or(".").to_string(); Box::pin(async move { Ok(git(&["status","--porcelain"],&c)) }) });
-    r.register("git_diff", "Git diff (unstaged). cwd.", json!({"type":"object","properties":{"cwd":{"type":"string"}},"required":["cwd"]}), |i: Value| { let c=i["cwd"].as_str().unwrap_or(".").to_string(); Box::pin(async move { Ok(git(&["diff"],&c)) }) });
-    r.register("git_diff_staged", "Git diff (staged). cwd.", json!({"type":"object","properties":{"cwd":{"type":"string"}},"required":["cwd"]}), |i: Value| { let c=i["cwd"].as_str().unwrap_or(".").to_string(); Box::pin(async move { Ok(git(&["diff","--staged"],&c)) }) });
-    r.register("git_log", "Git log (recent N). cwd, n.", json!({"type":"object","properties":{"cwd":{"type":"string"},"n":{"type":"integer"}},"required":["cwd"]}), |i: Value| { let c=i["cwd"].as_str().unwrap_or(".").to_string(); let n=i["n"].as_u64().unwrap_or(10).to_string(); Box::pin(async move { Ok(git(&["log","--oneline","-n",&n],&c)) }) });
-    r.register("git_add", "Git add files. cwd, files (space-separated).", json!({"type":"object","properties":{"cwd":{"type":"string"},"files":{"type":"string"}},"required":["cwd","files"]}), |i: Value| { let c=i["cwd"].as_str().unwrap_or(".").to_string(); let f=i["files"].as_str().unwrap_or(".").to_string(); Box::pin(async move { Ok(git(&["add",&f],&c)) }) });
-    r.register("git_commit", "Git commit. cwd, message.", json!({"type":"object","properties":{"cwd":{"type":"string"},"message":{"type":"string"}},"required":["cwd","message"]}), |i: Value| { let c=i["cwd"].as_str().unwrap_or(".").to_string(); let m=i["message"].as_str().unwrap_or("").to_string(); Box::pin(async move { Ok(git(&["commit","-m",&m],&c)) }) });
-    r.register("git_push", "Git push. cwd.", json!({"type":"object","properties":{"cwd":{"type":"string"}},"required":["cwd"]}), |i: Value| { let c=i["cwd"].as_str().unwrap_or(".").to_string(); Box::pin(async move { Ok(git(&["push"],&c)) }) });
-    r.register("git_branch", "List/create branches. cwd, name (optional).", json!({"type":"object","properties":{"cwd":{"type":"string"},"name":{"type":"string"}},"required":["cwd"]}), |i: Value| { let c=i["cwd"].as_str().unwrap_or(".").to_string(); let n=i["name"].as_str(); let args: Vec<&str>=if let Some(name)=n { vec!["branch",name] } else { vec!["branch"] }; Box::pin(async move { Ok(git(&args,&c)) }) });
-    r.register("git_checkout", "Git checkout branch. cwd, branch.", json!({"type":"object","properties":{"cwd":{"type":"string"},"branch":{"type":"string"}},"required":["cwd","branch"]}), |i: Value| { let c=i["cwd"].as_str().unwrap_or(".").to_string(); let b=i["branch"].as_str().unwrap_or("main").to_string(); Box::pin(async move { Ok(git(&["checkout",&b],&c)) }) });
-    r.register("git_reset", "Git reset (soft/mixed/hard). cwd, mode (--soft/--mixed/--hard).", json!({"type":"object","properties":{"cwd":{"type":"string"},"mode":{"type":"string"}},"required":["cwd"]}), |i: Value| { let c=i["cwd"].as_str().unwrap_or(".").to_string(); let m=i["mode"].as_str().unwrap_or("--mixed").to_string(); Box::pin(async move { Ok(git(&["reset",&m],&c)) }) });
+    r.register("git_status", "Git status. cwd.", json!({"type":"object","properties":{"cwd":{"type":"string"}},"required":["cwd"]}), |i: Value| { let c=i["cwd"].as_str().unwrap_or(".").to_string(); Box::pin(async move { Ok(run_git(git(&["status","--porcelain"],&c)) }) });
+    r.register("git_diff", "Git diff (unstaged). cwd.", json!({"type":"object","properties":{"cwd":{"type":"string"}},"required":["cwd"]}), |i: Value| { let c=i["cwd"].as_str().unwrap_or(".").to_string(); Box::pin(async move { Ok(run_git(git(&["diff"],&c)) }) });
+    r.register("git_diff_staged", "Git diff (staged). cwd.", json!({"type":"object","properties":{"cwd":{"type":"string"}},"required":["cwd"]}), |i: Value| { let c=i["cwd"].as_str().unwrap_or(".").to_string(); Box::pin(async move { Ok(run_git(git(&["diff","--staged"],&c)) }) });
+    r.register("git_log", "Git log (recent N). cwd, n.", json!({"type":"object","properties":{"cwd":{"type":"string"},"n":{"type":"integer"}},"required":["cwd"]}), |i: Value| { let c=i["cwd"].as_str().unwrap_or(".").to_string(); let n=i["n"].as_u64().unwrap_or(10).to_string(); Box::pin(async move { Ok(run_git(git(&["log","--oneline","-n",&n],&c)) }) });
+    r.register("git_add", "Git add files. cwd, files (space-separated).", json!({"type":"object","properties":{"cwd":{"type":"string"},"files":{"type":"string"}},"required":["cwd","files"]}), |i: Value| { let c=i["cwd"].as_str().unwrap_or(".").to_string(); let f=i["files"].as_str().unwrap_or(".").to_string(); Box::pin(async move { Ok(run_git(git(&["add",&f],&c)) }) });
+    r.register("git_commit", "Git commit. cwd, message.", json!({"type":"object","properties":{"cwd":{"type":"string"},"message":{"type":"string"}},"required":["cwd","message"]}), |i: Value| { let c=i["cwd"].as_str().unwrap_or(".").to_string(); let m=i["message"].as_str().unwrap_or("").to_string(); Box::pin(async move { Ok(run_git(git(&["commit","-m",&m],&c)) }) });
+    r.register("git_push", "Git push. cwd.", json!({"type":"object","properties":{"cwd":{"type":"string"}},"required":["cwd"]}), |i: Value| { let c=i["cwd"].as_str().unwrap_or(".").to_string(); Box::pin(async move { Ok(run_git(git(&["push"],&c)) }) });
+    r.register("git_branch", "List/create branches. cwd, name (optional).", json!({"type":"object","properties":{"cwd":{"type":"string"},"name":{"type":"string"}},"required":["cwd"]}), |i: Value| { let c=i["cwd"].as_str().unwrap_or(".").to_string(); let n=i["name"].as_str(); let args: Vec<&str>=if let Some(name)=n { vec!["branch",name] } else { vec!["branch"] }; Box::pin(async move { Ok(run_git(git(&args,&c)) }) });
+    r.register("git_checkout", "Git checkout branch. cwd, branch.", json!({"type":"object","properties":{"cwd":{"type":"string"},"branch":{"type":"string"}},"required":["cwd","branch"]}), |i: Value| { let c=i["cwd"].as_str().unwrap_or(".").to_string(); let b=i["branch"].as_str().unwrap_or("main").to_string(); Box::pin(async move { Ok(run_git(git(&["checkout",&b],&c)) }) });
+    r.register("git_reset", "Git reset (soft/mixed/hard). cwd, mode (--soft/--mixed/--hard).", json!({"type":"object","properties":{"cwd":{"type":"string"},"mode":{"type":"string"}},"required":["cwd"]}), |i: Value| { let c=i["cwd"].as_str().unwrap_or(".").to_string(); let m=i["mode"].as_str().unwrap_or("--mixed").to_string(); Box::pin(async move { Ok(run_git(git(&["reset",&m],&c)) }) });
 
     // —— 沙箱 ——
     r.register("sandbox_execute_js", "Execute JS code. code, packages (optional npm pkgs).", json!({"type":"object","properties":{"code":{"type":"string"},"packages":{"type":"array","items":{"type":"string"}}},"required":["code"]}), |i: Value| { let code=i["code"].as_str().unwrap_or("").to_string(); Box::pin(async move { match tokio::process::Command::new("node").args(["-e",&code]).output().await { Ok(o)=>Ok(format!("{}{}",String::from_utf8_lossy(&o.stdout),String::from_utf8_lossy(&o.stderr))), Err(e)=>Ok(format!("{e}")) } }) });
