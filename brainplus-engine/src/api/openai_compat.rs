@@ -133,13 +133,14 @@ pub async fn stream_openai_compat(
                                 let func_name = tc["function"]["name"].as_str().unwrap_or("").to_string();
                                 let args = tc["function"]["arguments"].as_str().unwrap_or("").to_string();
 
+                                // 空名跳过（DeepSeek 偶尔发空 name 的 delta）
+                                if func_name.is_empty() && args.is_empty() { continue; }
                                 if !id.is_empty() || !idx.is_empty() {
-                                    // 新 tool call 或已有 call 的参数
                                     let key = if !id.is_empty() { id.clone() } else { idx.clone() };
                                     let existing = pending_calls.iter_mut().find(|(k, _, _)| *k == key);
                                     if let Some((_, _, ref mut accumulated)) = existing {
                                         accumulated.push_str(&args);
-                                    } else if !func_name.is_empty() || !args.is_empty() {
+                                    } else {
                                         pending_calls.push((key, func_name, args));
                                     }
                                 }
