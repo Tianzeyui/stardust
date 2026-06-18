@@ -3,6 +3,7 @@
 pub mod fs;
 pub mod git;
 pub mod terminal;
+pub mod search;
 
 use crate::protocol::{HandlerResult, Request};
 use std::collections::HashMap;
@@ -78,6 +79,9 @@ pub fn register_all() -> Registry {
 
     // ====== 终端操作 ======
     terminal::register(&mut registry);
+
+    // ====== 搜索 & HTTP ======
+    search::register(&mut registry);
 
     // 内建方法
     registry.register("ping", |_req, _tx| async move {

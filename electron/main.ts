@@ -260,6 +260,27 @@ forwardToSidecar('terminal:ptyResize', 'terminal.ptyResize',
   (args) => ({ id: args[0], cols: args[1], rows: args[2] }),
 )
 
+// ==================== Search & HTTP → Rust Sidecar ====================
+
+forwardToSidecar('search:google', 'search.google',
+  (args) => ({ query: args[0], apiKey: args[1], cx: args[2] }),
+)
+forwardToSidecar('search:brave', 'search.brave',
+  (args) => ({ query: args[0], apiKey: args[1] }),
+)
+forwardToSidecar('search:ddg', 'search.ddg',
+  (args) => ({ query: args[0] }),
+)
+forwardToSidecar('search:bing', 'search.bing',
+  (args) => ({ query: args[0], count: args[1] }),
+)
+forwardToSidecar('search:fetch', 'search.fetch',
+  (args) => ({ url: args[0], timeout: args[1] }),
+)
+forwardToSidecar('http:fetch', 'http.fetch',
+  (args) => ({ url: args[0], method: args[1]?.method, headers: args[1]?.headers, body: args[1]?.body, timeout: args[1]?.timeout }),
+)
+
 // ==================== Skills Disk IPC ====================
 
 ipcMain.handle('skills:writeFiles', async (_event, skillId: string, files: Record<string, string>) => {
@@ -851,105 +872,6 @@ ipcMain.handle('graph:getConfig', async () => getGraphConfig())
 ipcMain.handle('graph:testConnection', async () => testGraphConnection())
 ipcMain.handle('graph:query', async (_event, cypher: string, pluginId: string) => {
   return graphQuery(cypher, pluginId)
-})
-
-// 搜索代理：主进程发起 HTTP 请求（绕过渲染进程 CORS 限制）
-ipcMain.handle('search:google', async (_e, query: string, apiKey: string, cx: string) => {
-  try {
-    const url = `https://www.googleapis.com/customsearch/v1?key=${encodeURIComponent(apiKey)}&cx=${encodeURIComponent(cx)}&q=${encodeURIComponent(query)}`
-    const res = await fetch(url)
-    const json = await res.json()
-    if (json.items) return { success: true, data: json.items.slice(0, 10).map((i: any) => ({ title: i.title, url: i.link, snippet: i.snippet })) }
-    return { success: false, error: json.error?.message || 'No results' }
-  } catch (e: any) { return { success: false, error: e.message } }
-})
-
-ipcMain.handle('search:brave', async (_e, query: string, apiKey: string) => {
-  try {
-    const res = await fetch(`https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=10`, {
-      headers: { 'Accept': 'application/json', 'Accept-Encoding': 'gzip', 'X-Subscription-Token': apiKey },
-    })
-    const json = await res.json()
-    if (json.web?.results) return { success: true, data: json.web.results.map((i: any) => ({ title: i.title, url: i.url, snippet: i.description })) }
-    return { success: false, error: 'No results' }
-  } catch (e: any) { return { success: false, error: e.message } }
-})
-
-ipcMain.handle('search:ddg', async (_e, query: string) => {
-  try {
-    const res = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1`)
-    const json = await res.json()
-    if (json.Results) return { success: true, data: json.Results.slice(0, 10).map((i: any) => ({ title: i.Text || i.FirstURL, url: i.FirstURL, snippet: i.Text })) }
-    if (json.RelatedTopics) {
-      const items = json.RelatedTopics.filter((t: any) => t.FirstURL).slice(0, 10)
-      return { success: true, data: items.map((i: any) => ({ title: i.Text?.slice(0, 80), url: i.FirstURL, snippet: i.Text?.slice(0, 200) })) }
-    }
-    return { success: true, data: [] }
-  } catch (e: any) { return { success: false, error: e.message } }
-})
-
-ipcMain.handle('search:bing', async (_e, query: string, count: number) => {
-  try {
-    const res = await fetch(`https://www.bing.com/search?q=${encodeURIComponent(query)}&count=${count || 10}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; BrainPlus/1.0)' },
-    })
-    const html = await res.text()
-    const results: { title: string; url: string; snippet: string }[] = []
-    const itemRe = /<li class="b_algo"[^>]*>[\s\S]*?<\/li>/gi
-    const matches = html.match(itemRe) || []
-    for (const m of matches.slice(0, 10)) {
-      const title = (m.match(/<h2[^>]*>[\s\S]*?<\/h2>/i)?.[0] || '').replace(/<[^>]+>/g, '').trim()
-      const url = (m.match(/href="(https?:\/\/[^"]+)"/)?.[1] || '').replace(/&amp;/g, '&')
-      const snippet = (m.match(/<p[^>]*>[\s\S]*?<\/p>/i)?.[0] || '').replace(/<[^>]+>/g, '').trim()
-      if (title && url) results.push({ title, url, snippet })
-    }
-    return { success: true, data: results }
-  } catch (e: any) { return { success: false, error: e.message } }
-})
-
-ipcMain.handle('search:fetch', async (_e, url: string, timeout: number) => {
-  try {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), timeout)
-    try {
-      const res = await fetch(url, {
-        signal: controller.signal,
-        headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36' },
-      })
-      if (!res.ok) return { success: false, error: `HTTP ${res.status}` }
-      const text = await res.text()
-      return { success: true, data: text }
-    } finally { clearTimeout(timer) }
-  } catch (e: any) {
-    if (e.name === 'AbortError') return { success: false, error: 'timeout' }
-    return { success: false, error: e.message }
-  }
-})
-
-// 通用 HTTP 代理（插件用）
-ipcMain.handle('http:fetch', async (_e, url: string, opts?: { method?: string; headers?: Record<string, string>; body?: string; timeout?: number }) => {
-  try {
-    const timeout = opts?.timeout || 15000
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), timeout)
-    try {
-      const res = await fetch(url, {
-        method: opts?.method || 'GET',
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-          'Accept': 'text/html,application/json,*/*',
-          ...(opts?.headers || {}),
-        },
-        body: opts?.body || undefined,
-        signal: controller.signal,
-      })
-      const text = await res.text()
-      return { success: true, data: text, status: res.status }
-    } finally { clearTimeout(timer) }
-  } catch (e: any) {
-    if (e.name === 'AbortError') return { success: false, error: 'timeout' }
-    return { success: false, error: e.message }
-  }
 })
 
 // ====== 权限管理 ======

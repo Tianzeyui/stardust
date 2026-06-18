@@ -242,7 +242,7 @@ src/lib/contextWindowManager.ts       → Rust 上下文管理
 
 ```
 Phase 1  ██████████ ✅           已完成   Rust 骨架 + 通信桥 + 12 fs handler
-Phase 2  ████████████🟢          进行中   转发层 ✅ | Git ✅ | 终端 ✅ | 搜索 ⏳
+Phase 2  ████████████ ✅           已完成   转发层 + Git + 终端 + 搜索 全部迁入 Rust
 Phase 3  ████████████            3-4 周   沙箱 (JS/Python) + 文档转换
 Phase 4  ████████████            3-4 周   MCP + 本地模型 + Neo4j
 Phase 5  ████████████████████    5-6 周   🤖 AI 引擎（最后一块拼图）
@@ -267,6 +267,6 @@ Phase 6  ████                    1-2 周   清理
 - ✅ **Phase 1**：Rust Sidecar 骨架 + JSON-RPC + 12 fs handler + Electron 集成
 - ✅ **Phase 2.2**：IPC 转发层（`forwardToSidecar` / `forwardStreamToSidecar` / `forwardMany`）
 - ✅ **Phase 2.3**：Git handler（`git.exec` / `git.status` / `git.diff` / `git.log`）— spawnSync 已删除
-- ✅ **Phase 2.4**：终端 handler（`terminal.exec/spawn/kill/check` + PTY）— node-pty + spawn 已删除
-- ⏳ **下一步**：Phase 2.5 搜索/HTTP — `reqwest` 替换浏览器 fetch
+- ✅ **Phase 2 (全部完成)**：转发层 + Git + 终端/PTY + 搜索/HTTP — 重 I/O 全部迁入 Rust
+- ⏳ **下一步**：Phase 3 沙箱 (JS/Python) + 文档转换
 - ⏳ **随后**：Phase 2.5 搜索/HTTP — `reqwest` 替换浏览器 fetch

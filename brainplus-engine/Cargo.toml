@@ -42,6 +42,9 @@ humantime = "2"
 # PTY 终端（替代 node-pty）
 portable-pty = "0.8"
 
+# HTTP 客户端（搜索/抓取）
+reqwest = { version = "0.12", features = ["json"] }
+
 [profile.release]
 opt-level = 3
 lto = true
