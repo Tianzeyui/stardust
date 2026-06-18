@@ -261,7 +261,7 @@ async function chatViaSidecar(
     api.sidecar.onEvent('event.chat.done', () => { console.log('[RustEngine] done'); done = true }),
     api.sidecar.onEvent('event.chat.error', (p: any) => { console.error('[RustEngine] error:', p.error) }),
   ]
-
+  try {
   console.log('[RustEngine] chat.send 已发送, 等待结果...')
   const result = await api.sidecar.call('chat.send', {
     provider: config.provider,
