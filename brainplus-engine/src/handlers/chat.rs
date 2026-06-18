@@ -182,7 +182,8 @@ async fn run_tool_loop(
         // 收集本轮事件
         let mut had_tool_calls = false;
         let mut assistant_content = String::new();
-        let mut pending_calls: Vec<(String, String, Value)> = Vec::new(); // (id, name, input)
+        let mut reasoning_content = String::new();
+        let mut pending_calls: Vec<(String, String, Value)> = Vec::new();
 
         while let Some(event) = event_rx.recv().await {
             match event {
@@ -191,6 +192,7 @@ async fn run_tool_loop(
                     let _ = stream_tx.send(StreamEvent::TextDelta { text }).await;
                 }
                 StreamEvent::ReasoningDelta { text } => {
+                    reasoning_content.push_str(&text);
                     let _ = stream_tx.send(StreamEvent::ReasoningDelta { text }).await;
                 }
                 StreamEvent::ToolCallStart { id, name, input } => {
@@ -225,7 +227,7 @@ async fn run_tool_loop(
                     input: input.clone(),
                 }
             }).collect()),
-            tool_call_id: None, reasoning_content: None,
+            tool_call_id: None, reasoning_content: if reasoning_content.is_empty() { None } else { Some(reasoning_content.clone()) },
         });
 
         // 执行工具
