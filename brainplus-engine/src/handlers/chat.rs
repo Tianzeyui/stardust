@@ -103,6 +103,7 @@ async fn chat_send(req: crate::protocol::Request, tx: mpsc::Sender<OutputLine>) 
 
     // 流式事件通道
     let (stream_tx, mut stream_rx) = mpsc::channel::<StreamEvent>(128);
+    let mut accumulated_text = String::new();
 
     // 后台运行工具循环
     let loop_result = {
@@ -118,8 +119,10 @@ async fn chat_send(req: crate::protocol::Request, tx: mpsc::Sender<OutputLine>) 
     // 转发流式事件到 Electron（在返回之前）
     while let Some(event) = stream_rx.recv().await {
         match event {
-            StreamEvent::TextDelta { text } =>
-                emit(&tx, "chat.textDelta", serde_json::json!({"text": text})),
+            StreamEvent::TextDelta { text } => {
+                accumulated_text.push_str(&text);
+                emit(&tx, "chat.textDelta", serde_json::json!({"text": text}));
+            }
             StreamEvent::ReasoningDelta { text } =>
                 emit(&tx, "chat.reasoningDelta", serde_json::json!({"text": text})),
             StreamEvent::ToolCallStart { id, name, input } =>
@@ -133,7 +136,7 @@ async fn chat_send(req: crate::protocol::Request, tx: mpsc::Sender<OutputLine>) 
     // 等待工具循环完成
     match loop_result.await {
         Ok(Ok(usage)) => Ok(serde_json::json!({
-            "success": true, "inputTokens": usage.input_tokens, "outputTokens": usage.output_tokens,
+            "success": true, "inputTokens": usage.input_tokens, "outputTokens": usage.output_tokens, "text": accumulated_text,
         })),
         Ok(Err(e)) => Ok(serde_json::json!({"success": false, "error": e})),
         Err(e) => Ok(serde_json::json!({"success": false, "error": format!("join: {e}")})),
