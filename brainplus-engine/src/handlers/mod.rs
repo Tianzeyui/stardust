@@ -1,5 +1,6 @@
 //! Handler 注册表 & 方法路由
 
+pub mod chat;
 pub mod fs;
 pub mod git;
 pub mod terminal;
@@ -74,6 +75,9 @@ impl Registry {
 
 pub fn register_all() -> Registry {
     let mut registry = Registry::new();
+
+    // ====== AI Chat ======
+    chat::register(&mut registry);
 
     // ====== fs 操作 ======
     fs::register(&mut registry);

@@ -11,9 +11,11 @@
 //! 输出顺序保证：所有输出（响应+事件）都通过同一个 mpsc channel → 单 writer，
 //! 确保事件一定在响应之前发出。
 
+mod api;
 mod error;
 mod handlers;
 mod protocol;
+mod tools;
 
 use protocol::Response;
 use std::io::{self, BufRead, Write};

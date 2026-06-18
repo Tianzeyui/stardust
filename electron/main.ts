@@ -286,6 +286,12 @@ forwardToSidecar('model:load', 'model.load', (args) => ({ id: args[0] }))
 forwardToSidecar('model:download', 'model.download', (args) => ({ id: args[0] }))
 forwardToSidecar('model:unload', 'model.unload')
 
+// ==================== AI Chat → Rust Sidecar (Phase 5) ====================
+
+// chat:send 目前作为 opt-in 功能：TS 侧可通过此 IPC 委托 Rust AI 引擎
+// 未来 chatService.ts 将变为薄包装，直接调用此接口
+forwardToSidecar('chat:send', 'chat.send')
+
 // ==================== Skills Disk IPC ====================
 
 ipcMain.handle('skills:writeFiles', async (_event, skillId: string, files: Record<string, string>) => {
