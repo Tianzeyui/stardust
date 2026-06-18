@@ -8,7 +8,7 @@ use crate::api::{anthropic, openai_compat};
 use crate::handlers::{emit, OutputLine, Registry};
 use crate::protocol::HandlerResult;
 use crate::tools::ToolRegistry;
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
