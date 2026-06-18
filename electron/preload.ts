@@ -262,4 +262,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     check: (workspaceRoot: string, type: string, value: string) => ipcRenderer.invoke('perm:check', workspaceRoot, type, value),
     grant: (workspaceRoot: string, type: string, pattern: string) => ipcRenderer.invoke('perm:grant', workspaceRoot, type, pattern),
   },
+
+	  sidecar: {
+	    call: (method: string, params?: any, timeout?: number) =>
+	      ipcRenderer.invoke('sidecar:call', method, params, timeout),
+	    onEvent: (eventName: string, cb: (params: any) => void) => {
+	      const handler = (_event: any, data: any) => {
+	        if (data.event === eventName) cb(data.params)
+	      }
+	      ipcRenderer.on('sidecar:event', handler)
+	      return () => ipcRenderer.removeListener('sidecar:event', handler)
+	    },
+	  },
 })

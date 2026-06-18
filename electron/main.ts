@@ -211,6 +211,14 @@ forwardToSidecar('model:chat', 'model.chat',
   (args) => ({ id: args[0], messages: args[1] }),
 )
 
+// ==================== Sidecar bridge IPC ====================
+
+// 渲染进程 → Sidecar 的直接调用通道
+ipcMain.handle('sidecar:call', async (_event, method: string, params?: any, timeout?: number) => {
+  try { return await getSidecar().call(method, params || {}, timeout) }
+  catch (e: any) { return { success: false, error: e.message } }
+})
+
 // ==================== MCP → Rust Sidecar ====================
 
 forwardMany([
@@ -399,6 +407,17 @@ app.whenReady().then(async () => {
     const sidecar = initSidecar()
     await sidecar.start()
     console.log('[main] 🦀 Rust Sidecar 已就绪')
+
+    // 全局事件转发：Sidecar 事件 → 渲染进程
+    sidecar.onEvent('event.chat.textDelta', (p) => mainWindow?.webContents.send('sidecar:event', { event: 'event.chat.textDelta', params: p }))
+    sidecar.onEvent('event.chat.reasoningDelta', (p) => mainWindow?.webContents.send('sidecar:event', { event: 'event.chat.reasoningDelta', params: p }))
+    sidecar.onEvent('event.chat.toolCall', (p) => mainWindow?.webContents.send('sidecar:event', { event: 'event.chat.toolCall', params: p }))
+    sidecar.onEvent('event.chat.toolResult', (p) => mainWindow?.webContents.send('sidecar:event', { event: 'event.chat.toolResult', params: p }))
+    sidecar.onEvent('event.chat.done', (p) => mainWindow?.webContents.send('sidecar:event', { event: 'event.chat.done', params: p }))
+    sidecar.onEvent('event.chat.error', (p) => mainWindow?.webContents.send('sidecar:event', { event: 'event.chat.error', params: p }))
+    sidecar.onEvent('event.model.chatChunk', (p) => mainWindow?.webContents.send('sidecar:event', { event: 'event.model.chatChunk', params: p }))
+    sidecar.onEvent('event.model.chatDone', (p) => mainWindow?.webContents.send('sidecar:event', { event: 'event.model.chatDone', params: p }))
+    sidecar.onEvent('event.model.chatError', (p) => mainWindow?.webContents.send('sidecar:event', { event: 'event.model.chatError', params: p }))
   } catch (e: any) {
     console.error('[main] ⚠️ Rust Sidecar 启动失败，回退到 Node.js 模式:', e.message)
   }

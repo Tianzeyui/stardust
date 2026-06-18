@@ -1,8 +1,4 @@
-import { streamText, generateText, stepCountIs, jsonSchema, type ModelMessage } from 'ai'
-import { createOpenAI } from '@ai-sdk/openai'
-import { createAnthropic } from '@ai-sdk/anthropic'
-import { createGoogleGenerativeAI } from '@ai-sdk/google'
-import { createDeepSeek } from '@ai-sdk/deepseek'
+import { streamChatWithTools, generateText, jsonSchema, type ChatMessage, type ProviderConfig } from './api'
 import { getAIModels, getAgentMaxSteps, type AIModelConfig } from './config'
 import { getInstalledSkills } from './skillService'
 import type { DisclosureResult } from './toolDisclosure'
@@ -69,44 +65,18 @@ export function setAgentUIHandler(handler: ((event: AgentUIEvent) => void) | nul
   setAgentToolHandler(handler)
 }
 
-function getProvider(model: AIModelConfig) {
-  const apiKey = model.apiKey || 'dummy'
-  const baseURL = model.baseUrl || undefined
-
-  // model.name 存的是 Provider 名称（如 'OpenAI', 'DeepSeek'），model.id 是唯一生成 ID
-  const providerName = (model.name || model.id).toLowerCase()
-
-  if (providerName === 'openai') {
-    return createOpenAI({ apiKey, baseURL })
-  }
-  if (providerName === 'anthropic' || providerName === 'claude') {
-    return createAnthropic({ apiKey, baseURL, headers: { 'anthropic-beta': 'interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07' } })
-  }
-  if (providerName === 'google' || providerName === 'gemini') {
-    return createGoogleGenerativeAI({ apiKey, baseURL })
-  }
-  if (providerName === 'deepseek' || providerName === '深度求索') {
-    return createDeepSeek({ apiKey, baseURL })
-  }
-
-  // 兼容旧的 model.id 直接等于 provider 名称的情况
-  const legacyId = model.id.toLowerCase()
-  if (legacyId === 'deepseek') return createDeepSeek({ apiKey, baseURL })
-  if (legacyId === 'anthropic') return createAnthropic({ apiKey, baseURL, headers: { 'anthropic-beta': 'interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07' } })
-  if (legacyId === 'google' || legacyId === 'gemini') return createGoogleGenerativeAI({ apiKey, baseURL })
-
-  // 其他 OpenAI 兼容的 provider（qwen, openrouter, groq, together, mistral 等）
-  return createOpenAI({ apiKey, baseURL })
-}
-
-export function getChatModel() {
+export function getChatModel(): ProviderConfig | null {
   const models = getAIModels()
   const enabled = models.find((m) => m.enabled && m.apiKey)
   if (!enabled) return null
 
-  const provider = getProvider(enabled)
-  const modelId = enabled.selectedModel || 'gpt-4o'
-  return { instance: provider(modelId), config: enabled }
+  const providerName = (enabled.name || enabled.id).toLowerCase()
+  return {
+    provider: providerName,
+    modelId: enabled.selectedModel || 'gpt-4o',
+    apiKey: enabled.apiKey || 'dummy',
+    baseUrl: enabled.baseUrl || undefined,
+  }
 }
 
 // ====== 模型委托 ======
@@ -136,14 +106,19 @@ export async function delegateToModel(
   const enabled = models.find((m) => m.enabled && m.apiKey)
   if (!enabled) throw new Error('没有可用的模型')
 
-  const modelId = pickModelByTier(enabled, tier)
-  const provider = getProvider(enabled)
+  const modelId = await pickModelByTier(enabled, tier)
+  const providerName = (enabled.name || enabled.id).toLowerCase()
 
   try {
     const result = await generateText({
-      model: provider(modelId),
-      system: systemContext || 'You are a coding agent. Use tools directly. Report in one sentence.',
+      config: {
+        provider: providerName,
+        modelId,
+        apiKey: enabled.apiKey || 'dummy',
+        baseUrl: enabled.baseUrl || undefined,
+      },
       prompt: task,
+      systemPrompt: systemContext || 'You are a coding agent. Use tools directly. Report in one sentence.',
     })
     return { modelName: `${enabled.displayName} / ${modelId}`, result: result.text }
   } catch (e: any) {
@@ -199,6 +174,8 @@ export interface TerminalUIEvent {
 let terminalUIHandler: ((event: TerminalUIEvent) => void) | null = null
 export function setTerminalUIHandler(handler: ((event: TerminalUIEvent) => void) | null) {
   terminalUIHandler = handler
+  // 同步到 terminalManager，让 killTerminal/killAll 也能通知 UI
+  import('./terminalManager').then(m => m.setTerminalUIHandler(handler as any))
 }
 export function getTerminalUIHandler() { return terminalUIHandler }
 
@@ -216,7 +193,7 @@ export function setFileOpUIHandler(handler: ((event: FileOpUIEvent) => void) | n
 export function getFileOpUIHandler() { return fileOpUIHandler }
 
 export interface ChatStreamEvent {
-  type: 'text-delta' | 'tool-call' | 'tool-result' | 'done' | 'compression' | 'disclosure' | 'system-log' | 'agent-tool-call' | 'agent-tool-result' | 'agent-text-delta' | 'agent-done' | 'task-status' | 'reasoning-delta' | 'agent-reasoning-delta'
+  type: 'text-delta' | 'tool-call' | 'tool-result' | 'done' | 'compression' | 'disclosure' | 'system-log' | 'retry-clear' | 'agent-tool-call' | 'agent-tool-result' | 'agent-text-delta' | 'agent-done' | 'task-status' | 'reasoning-delta' | 'agent-reasoning-delta'
   text?: string
   toolName?: string
   toolInput?: unknown
@@ -240,11 +217,72 @@ export interface ChatStreamEvent {
 let _lastCompressionSummary = ''
 let _lastRulesSummary: string | undefined  // 压缩时保存的规则摘要
 
+/** 格式化压缩摘要：去掉 <analysis> 草稿，只保留 <summary> 内容（对齐 CC formatCompactSummary） */
+function formatCompactSummary(raw: string): string {
+  let s = raw.replace(/<analysis>[\s\S]*?<\/analysis>/g, '')
+  const m = s.match(/<summary>([\s\S]*?)<\/summary>/)
+  if (m) s = m[1].trim()
+  return s.replace(/\n\n+/g, '\n\n').trim()
+}
+
 /** 暴露文件追踪（供工具调用，实际实现在 fileTracker.ts 避免循环依赖） */
 export { trackFileOp } from './fileTracker'
 
+// ====== Rust AI 引擎开关 ======
+const USE_RUST_ENGINE = true
+
+async function chatViaSidecar(
+  config: ProviderConfig,
+  messages: ChatMessage[],
+  systemPrompt: string,
+  onEvent?: (event: ChatStreamEvent) => void,
+): Promise<string> {
+  const api = (window as any).electronAPI
+  if (!api?.sidecar?.onEvent) throw new Error('Sidecar 不可用')
+
+  let fullText = ''
+  let done = false
+
+  // 注册流式事件监听
+  const unsubs = [
+    api.sidecar.onEvent('event.chat.textDelta', (p: any) => {
+      fullText += p.text
+      onEvent?.({ type: 'text-delta', text: p.text })
+    }),
+    api.sidecar.onEvent('event.chat.toolCall', (p: any) => {
+      onEvent?.({ type: 'tool-call', toolName: p.toolName, toolInput: p.toolInput })
+    }),
+    api.sidecar.onEvent('event.chat.toolResult', (p: any) => {
+      onEvent?.({ type: 'tool-result', toolName: p.toolName, toolOutput: p.toolOutput })
+    }),
+    api.sidecar.onEvent('event.chat.done', () => { done = true }),
+  ]
+
+  try {
+    const result = await api.sidecar.call('chat.send', {
+      provider: config.provider,
+      modelId: config.modelId,
+      apiKey: config.apiKey,
+      baseUrl: config.baseUrl,
+      messages,
+      systemPrompt,
+      maxSteps: 25,
+    }, 180000) // 3 min timeout
+
+    // 等待 done 事件或超时
+    let wait = 0
+    while (!done && wait < 100) { await new Promise(r => setTimeout(r, 100)); wait++ }
+
+    onEvent?.({ type: 'done' })
+    if (!result.success) throw new Error(result.error || 'Sidecar 调用失败')
+    return fullText || '(无输出)'
+  } finally {
+    unsubs.forEach(fn => fn())
+  }
+}
+
 export async function chat(
-  messages: ModelMessage[],
+  messages: ChatMessage[],
   onEvent?: (event: ChatStreamEvent) => void,
   opts?: { abortSignal?: AbortSignal; autoMode?: boolean; codingMode?: boolean; localModelId?: string; forceCompression?: boolean; memoryInjection?: string; userId?: string; modelOverride?: { provider: string; modelId: string } },
 ) {
@@ -253,20 +291,26 @@ export async function chat(
     return chatLocalViaIpc(messages, onEvent, opts.localModelId, opts?.abortSignal)
   }
 
-  let model = getChatModel()
-  if (!model) throw new Error('请先在设置中启用一个 AI 模型')
-  const primaryModel = model  // 固定引用，TS 能推断非 null
+  const primaryConfig = getChatModel()
+  if (!primaryConfig) throw new Error('请先在设置中启用一个 AI 模型')
+  let currentConfig: ProviderConfig = primaryConfig
   // 动态路由：覆盖模型选择
   if (opts?.modelOverride) {
-    model = { ...model, selectedModel: opts.modelOverride.modelId }
+    currentConfig = { ...currentConfig, modelId: opts.modelOverride.modelId }
   }
 
   // 注入 Agent 流式回调，让 delegate_task 能把 Agent 执行过程"开窗"到主对话
   const { setAgentStreamHandler } = await import('./tools/agent')
   setAgentStreamHandler(onEvent as any || null)
 
+  // Agent 行为规则：提前声明（pre-check 和后续流程共用）
+  const { getPromptCode, getPromptChat } = await import('@/lib/config')
+  const agentRules = opts?.codingMode === false ? getPromptChat() : getPromptCode()
+
   // 两阶段调用：所有请求先 fast 无工具判断意图
-  if (opts?.autoMode) {
+  // 安全机制：已有工具调用的活跃编码会话直接走主模型（防止预检错误绕过工具）
+  const hasPriorToolCalls = messages.some(m => (m as any).role === 'tool' && (m as any).content)
+  if (opts?.autoMode && !hasPriorToolCalls) {
     const lastMsg = messages[messages.length - 1]?.content
     const userText = typeof lastMsg === 'string' ? lastMsg : ''
     // 明显的编码操作 → 直接走工具，不预检
@@ -283,7 +327,7 @@ export async function chat(
     ]
     const needsTools = codeHints.some(w => userText.toLowerCase().includes(w))
 
-    // 非明显编码 → fast 模型预检
+    // 非明显编码 → fast 模型预检（仅首条消息，无工具历史时生效）
     if (!needsTools) {
       try {
         const { delegateToModel } = await import('./chatService')
@@ -326,10 +370,6 @@ export async function chat(
       skillInjection = `已启用 ${enabledSkills.length} 个技能。使用 read_skill("技能名") 查看具体技能详情。`
     }
   }
-
-  // Agent 行为规则：根据模式选编码/对话提示词
-  const { getPromptCode, getPromptChat } = await import('@/lib/config')
-  let agentRules = opts?.codingMode === false ? getPromptChat() : getPromptCode()
 
   // 多层规则发现：从项目根向上遍历，读取 brainPlusRules.md + .brainplus/rules/
   let projectInstructions: string | undefined
@@ -526,7 +566,7 @@ export async function chat(
     : null
 
   // 动静分离 system prompt（静态部分可缓存）
-  const staticPart = (systemPrompt || '') + (summary ? `\n\n[Conversation summary]\n${summary}` : '')
+  const staticPart = (systemPrompt || '') + (summary ? `\n\n[Conversation summary]\n${formatCompactSummary(summary)}` : '')
   const dynamicPart = opts?.memoryInjection || ''
 
   if (opts?.memoryInjection) {
@@ -543,7 +583,7 @@ export async function chat(
 
   onEvent?.({ type: 'system-log', text: `📋 系统提示词 (${finalSystem.length}字):\n${finalSystem.slice(0, 500)}${finalSystem.length > 500 ? '...(截断)' : ''}` })
 
-  // user message 注入：rules.md + 日期上下文
+  // user message 注入：对齐 CC prependUserContext —— 每轮强制注入上下文提醒
   const contextMessages: Array<{ role: 'user'; content: string }> = []
 
   if (projectInstructions) {
@@ -553,61 +593,130 @@ export async function chat(
     })
   }
 
+  // 动态工具纪律：对话越长提醒越强（防止后期"偷懒"不调工具）
+  const turnCount = messages.filter(m => (m as any).role === 'user').length
+  const toolDisciplineLevel = turnCount <= 1 ? 'basic'
+    : turnCount <= 5 ? 'moderate'
+    : turnCount <= 12 ? 'strong'
+    : 'critical'
+
+  const filesRestoredNote = wasCompressed
+    ? ` File contents from before compaction have been restored — check the "压缩后文件恢复" section above before re-reading.`
+    : ''
+  const toolDisciplineMessages: Record<string, string> = {
+    basic: `You have access to tools — use them for reading files, editing code, running commands.`,
+    moderate: `⚠️ TOOL DISCIPLINE: As the conversation continues, you MUST keep using tools. Every code change, file read, test run, or verification claim MUST come from a tool call in this turn. Do not drift into text-only mode.${filesRestoredNote}`,
+    strong: `⚠️⚠️ STRONG TOOL DISCIPLINE (turn ${turnCount}): You have been working on this task for a while. This is when models tend to skip tools and hallucinate. RESIST THIS. You MUST call tools for EVERY action. No tool call = no knowledge. Verify every change.${filesRestoredNote}`,
+    critical: `🛑 CRITICAL TOOL DISCIPLINE (turn ${turnCount}): Long conversation — highest risk of tool abandonment. Every statement about code, tests, or results WITHOUT a tool call in this turn is a HALLUCINATION. Call tools for EVERYTHING.${filesRestoredNote}`,
+  }
+
+  const toolSummary = [
+    `Core tools always available: workspace_* (files), git_* (version control), run_terminal (shell), sandbox_* (code exec), web_search, web_fetch, delegate_task, update_task_list, search_tools/use_tool (MCP).`,
+    `Prefer workspace_read_file/workspace_edit_file over run_terminal for file operations.`,
+    `Use update_task_list for complex tasks: create steps → mark running → mark done immediately.`,
+    `Read code before changing it. Verify before reporting complete.`,
+    `MCP tools (if any) are discoverable via search_tools.`,
+    enabledSkills.length > 0 ? `Enabled skills: ${enabledSkills.map(s => s.name).join(', ')}` : '',
+  ].filter(Boolean).join(' ')
+
   contextMessages.push({
     role: 'user',
-    content: `<system-reminder>\nAs you answer the user's questions, you can use the following context:\n# currentDate\nToday's date is ${new Date().toLocaleDateString('en-CA')}.\n\nIMPORTANT: this context may or may not be relevant to your tasks. You should not respond to this context unless it is highly relevant to your task.\n</system-reminder>`,
+    content: [
+      '<system-reminder>',
+      `As you answer the user's questions, you can use the following context:`,
+      `# currentDate`,
+      `Today's date is ${new Date().toLocaleDateString('en-CA')}.`,
+      wasCompressed ? `# contextStatus\nThe conversation history was recently compressed. The summary above captures key decisions and facts. Re-read files before making claims about their current state.` : '',
+      `# toolDiscipline`,
+      toolDisciplineMessages[toolDisciplineLevel],
+      `# tools`,
+      toolSummary,
+      '</system-reminder>',
+    ].filter(Boolean).join('\n'),
   })
 
+  onEvent?.({ type: 'system-log', text: `🔧 发送 ${Object.keys(filteredTools).length} 个工具` })
   let currentMessages = [...contextMessages, ...compressedMessages]
 
-  // ====== 恢复循环：max_output_tokens 升级 + 模型回退 ======
+  // ====== 恢复循环：max_output_tokens 升级 + 模型回退 + 工具放弃检测 ======
   const MAX_ESCALATIONS = 2
-  let maxOutputTokens: number | undefined = undefined  // 首次不设限制，用模型默认
+  const MAX_TOOL_ABANDONMENT_RETRIES = 1
+  // 对齐 CC proxy: DeepSeek/OpenAI 兼容模型不传 max_tokens 或小步升级
+  const providerName = (primaryConfig.provider).toLowerCase()
+  const isOpenAICompat = ['deepseek', '深度求索', 'openai', 'qwen', '通义千问', 'openrouter', 'groq', 'together', 'mistral', 'ollama', 'lmstudio', 'perplexity', 'fireworks'].some(
+    p => providerName.includes(p)
+  )
+  const MAX_OUTPUT_FIRST = isOpenAICompat ? 4096 : 32000
+  const MAX_OUTPUT_CAP = isOpenAICompat ? 8192 : 128000
+  let maxOutputTokens: number | undefined = undefined  // 首次不设限制
   let escalationCount = 0
   let hasAttemptedFallback = false
-  let currentModel = primaryModel
-  let finalUsage: any = null  // 最后一次成功调用的 usage
+  let toolAbandonmentRetries = 0
+  let finalUsage: any = null
+  let capturedFinishReason = ''
+  let capturedUsage: any = null
 
   let fullText = ''
 
   while (true) {
-    const result = streamText({
-      model: currentModel.instance,
-      system: finalSystem || undefined,
-      messages: currentMessages,
-      tools: Object.keys(filteredTools).length > 0 ? filteredTools : undefined,
-      stopWhen: stepCountIs(getAgentMaxSteps()),
-      abortSignal: opts?.abortSignal,
-      temperature: 0.3,
-      ...(maxOutputTokens != null ? { maxOutputTokens } as any : {}),
-    })
-
-    // 可观测性追踪
     const trace = createTrace()
-    currentMessages.forEach(m => trace.addInput(typeof m.content === 'string' ? (m.content as string) : JSON.stringify(m.content)))
+    // 只追踪当前轮次的用户消息（不追踪工具结果等）
+    currentMessages.forEach(m => {
+      if (m.role === 'user' || m.role === 'system') {
+        trace.addInput(typeof m.content === 'string' ? m.content : JSON.stringify(m.content))
+      }
+    })
 
     let streamError: Error | null = null
     const assistantMsgs: Array<{ role: 'assistant'; content: string }> = []
+    let toolsCalledThisRound = false
+    capturedFinishReason = ''
+    capturedUsage = null
 
     try {
-      for await (const chunk of result.fullStream) {
+      // === Rust AI 引擎路径 ===
+      if (USE_RUST_ENGINE && !opts?.localModelId) {
+        const result = await chatViaSidecar(currentConfig, currentMessages as any, finalSystem || '', onEvent)
+        fullText = result
+        if (finalUsage) {
+          cwm.updateRealTokens(finalUsage.inputTokens || 0, finalUsage.outputTokens || 0)
+        }
+        onEvent?.({ type: 'done' })
+        return fullText
+      }
+
+      const stream = streamChatWithTools({
+        config: currentConfig,
+        messages: currentMessages as any,
+        tools: Object.keys(filteredTools).length > 0 ? filteredTools : {},
+        systemPrompt: finalSystem || undefined,
+        abortSignal: opts?.abortSignal,
+        maxOutputTokens,
+        maxSteps: getAgentMaxSteps(),
+      })
+
+      for await (const event of stream) {
         if (opts?.abortSignal?.aborted) break
-        if (chunk.type === 'reasoning-delta') {
-          onEvent?.({ type: 'reasoning-delta', text: (chunk as any).text || (chunk as any).delta || '', reasoningId: (chunk as any).id })
-        } else if (chunk.type === 'text-delta') {
-          fullText += chunk.text
-          trace.addOutput(chunk.text)
-          onEvent?.({ type: 'text-delta', text: chunk.text })
-        } else if (chunk.type === 'tool-call') {
-          const name = (chunk as any).toolName || 'unknown'
+        if (event.type === 'reasoning-delta') {
+          onEvent?.({ type: 'reasoning-delta', text: event.text, reasoningId: event.reasoningId })
+        } else if (event.type === 'text-delta') {
+          fullText += event.text
+          trace.addOutput(event.text)
+          onEvent?.({ type: 'text-delta', text: event.text })
+        } else if (event.type === 'tool-call') {
+          toolsCalledThisRound = true
+          const name = event.toolName
           trace.toolStart(name)
-          onEvent?.({ type: 'tool-call', toolName: name, toolInput: (chunk as any).args || (chunk as any).input })
-        } else if (chunk.type === 'tool-result') {
-          const name = (chunk as any).toolName || 'unknown'
-          const output = (chunk as any).result || (chunk as any).output || ''
-          const ok = !String(output).startsWith('Error')
+          onEvent?.({ type: 'tool-call', toolName: name, toolInput: event.toolInput })
+        } else if (event.type === 'tool-result') {
+          const name = event.toolName
+          const output = String(event.toolOutput ?? '')
+          const ok = !output.startsWith('Error')
           trace.toolEnd(name, ok)
-          onEvent?.({ type: 'tool-result', toolName: name, toolOutput: (chunk as any).result || (chunk as any).output })
+          onEvent?.({ type: 'tool-result', toolName: name, toolOutput: output })
+        } else if (event.type === 'done') {
+          capturedFinishReason = event.finishReason
+          capturedUsage = event.usage
         }
       }
     } catch (e: any) {
@@ -624,7 +733,7 @@ export async function chat(
         if (recovered) {
           onEvent?.({ type: 'system-log', text: '⚠️ 上下文过长，已自动压缩后重试...' })
           currentMessages = [...contextMessages, ...recovered]
-          continue  // 回到循环顶部重试
+          continue
         }
         onEvent?.({ type: 'system-log', text: '⚠️ 上下文过长且无法自动压缩。请减少上下文后重试。' })
         break
@@ -632,25 +741,24 @@ export async function chat(
 
       // === 模型错误 → 回退到备选模型 ===
       if (!hasAttemptedFallback) {
-        const fallbackModel = await pickFallbackModel(currentModel)
-        if (fallbackModel) {
+        const fallbackConfig = await pickFallbackModel(currentConfig)
+        if (fallbackConfig) {
           hasAttemptedFallback = true
-          currentModel = fallbackModel
-          onEvent?.({ type: 'system-log', text: `⚠️ 模型 ${currentModel.config.displayName || currentModel.config.name} 调用失败，回退到 ${fallbackModel.config.displayName || fallbackModel.config.name}...` })
-          continue  // 回到循环顶部，用回退模型重试
+          const fbName = fallbackConfig.provider
+          currentConfig = fallbackConfig
+          onEvent?.({ type: 'system-log', text: `⚠️ 模型调用失败，回退到 ${fbName}/${fallbackConfig.modelId}...` })
+          continue
         }
       }
 
-      // 无法恢复 → 退出
       break
     }
 
     // ====== 流式完成，检查输出是否被截断 ======
     if (!streamError) {
-      let finishReason = ''
-      try {
-        finishReason = (await (result as any).finishReason) || ''
-      } catch {}
+      const finishReason = capturedFinishReason
+      // 用户主动中断：跳过截断升级和工具放弃检测，保留已有文本
+      if (finishReason === 'abort') break
 
       const isTruncated =
         finishReason === 'length' ||
@@ -658,24 +766,70 @@ export async function chat(
 
       if (isTruncated && escalationCount < MAX_ESCALATIONS && !opts?.abortSignal?.aborted) {
         escalationCount++
-        // 首次截断设置 32k，之后每次翻倍
-        maxOutputTokens = maxOutputTokens == null ? 32000 : maxOutputTokens * 2
+        maxOutputTokens = maxOutputTokens == null
+          ? MAX_OUTPUT_FIRST
+          : Math.min(maxOutputTokens * 2, MAX_OUTPUT_CAP)
         onEvent?.({ type: 'system-log', text: `⚠️ 输出被截断 (finishReason=${finishReason})，升级至 ${maxOutputTokens} tokens 重试 (#${escalationCount})...` })
-        // 注入恢复消息，保留已输出的文本
-        assistantMsgs.push({ role: 'assistant', content: fullText.slice(-500) }) // 最后 500 字符作为上下文
+        // 清空已展示的截断文本，重试后只展示完整版
+        onEvent?.({ type: 'retry-clear' })
+        assistantMsgs.push({ role: 'assistant', content: fullText.slice(-500) })
         currentMessages = [
           ...currentMessages,
           ...assistantMsgs,
           { role: 'user' as const, content: 'Output truncated. Resume directly — no recap, no apology. Pick up mid-thought where cut off. Break remaining work into smaller pieces.' },
         ]
-        continue  // 回到循环顶部重试
+        continue
       }
 
-      // 捕获真实 API usage
-      try {
-        const usage = await result.usage
-        if (usage) finalUsage = usage
-      } catch {}
+      // ====== 工具放弃检测：声称完成但本轮未调用任何工具 ======
+      if (!toolsCalledThisRound && toolAbandonmentRetries < MAX_TOOL_ABANDONMENT_RETRIES && !opts?.abortSignal?.aborted) {
+        const completionPatterns = [
+          // 中文
+          /已(完成|修复|修改|改好|写好|实现|创建|添加|删除|更新|重构|解决|搞定|处理|调整|优化|整合|合并|拆分|迁移|升级|降级|回滚)/,
+          /(问题|bug|错误|功能|任务|需求|改动|修改|优化)已(完成|修复|解决|实现|处理|结束|搞定)/,
+          /(代码|文件|配置|测试|文档)已(写|改|修改|更新|创建|添加|完成|生成)/,
+          /任务已(完成|结束|搞定)/,
+          /(改动|修改|变更)已(完成|实施|应用|生效)/,
+          /可以(了|的)|没问题|已经(好|行|完成)了/,
+          /(测试|编译|构建)(通过|成功|完成)/,
+          // 英文
+          /(done|fixed|completed|finished|resolved|implemented|created|added|removed|updated|refactored|solved|handled)/i,
+          /(task|issue|bug|feature) (is |has been )?(done|fixed|completed|finished|resolved)/i,
+          /(I('ve| have)|I'?m) (done|finished|completed|fixed)/i,
+          /(all|everything) (is |looks? )(good|fine|working|done|ready)/i,
+          /(tests?|build) (pass|succeed|complete)/i,
+        ]
+        const claimsCompletion = completionPatterns.some(p => p.test(fullText))
+
+        if (claimsCompletion) {
+          toolAbandonmentRetries++
+          onEvent?.({ type: 'system-log', text: `🛑 检测到无工具调用的完成声明 (#${toolAbandonmentRetries})——模型在YY。强制重试并要求使用工具验证...` })
+
+          // 保留最后一段文本作为上下文，注入强制工具提醒
+          const tailText = fullText.slice(-300)
+          currentMessages = [
+            ...currentMessages,
+            { role: 'assistant' as const, content: tailText },
+            { role: 'user' as const, content: `<system-reminder>
+🛑 工具放弃强制恢复 (第${toolAbandonmentRetries}次)
+
+你刚才输出了声称完成任务的文本，但没有调用任何工具。这是工具放弃（Tool Abandonment）——不可接受。
+
+你必须立即调用工具来完成当前任务：
+1. workspace_read_file — 重新读取你声称已修改的文件，确认实际状态
+2. run_terminal — 运行相关测试或命令来验证你的改动
+3. 如果确实没有任务要做（用户只是闲聊），直接回复简短答案，不要声称完成
+
+不要输出解释、不要道歉、不要重述你"本来打算做什么"——直接调工具。
+</system-reminder>` },
+          ]
+          fullText = ''  // 重置文本，下一轮重新累积
+          continue  // 回到循环顶部重试
+        }
+      }
+
+      // 捕获 usage（来自 streamChatWithTools 的 done 事件）
+      if (capturedUsage) finalUsage = capturedUsage
     }
 
     break  // 正常完成或无法恢复 → 退出循环
@@ -684,34 +838,37 @@ export async function chat(
   // ====== 后处理：usage 回传 ======
   if (finalUsage) {
     cwm.updateRealTokens(
-      finalUsage.inputTokens || finalUsage.promptTokens || 0,
-      finalUsage.outputTokens || finalUsage.completionTokens || 0,
+      finalUsage.inputTokens || 0,
+      finalUsage.outputTokens || 0,
     )
   }
   const traceBuilder = createTrace()
   const turnTrace = traceBuilder.finish()
   if (finalUsage) {
-    turnTrace.inputTokens = finalUsage.inputTokens || finalUsage.promptTokens || 0
-    turnTrace.outputTokens = finalUsage.outputTokens || finalUsage.completionTokens || 0
-    const cached = finalUsage.cachedInputTokens || finalUsage.cacheReadInputTokens || 0
-    if (cached > 0) turnTrace.cachedInputTokens = cached
+    turnTrace.inputTokens = finalUsage.inputTokens || 0
+    turnTrace.outputTokens = finalUsage.outputTokens || 0
+    if (finalUsage.cachedInputTokens) turnTrace.cachedInputTokens = finalUsage.cachedInputTokens
   }
   onEvent?.({ type: 'done', trace: turnTrace })
   return fullText
 }
 
 /** 选择一个备选模型用于回退 */
-async function pickFallbackModel(current: { config: AIModelConfig }): Promise<{ instance: any; config: AIModelConfig } | null> {
+async function pickFallbackModel(current: ProviderConfig): Promise<ProviderConfig | null> {
   try {
     const { getAIModels } = await import('./config')
     const all = getAIModels()
     const enabled = all.filter(m => m.enabled && m.apiKey)
     if (enabled.length <= 1) return null
     // 找和当前模型不同的第一个可用模型
-    const cfg = enabled.find(m => m.selectedModel !== current.config.selectedModel)
+    const cfg = enabled.find(m => m.selectedModel !== current.modelId)
     if (!cfg) return null
-    const provider = getProvider(cfg)
-    return { instance: provider(cfg.selectedModel), config: cfg }
+    return {
+      provider: (cfg.name || cfg.id).toLowerCase(),
+      modelId: cfg.selectedModel,
+      apiKey: cfg.apiKey || 'dummy',
+      baseUrl: cfg.baseUrl || undefined,
+    }
   } catch {
     return null
   }
@@ -722,10 +879,10 @@ async function pickFallbackModel(current: { config: AIModelConfig }): Promise<{ 
  * 返回重试用的消息数组，或 null 表示无法恢复
  */
 async function tryReactiveCompact(
-  messages: ModelMessage[],
+  messages: ChatMessage[],
   cwm: ContextWindowManager,
   contextWindow: number,
-): Promise<ModelMessage[] | null> {
+): Promise<ChatMessage[] | null> {
   try {
     const result = await cwm.reactiveCompact(messages, contextWindow, _lastCompressionSummary || undefined)
     if (result.wasCompressed) {
@@ -740,7 +897,7 @@ async function tryReactiveCompact(
 // ====== 本地模型推理（通过 IPC） ======
 
 async function chatLocalViaIpc(
-  messages: ModelMessage[],
+  messages: ChatMessage[],
   onEvent?: (event: ChatStreamEvent) => void,
   modelId?: string,
   abortSignal?: AbortSignal,

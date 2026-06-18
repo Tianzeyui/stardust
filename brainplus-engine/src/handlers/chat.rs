@@ -89,74 +89,57 @@ fn build_tool_registry() -> ToolRegistry {
 // ====== chat.send handler ======
 
 async fn chat_send(req: crate::protocol::Request, tx: mpsc::Sender<OutputLine>) -> HandlerResult {
-    // 解析 config
     let provider = req.params.get("provider").and_then(|v| v.as_str()).unwrap_or("anthropic").to_string();
     let model_id = req.params.get("modelId").and_then(|v| v.as_str()).unwrap_or("claude-sonnet-4-6").to_string();
     let api_key = req.params.get("apiKey").and_then(|v| v.as_str()).unwrap_or("").to_string();
     let base_url = req.params.get("baseUrl").and_then(|v| v.as_str()).map(String::from);
-
     let config = ProviderConfig { provider, model_id, api_key, base_url };
 
-    // 解析 messages
     let messages: Vec<ChatMessage> = req.params.get("messages")
-        .and_then(|v| serde_json::from_value(v.clone()).ok())
-        .unwrap_or_default();
-
+        .and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default();
     let system_prompt = req.params.get("systemPrompt").and_then(|v| v.as_str()).map(String::from);
     let max_steps = req.params.get("maxSteps").and_then(|v| v.as_u64()).unwrap_or(25) as usize;
 
-    // 构建工具注册表
     let tools = build_tool_registry();
     let tool_defs = tools.definitions();
 
     // 流式事件通道
     let (stream_tx, mut stream_rx) = mpsc::channel::<StreamEvent>(128);
 
-    let config_clone = config.clone();
-    let msgs_clone = messages.clone();
+    // 后台运行工具循环
+    let loop_result = {
+        let config = config.clone();
+        let messages = messages.clone();
+        let system = system_prompt.clone();
+        let loop_tx = tx.clone();
+        tokio::spawn(async move {
+            run_tool_loop(&config, messages, &tool_defs, &tools, system.as_deref(), max_steps, &loop_tx, stream_tx).await
+        })
+    };
 
-    // 后台任务：执行 AI 对话 + 工具循环
-    let loop_tx = tx.clone();
-    tokio::spawn(async move {
-        let result = run_tool_loop(&config_clone, msgs_clone, &tool_defs, &tools, system_prompt.as_deref(), max_steps, &loop_tx, stream_tx).await;
-
-        match result {
-            Ok(usage) => {
-                emit(&loop_tx, "chat.done", serde_json::json!({
-                    "inputTokens": usage.input_tokens,
-                    "outputTokens": usage.output_tokens,
-                }));
-            }
-            Err(e) => {
-                emit(&loop_tx, "chat.error", serde_json::json!({"error": e}));
-            }
-        }
-    });
-
-    // 转发流式事件到 Electron
+    // 转发流式事件到 Electron（在返回之前）
     while let Some(event) = stream_rx.recv().await {
         match event {
-            StreamEvent::TextDelta { text } => {
-                emit(&tx, "chat.textDelta", serde_json::json!({"text": text}));
-            }
-            StreamEvent::ReasoningDelta { text } => {
-                emit(&tx, "chat.reasoningDelta", serde_json::json!({"text": text}));
-            }
-            StreamEvent::ToolCallStart { id, name, input } => {
-                emit(&tx, "chat.toolCall", serde_json::json!({
-                    "toolName": name, "toolInput": input, "toolCallId": id,
-                }));
-            }
-            StreamEvent::ToolResult { tool_name, tool_output } => {
-                emit(&tx, "chat.toolResult", serde_json::json!({
-                    "toolName": tool_name, "toolOutput": tool_output,
-                }));
-            }
+            StreamEvent::TextDelta { text } =>
+                emit(&tx, "chat.textDelta", serde_json::json!({"text": text})),
+            StreamEvent::ReasoningDelta { text } =>
+                emit(&tx, "chat.reasoningDelta", serde_json::json!({"text": text})),
+            StreamEvent::ToolCallStart { id, name, input } =>
+                emit(&tx, "chat.toolCall", serde_json::json!({"toolName": name, "toolInput": input, "toolCallId": id})),
+            StreamEvent::ToolResult { tool_name, tool_output } =>
+                emit(&tx, "chat.toolResult", serde_json::json!({"toolName": tool_name, "toolOutput": tool_output})),
             StreamEvent::Done { .. } => {}
         }
     }
 
-    Ok(serde_json::json!({"success": true}))
+    // 等待工具循环完成
+    match loop_result.await {
+        Ok(Ok(usage)) => Ok(serde_json::json!({
+            "success": true, "inputTokens": usage.input_tokens, "outputTokens": usage.output_tokens,
+        })),
+        Ok(Err(e)) => Ok(serde_json::json!({"success": false, "error": e})),
+        Err(e) => Ok(serde_json::json!({"success": false, "error": format!("join: {e}")})),
+    }
 }
 
 // ====== 工具执行循环 ======

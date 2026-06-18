@@ -273,5 +273,6 @@ Phase 6  ████                    1-2 周   清理
 - ⚠️ **保留**：MCP Service (~15 handler) + model:chat 流式推理 — 需后续专项处理
 - ✅ **Phase 5**：AI 引擎 (API 路由 + 工具循环 + 11 个工具注册)
 - ✅ **Phase 6 (部分)**：删除 4 个已替换 TS 文件 (fileConvert/graphService/localModelManager/sandboxService)
-- ✅ **全部完成**：所有模块迁入 Rust + llama-cpp-2 本地推理
+- ✅ **全部完成**：AI 引擎接入 + llama-cpp-2 + chatService 薄包装
+- 🚀 `USE_RUST_ENGINE = true` — 用户对话通过 Rust AI 引擎执行
 - ⏳ **随后**：Phase 2.5 搜索/HTTP — `reqwest` 替换浏览器 fetch
