@@ -225,7 +225,7 @@ async fn run_tool_loop(
                     input: input.clone(),
                 }
             }).collect()),
-            tool_call_id: None,
+            tool_call_id: None, reasoning_content: None,
         });
 
         // 执行工具
@@ -299,7 +299,7 @@ async fn chat_compress(req: crate::protocol::Request, _tx: mpsc::Sender<OutputLi
         role: "user".into(),
         content: summary,
         tool_calls: None,
-        tool_call_id: None,
+        tool_call_id: None, reasoning_content: None,
     }];
     compressed.extend_from_slice(recent);
 
