@@ -267,6 +267,7 @@ Phase 6  ████                    1-2 周   清理
 - ✅ **Phase 1**：Rust Sidecar 骨架 + JSON-RPC + 12 fs handler + Electron 集成
 - ✅ **Phase 2.2**：IPC 转发层（`forwardToSidecar` / `forwardStreamToSidecar` / `forwardMany`）
 - ✅ **Phase 2.3**：Git handler（`git.exec` / `git.status` / `git.diff` / `git.log`）— spawnSync 已删除
-- ✅ **Phase 2 (全部完成)**：转发层 + Git + 终端/PTY + 搜索/HTTP — 重 I/O 全部迁入 Rust
-- ⏳ **下一步**：Phase 3 沙箱 (JS/Python) + 文档转换
+- ✅ **Phase 2 (全部完成)**：转发层 + Git + 终端/PTY + 搜索/HTTP
+- ✅ **Phase 3 (全部完成)**：沙箱 (JS/Python) + 文档转换
+- ⏳ **下一步**：Phase 4 MCP 客户端 + 本地模型 + Neo4j
 - ⏳ **随后**：Phase 2.5 搜索/HTTP — `reqwest` 替换浏览器 fetch

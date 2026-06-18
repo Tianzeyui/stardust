@@ -7,13 +7,13 @@ import { initSidecar, getSidecar } from './main/sidecarManager.js'
 import { forwardToSidecar, forwardStreamToSidecar, forwardMany, mapPath, mapPathContent, mapCwdArgs, mapGrep } from './main/ipcForwarder.js'
 import { mcpService, type MCPServer } from './main/mcp/MCPService.js'
 import { startA2AServer, stopA2AServer, completeA2ATask, getA2ATask, syncAgents, setA2AToken } from './main/a2aServer.js'
-import { executeJS, executePython, preInit } from './main/sandboxService.js'
+import { preInit } from './main/sandboxService.js'
 import { initWorkspace, getWorkspacePaths, getWorkspaceInfo, listOutputFiles, openFile, deleteFile, clearOutputFiles, setWorkspaceRoot, pickWorkspaceRoot, resetWorkspaceRoot, isBrainPlusWorkspace } from './main/workspace.js'
 import { writeSkillFiles, readSkillFile, deleteSkillFiles } from './main/skillDiskStore.js'
 import { downloadPluginFiles } from './main/pluginDownloader.js'
 import { cloneRepo, pullRepo, readRepoPluginsJson, parseGitHubUrl, cloneToTemp, removeTempDir } from './main/pluginRepoManager.js'
 import { configureGraph, graphQuery, testGraphConnection, getGraphConfig, closeGraphDriver } from './main/graphService.js'
-import { convertWithMarkitdown, isImageFile, isConvertible } from './main/fileConvert.js'
+// fileConvert → Rust Sidecar (file.checkType / file.convert)
 import {
   getModelStatus,
   getModelDir,
@@ -192,18 +192,10 @@ ipcMain.handle('dialog:openFile', async (_event, opts?: { filters?: Array<{ name
   }
 })
 
-// ==================== File Convert IPC ====================
+// ==================== File Convert IPC → Rust Sidecar ====================
 
-ipcMain.handle('file:checkType', async (_event, filePath: string) => {
-  return { isImage: isImageFile(filePath), isConvertible: isConvertible(filePath) }
-})
-
-ipcMain.handle('file:convert', async (event, filePath: string) => {
-  const result = await convertWithMarkitdown(filePath, (msg) => {
-    event.sender.send('file:convertProgress', { filePath, message: msg })
-  })
-  return result
-})
+forwardToSidecar('file:checkType', 'file.checkType', (args) => ({ path: args[0] }))
+forwardToSidecar('file:convert', 'file.convert', (args) => ({ path: args[0] }))
 
 // ==================== File System IPC → Rust Sidecar ====================
 
@@ -295,15 +287,14 @@ ipcMain.handle('skills:deleteFiles', async (_event, skillId: string) => {
   return deleteSkillFiles(skillId)
 })
 
-// ==================== Sandbox IPC ====================
+// ==================== Sandbox IPC → Rust Sidecar ====================
 
-ipcMain.handle('sandbox:executeJS', async (_event, code: string, packages?: string[], outputDir?: string) => {
-  return executeJS(code, packages, outputDir)
-})
-
-ipcMain.handle('sandbox:executePython', async (_event, code: string, packages?: string[], outputDir?: string) => {
-  return executePython(code, packages, outputDir)
-})
+forwardToSidecar('sandbox:executeJS', 'sandbox.executeJS',
+  (args) => ({ code: args[0], packages: args[1], outputDir: args[2] }),
+)
+forwardToSidecar('sandbox:executePython', 'sandbox.executePython',
+  (args) => ({ code: args[0], packages: args[1], outputDir: args[2] }),
+)
 
 // ==================== Workspace IPC ====================
 

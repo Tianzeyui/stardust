@@ -4,6 +4,8 @@ pub mod fs;
 pub mod git;
 pub mod terminal;
 pub mod search;
+pub mod sandbox;
+pub mod file_convert;
 
 use crate::protocol::{HandlerResult, Request};
 use std::collections::HashMap;
@@ -82,6 +84,12 @@ pub fn register_all() -> Registry {
 
     // ====== 搜索 & HTTP ======
     search::register(&mut registry);
+
+    // ====== 沙箱执行 ======
+    sandbox::register(&mut registry);
+
+    // ====== 文件转换 ======
+    file_convert::register(&mut registry);
 
     // 内建方法
     registry.register("ping", |_req, _tx| async move {
