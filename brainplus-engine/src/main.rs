@@ -14,6 +14,7 @@
 mod api;
 mod error;
 mod handlers;
+mod inference;
 mod protocol;
 mod tools;
 

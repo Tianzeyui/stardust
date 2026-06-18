@@ -49,6 +49,9 @@ reqwest = { version = "0.12", features = ["json", "stream"] }
 dirs = "5"
 open = "5"
 
+# 本地模型推理 (llama.cpp)
+llama-cpp-2 = "0.1"
+
 [profile.release]
 opt-level = 3
 lto = true

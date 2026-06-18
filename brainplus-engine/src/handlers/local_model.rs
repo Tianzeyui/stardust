@@ -139,7 +139,40 @@ async fn model_load(req: crate::protocol::Request, _tx: mpsc::Sender<OutputLine>
 }
 
 async fn model_unload(_req: crate::protocol::Request, _tx: mpsc::Sender<OutputLine>) -> HandlerResult {
+    crate::inference::unload_model();
     Ok(serde_json::json!(true))
+}
+
+/// 流式推理——对齐 model:chat IPC handler
+async fn model_chat(req: crate::protocol::Request, tx: mpsc::Sender<OutputLine>) -> HandlerResult {
+    let id = req.param_str("id").unwrap_or("");
+    let messages: Vec<serde_json::Value> = req.params.get("messages")
+        .and_then(|v| v.as_array()).cloned().unwrap_or_default();
+
+    let path = model_path(id);
+    if !path.exists() {
+        emit(&tx, "model.chatError", serde_json::json!({"error": format!("模型未下载: {id}")}));
+        return Ok(serde_json::json!({"success": false, "error": "模型未下载"}));
+    }
+
+    let path_str = path.to_string_lossy().to_string();
+    emit(&tx, "model.chatLoading", serde_json::json!({"modelId": id}));
+
+    // 后台任务：执行推理（可能耗时数十秒）
+    let tx_clone = tx.clone();
+    let id_clone = id.to_string();
+    tokio::task::spawn_blocking(move || {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            if let Err(e) = crate::inference::stream_inference(
+                &id_clone, &path_str, &messages, 2048, tx_clone.clone(),
+            ).await {
+                emit(&tx_clone, "model.chatError", serde_json::json!({"error": e}));
+            }
+        });
+    });
+
+    Ok(serde_json::json!({"success": true}))
 }
 
 // ====== 注册 ======
@@ -153,4 +186,5 @@ pub fn register(registry: &mut Registry) {
     registry.register("model.openDir", |req, tx| Box::pin(model_open_dir(req, tx)));
     registry.register("model.load", |req, tx| Box::pin(model_load(req, tx)));
     registry.register("model.unload", |req, tx| Box::pin(model_unload(req, tx)));
+    registry.register("model.chat", |req, tx| Box::pin(model_chat(req, tx)));
 }

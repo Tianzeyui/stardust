@@ -207,6 +207,9 @@ forwardToSidecar('model:openDir', 'model.openDir')
 forwardToSidecar('model:load', 'model.load', (args) => ({ id: args[0] }))
 forwardToSidecar('model:download', 'model.download', (args) => ({ id: args[0] }))
 forwardToSidecar('model:unload', 'model.unload')
+forwardToSidecar('model:chat', 'model.chat',
+  (args) => ({ id: args[0], messages: args[1] }),
+)
 
 // ==================== MCP → Rust Sidecar ====================
 
@@ -327,26 +330,7 @@ ipcMain.handle('config:clearCloudinary', () => { clearCloudinaryCfg(); return tr
 ipcMain.handle('config:getAIModels', () => getAIModelsCfg())
 ipcMain.handle('config:saveAIModels', (_e, models: any[]) => saveAIModelsCfg(models))
 
-// ==================== Local Model IPC (streaming inference via node-llama-cpp) ====================
-
-import { loadModel, chatLocal, unloadModel } from './main/localInference.js'
-
-ipcMain.on('model:chat', async (event, id: string, messages: Array<{ role: string; content: string }>) => {
-  const win = BrowserWindow.fromWebContents(event.sender)
-  if (!win) return
-  try {
-    const loadResult = await loadModel(id)
-    if (!loadResult.success) { win.webContents.send('model:chatError', { error: loadResult.error || '加载失败' }); return }
-    const stream = chatLocal(messages)
-    for await (const chunk of stream) {
-      if (win.isDestroyed()) break
-      win.webContents.send('model:chatChunk', { text: chunk })
-    }
-    if (!win.isDestroyed()) win.webContents.send('model:chatDone', {})
-  } catch (e: any) {
-    if (!win.isDestroyed()) win.webContents.send('model:chatError', { error: e.message || '推理异常' })
-  }
-})
+// model:chat → Rust Sidecar (llama-cpp-2 streaming inference)
 
 // ==================== Conversation IPC ====================
 
