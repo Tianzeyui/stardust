@@ -303,9 +303,9 @@ export async function chat(
   const primaryConfig = getChatModel()
   if (!primaryConfig) throw new Error('请先在设置中启用一个 AI 模型')
   let currentConfig: ProviderConfig = primaryConfig
-  // 动态路由：覆盖模型选择
+  // 动态路由：覆盖模型选择（同时更新 provider，避免选 DeepSeek 走 Anthropic）
   if (opts?.modelOverride) {
-    currentConfig = { ...currentConfig, modelId: opts.modelOverride.modelId }
+    currentConfig = { ...currentConfig, modelId: opts.modelOverride.modelId, provider: opts.modelOverride.provider }
   }
 
   // 注入 Agent 流式回调，让 delegate_task 能把 Agent 执行过程"开窗"到主对话
