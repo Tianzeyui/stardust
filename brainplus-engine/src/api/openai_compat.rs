@@ -111,6 +111,12 @@ pub async fn stream_openai_compat(
 
                 if let Some(choices) = event["choices"].as_array() {
                     for choice in choices {
+                        // Reasoning delta（DeepSeek R1 思维链）
+                        if let Some(rc) = choice["delta"]["reasoning_content"].as_str() {
+                            if !rc.is_empty() {
+                                let _ = tx.send(StreamEvent::ReasoningDelta { text: rc.to_string() }).await;
+                            }
+                        }
                         // Text delta
                         if let Some(text) = choice["delta"]["content"].as_str() {
                             if !text.is_empty() {
