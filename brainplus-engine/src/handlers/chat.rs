@@ -227,7 +227,7 @@ async fn run_tool_loop(
                     input: input.clone(),
                 }
             }).collect()),
-            tool_call_id: None, reasoning_content: if reasoning_content.is_empty() { None } else { Some(reasoning_content.clone()) },
+            tool_call_id: None, reasoning_content: None,
         });
 
         // 执行工具
