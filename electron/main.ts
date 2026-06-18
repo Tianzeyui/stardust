@@ -7,12 +7,12 @@ import { initSidecar, getSidecar } from './main/sidecarManager.js'
 import { forwardToSidecar, forwardStreamToSidecar, forwardMany, mapPath, mapPathContent, mapCwdArgs, mapGrep } from './main/ipcForwarder.js'
 import { mcpService, type MCPServer } from './main/mcp/MCPService.js'
 import { startA2AServer, stopA2AServer, completeA2ATask, getA2ATask, syncAgents, setA2AToken } from './main/a2aServer.js'
-import { preInit } from './main/sandboxService.js'
+// sandboxService → Rust Sidecar (sandbox.preInit / sandbox.executeJS / sandbox.executePython)
 import { initWorkspace, getWorkspacePaths, getWorkspaceInfo, listOutputFiles, openFile, deleteFile, clearOutputFiles, setWorkspaceRoot, pickWorkspaceRoot, resetWorkspaceRoot, isBrainPlusWorkspace } from './main/workspace.js'
 import { writeSkillFiles, readSkillFile, deleteSkillFiles } from './main/skillDiskStore.js'
 import { downloadPluginFiles } from './main/pluginDownloader.js'
 import { cloneRepo, pullRepo, readRepoPluginsJson, parseGitHubUrl, cloneToTemp, removeTempDir } from './main/pluginRepoManager.js'
-import { closeGraphDriver } from './main/graphService.js'
+// graphService → Rust Sidecar (graph.* handlers)
 // fileConvert → Rust Sidecar (file.checkType / file.convert)
 // localModelManager + localInference → Rust Sidecar (model.* handlers)
 import {
@@ -274,6 +274,7 @@ forwardToSidecar('graph:testConnection', 'graph.testConnection')
 forwardToSidecar('graph:query', 'graph.query',
   (args) => ({ cypher: args[0] }),
 )
+forwardToSidecar('graph:close', 'graph.close')
 
 // ==================== Local Model → Rust Sidecar ====================
 
@@ -474,7 +475,7 @@ function showAbout() {
 // ==================== App Lifecycle ====================
 
 app.whenReady().then(async () => {
-  preInit()
+  getSidecar().call('sandbox.preInit').catch(() => {})  // preInit → Rust
   startA2AServer(9090)  // A2A HTTP Server
   initWorkspace()
 
@@ -854,6 +855,6 @@ ipcMain.handle('perm:grant', async (_event, workspaceRoot: string, type: string,
 
 app.on('before-quit', async () => {
   await mcpService.cleanup()
-  closeGraphDriver()
+  try { await getSidecar().call('graph.close', {}, 1000) } catch {}
   try { await getSidecar().stop() } catch {}
 })

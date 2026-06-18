@@ -131,6 +131,14 @@ fn base64_encode(input: &str) -> String {
     enc.into_inner()
 }
 
+// ====== 关闭 ======
+
+async fn graph_close(_req: crate::protocol::Request, _tx: mpsc::Sender<OutputLine>) -> HandlerResult {
+    let mut cfg = GRAPH_CONFIG.lock().unwrap();
+    *cfg = None;
+    Ok(serde_json::json!({"ok": true}))
+}
+
 // ====== 注册 ======
 
 pub fn register(registry: &mut Registry) {
@@ -138,4 +146,5 @@ pub fn register(registry: &mut Registry) {
     registry.register("graph.getConfig", |req, tx| Box::pin(graph_get_config(req, tx)));
     registry.register("graph.testConnection", |req, tx| Box::pin(graph_test_connection(req, tx)));
     registry.register("graph.query", |req, tx| Box::pin(graph_query(req, tx)));
+    registry.register("graph.close", |req, tx| Box::pin(graph_close(req, tx)));
 }

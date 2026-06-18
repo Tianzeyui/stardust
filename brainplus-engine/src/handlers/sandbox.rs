@@ -15,6 +15,10 @@ use std::path::Path;
 use tokio::process::Command;
 use tokio::sync::mpsc;
 
+fn home_dir() -> std::path::PathBuf {
+    dirs::home_dir().unwrap_or_default()
+}
+
 // ====== JS 执行 ======
 
 async fn sandbox_execute_js(req: crate::protocol::Request, _tx: mpsc::Sender<OutputLine>) -> HandlerResult {
@@ -242,9 +246,22 @@ fn collect_output_files(output_dir: &str) -> Result<Vec<String>, std::io::Error>
     Ok(files)
 }
 
+// ====== 预初始化 ======
+
+async fn sandbox_pre_init(_req: crate::protocol::Request, _tx: mpsc::Sender<OutputLine>) -> HandlerResult {
+    let dir = home_dir().join(".brainplus").join("sandbox-npm");
+    if !dir.exists() {
+        let _ = std::fs::create_dir_all(&dir);
+        let pkg = serde_json::json!({"name":"brainplus-sandbox","private":true,"dependencies":{}});
+        let _ = std::fs::write(dir.join("package.json"), serde_json::to_string_pretty(&pkg).unwrap_or_default());
+    }
+    Ok(serde_json::json!({"ok": true}))
+}
+
 // ====== 注册 ======
 
 pub fn register(registry: &mut Registry) {
+    registry.register("sandbox.preInit", |req, tx| Box::pin(sandbox_pre_init(req, tx)));
     registry.register("sandbox.executeJS", |req, tx| Box::pin(sandbox_execute_js(req, tx)));
     registry.register("sandbox.executePython", |req, tx| Box::pin(sandbox_execute_python(req, tx)));
 }

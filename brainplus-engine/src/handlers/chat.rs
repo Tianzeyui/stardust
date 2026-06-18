@@ -17,70 +17,70 @@ fn build_tool_registry() -> ToolRegistry {
     let mut registry = ToolRegistry::new();
 
     // —— 文件操作 ——
-    // fs_read_file, fs_write_file 等工具已通过 handlers/fs.rs 实现
-    // 这里注册为 AI 可调用的工具
-
     registry.register(
-        "workspace_read_file", "读取文件内容",
-        serde_json::json!({"type":"object","properties":{"path":{"type":"string","description":"文件路径"}},"required":["path"]}),
-        |input: Value| {
-            Box::pin(async move {
-                let path = input["path"].as_str().unwrap_or("");
-                match tokio::fs::read_to_string(path).await {
-                    Ok(s) => Ok(s),
-                    Err(e) => Ok(format!("Error: {e}")),
-                }
-            })
-        },
+        "workspace_read_file", "读取文件内容。参数: path (文件路径)。返回文件全文。",
+        serde_json::json!({"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}),
+        |input: Value| { let p = input["path"].as_str().unwrap_or("").to_string(); Box::pin(async move { tokio::fs::read_to_string(&p).await.map_err(|e| format!("Error: {e}")) }) },
     );
-
     registry.register(
-        "workspace_edit_file", "编辑文件（全文替换）",
+        "workspace_edit_file", "写入/替换文件内容。参数: path, content。",
         serde_json::json!({"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"}},"required":["path","content"]}),
-        |input: Value| {
-            Box::pin(async move {
-                let path = input["path"].as_str().unwrap_or("");
-                let content = input["content"].as_str().unwrap_or("");
-                match tokio::fs::write(path, content).await {
-                    Ok(()) => Ok("文件已写入".to_string()),
-                    Err(e) => Ok(format!("Error: {e}")),
-                }
-            })
-        },
+        |input: Value| { let p = input["path"].as_str().unwrap_or("").to_string(); let c = input["content"].as_str().unwrap_or("").to_string(); Box::pin(async move { tokio::fs::write(&p, &c).await.map_err(|e| format!("Error: {e}"))?; Ok("文件已写入".into()) }) },
+    );
+    registry.register(
+        "workspace_list_dir", "列出目录内容。参数: path。",
+        serde_json::json!({"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}),
+        |input: Value| { let p = input["path"].as_str().unwrap_or("").to_string(); Box::pin(async move { let mut dir = tokio::fs::read_dir(&p).await.map_err(|e| format!("Error: {e}"))?; let mut files = vec![]; while let Ok(Some(e)) = dir.next_entry().await { files.push(e.file_name().to_string_lossy().to_string()); } Ok(files.join("\n")) }) },
     );
 
+    // —— 搜索 ——
     registry.register(
-        "run_terminal", "执行终端命令",
+        "workspace_find", "递归搜索文件。参数: path (目录)。自动跳过 node_modules/.git。",
+        serde_json::json!({"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}),
+        |input: Value| { let p = input["path"].as_str().unwrap_or("").to_string(); Box::pin(async move { let mut files = vec![]; for r in ignore::WalkBuilder::new(&p).git_ignore(true).build() { if let Ok(e) = r { if e.file_type().map_or(false,|f|f.is_file()) { files.push(e.path().to_string_lossy().to_string()); if files.len() >= 500 { break; } } } } Ok(files.join("\n")) }) },
+    );
+    registry.register(
+        "workspace_grep", "搜索文件内容（正则）。参数: path, pattern。",
+        serde_json::json!({"type":"object","properties":{"path":{"type":"string"},"pattern":{"type":"string"}},"required":["path","pattern"]}),
+        |input: Value| { let p = input["path"].as_str().unwrap_or("").to_string(); let pat = input["pattern"].as_str().unwrap_or("").to_string(); Box::pin(async move { let re = regex::RegexBuilder::new(&pat).case_insensitive(true).build().map_err(|e| format!("Regex: {e}"))?; let mut results = vec![]; for r in ignore::WalkBuilder::new(&p).git_ignore(true).build() { if let Ok(e) = r { if e.file_type().map_or(false,|f|f.is_file()) { if let Ok(c) = std::fs::read_to_string(e.path()) { for (i, l) in c.lines().enumerate() { if re.is_match(l) && results.len() < 100 { results.push(format!("{}:{}:{}", e.path().display(), i+1, &l[..l.len().min(200)])); } } } } } } Ok(results.join("\n")) }) },
+    );
+
+    // —— 终端 ——
+    registry.register(
+        "run_terminal", "执行终端命令。参数: command, cwd(可选)。",
         serde_json::json!({"type":"object","properties":{"command":{"type":"string"},"cwd":{"type":"string"}},"required":["command"]}),
-        |input: Value| {
-            Box::pin(async move {
-                let command = input["command"].as_str().unwrap_or("");
-                let cwd = input["cwd"].as_str().unwrap_or(".");
-                let result = tokio::process::Command::new("/bin/sh")
-                    .args(["-c", command])
-                    .current_dir(cwd)
-                    .output()
-                    .await;
-                match result {
-                    Ok(o) => {
-                        let out = String::from_utf8_lossy(&o.stdout);
-                        let err = String::from_utf8_lossy(&o.stderr);
-                        Ok(format!("{out}{err}"))
-                    }
-                    Err(e) => Ok(format!("Error: {e}")),
-                }
-            })
-        },
+        |input: Value| { let cmd = input["command"].as_str().unwrap_or("").to_string(); let cwd = input["cwd"].as_str().unwrap_or(".").to_string(); Box::pin(async move { let o = tokio::process::Command::new("/bin/sh").args(["-c", &cmd]).current_dir(&cwd).output().await.map_err(|e| format!("Error: {e}"))?; Ok(format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr))) }) },
     );
 
+    // —— Git ——
     registry.register(
-        "web_search", "搜索网页",
-        serde_json::json!({"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}),
-        |_input: Value| {
-            Box::pin(async move {
-                Ok("网页搜索功能需要配置 API key".to_string())
-            })
-        },
+        "git_status", "查看 git 状态。参数: cwd。",
+        serde_json::json!({"type":"object","properties":{"cwd":{"type":"string"}},"required":["cwd"]}),
+        |input: Value| { let c = input["cwd"].as_str().unwrap_or(".").to_string(); Box::pin(async move { let o = tokio::process::Command::new("git").args(["status","--porcelain"]).current_dir(&c).output().await.map_err(|e| format!("Error: {e}"))?; Ok(String::from_utf8_lossy(&o.stdout).to_string()) }) },
+    );
+    registry.register(
+        "git_diff", "查看 git diff。参数: cwd。",
+        serde_json::json!({"type":"object","properties":{"cwd":{"type":"string"}},"required":["cwd"]}),
+        |input: Value| { let c = input["cwd"].as_str().unwrap_or(".").to_string(); Box::pin(async move { let o = tokio::process::Command::new("git").args(["diff"]).current_dir(&c).output().await.map_err(|e| format!("Error: {e}"))?; Ok(String::from_utf8_lossy(&o.stdout).to_string()) }) },
+    );
+
+    // —— 沙箱 ——
+    registry.register(
+        "sandbox_execute_js", "执行 JS 代码。参数: code, packages(可选)。",
+        serde_json::json!({"type":"object","properties":{"code":{"type":"string"},"packages":{"type":"array","items":{"type":"string"}}},"required":["code"]}),
+        |input: Value| { let code = input["code"].as_str().unwrap_or("").to_string(); let pkgs: Vec<String> = input["packages"].as_array().map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect()).unwrap_or_default(); Box::pin(async move { if !pkgs.is_empty() { for p in &pkgs { let _ = tokio::process::Command::new("npm").args(["install","--no-save","--no-audit","--ignore-scripts",p]).output().await; } } let o = tokio::process::Command::new("node").args(["-e", &code]).output().await.map_err(|e| format!("Error: {e}"))?; Ok(format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr))) }) },
+    );
+    registry.register(
+        "sandbox_execute_python", "执行 Python 代码。参数: code, packages(可选)。",
+        serde_json::json!({"type":"object","properties":{"code":{"type":"string"},"packages":{"type":"array","items":{"type":"string"}}},"required":["code"]}),
+        |input: Value| { let code = input["code"].as_str().unwrap_or("").to_string(); let pkgs: Vec<String> = input["packages"].as_array().map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect()).unwrap_or_default(); Box::pin(async move { let cmd = if tokio::process::Command::new("which").arg("uv").output().await.map(|o|o.status.success()).unwrap_or(false) { "uv".to_string() } else { "python3".to_string() }; let o = if cmd == "uv" && !pkgs.is_empty() { let mut args = vec!["run".into()]; for p in &pkgs { args.push("--with".into()); args.push(p.clone()); } args.push("python".into()); args.push("-c".into()); args.push(code); tokio::process::Command::new("uv").args(&args).output().await } else if cmd == "uv" { tokio::process::Command::new("uv").args(["run","python","-c",&code]).output().await } else { tokio::process::Command::new("python3").args(["-c",&code]).output().await }.map_err(|e| format!("Error: {e}"))?; Ok(format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr))) }) },
+    );
+
+    // —— 网络 ——
+    registry.register(
+        "web_fetch", "抓取网页内容。参数: url。",
+        serde_json::json!({"type":"object","properties":{"url":{"type":"string"}},"required":["url"]}),
+        |input: Value| { let url = input["url"].as_str().unwrap_or("").to_string(); Box::pin(async move { let c = reqwest::Client::builder().timeout(std::time::Duration::from_secs(15)).build().unwrap_or_default(); let t = c.get(&url).header("User-Agent","Mozilla/5.0").send().await.map_err(|e| format!("Error: {e}"))?.text().await.map_err(|e| format!("Error: {e}"))?; Ok(t.chars().take(10000).collect::<String>()) }) },
     );
 
     registry

@@ -271,6 +271,7 @@ Phase 6  ████                    1-2 周   清理
 - ✅ **Phase 3 (全部完成)**：沙箱 (JS/Python) + 文档转换
 - ✅ **Phase 4 (全部完成)**：Neo4j + 本地模型管理
 - ⚠️ **保留**：MCP Service (~15 handler) + model:chat 流式推理 — 需后续专项处理
-- ✅ **Phase 5 (初版完成)**：AI API 路由 + 工具循环 + chat.send handler
-- ⏳ **下一步**：Phase 5 深化 — TS chatService.ts 薄包装 + 上下文压缩
+- ✅ **Phase 5**：AI 引擎 (API 路由 + 工具循环 + 11 个工具注册)
+- ✅ **Phase 6 (部分)**：删除 4 个已替换 TS 文件 (fileConvert/graphService/localModelManager/sandboxService)
+- ⏳ **待完成**：TS chatService.ts 薄包装 + 上下文压缩 + MCP Service
 - ⏳ **随后**：Phase 2.5 搜索/HTTP — `reqwest` 替换浏览器 fetch
