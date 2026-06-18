@@ -20,14 +20,18 @@ fn build_tool_registry() -> ToolRegistry {
 
     // 路径解析：相对路径 → 绝对路径
     fn resolve(p: &str) -> String {
+        if p.is_empty() { return ".".to_string(); }
         let path = std::path::Path::new(p);
         if path.is_absolute() && path.exists() { return p.to_string(); }
-        // 尝试当前目录 + 常见根目录
-        for base in &[".", ".."] {
-            let abs = std::path::Path::new(base).join(p);
+        if path.exists() { return p.to_string(); }
+        // 尝试当前目录 + 父目录 + home
+        let cwd = std::env::current_dir().unwrap_or_default();
+        for base in [cwd.clone(), cwd.join(".."), dirs::home_dir().unwrap_or_default()] {
+            let abs = base.join(p);
             if abs.exists() { return abs.to_string_lossy().to_string(); }
         }
-        p.to_string()
+        // 回退：CWD + 文件名
+        cwd.join(p).to_string_lossy().to_string()
     }
 
     // —— 工作区 (对齐 TS workspace.ts) ——
