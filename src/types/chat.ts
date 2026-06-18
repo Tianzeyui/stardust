@@ -33,6 +33,7 @@ export type MainTimelineItem =
   | { type: 'text'; content: string }
 
 export interface UIMessage {
+  id?: string       // 消息唯一标识（reducer 自动分配）
   role: 'user' | 'assistant' | 'tool'
   content: string
   streaming?: boolean

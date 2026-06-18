@@ -15,17 +15,13 @@
     "build:linux": "npm run build && electron-builder --linux"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.84",
-    "@ai-sdk/deepseek": "^2.0.38",
-    "@ai-sdk/google": "^3.0.82",
-    "@ai-sdk/openai": "^3.0.71",
+    "@anthropic-ai/sdk": "^0.104.2",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-label": "^2.1.8",
     "@radix-ui/react-slot": "^1.1.1",
     "@supabase/supabase-js": "^2.106.2",
     "@uiw/react-markdown-preview": "^5.2.1",
-    "ai": "^6.0.205",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "esbuild": "^0.28.0",

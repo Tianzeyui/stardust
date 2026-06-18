@@ -2,7 +2,7 @@
  * MemoryManager — 分层记忆管理
  * 短期记忆 (localStorage per-conversation) + 长期记忆 (Supabase)
  */
-import type { ModelMessage } from 'ai'
+import type { ChatMessage } from '../api'
 import type { Memory, MemoryStore } from './types'
 
 /** 提取事实的 system prompt */
@@ -69,7 +69,7 @@ export class MemoryManager {
   }
 
   /** 从对话消息中提取结构化事实 */
-  async extract(messages: ModelMessage[]): Promise<Memory[]> {
+  async extract(messages: ChatMessage[]): Promise<Memory[]> {
     const text = messages
       .map(m => {
         const role = m.role === 'user' ? '用户' : m.role === 'assistant' ? '助手' : m.role

@@ -1,7 +1,7 @@
 /**
  * web_fetch 工具：网页抓取 + 智能摘要 + 分页
  */
-import { jsonSchema } from 'ai'
+import { jsonSchema } from '../api'
 import type { ToolMap } from './registry'
 
 function stripHtml(html: string): string {

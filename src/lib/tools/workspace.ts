@@ -2,7 +2,7 @@
  * 工作区工具：列出目录、读取文件、搜索文件、写入/删除文件
  * 路径由 ChatPage 注入，跟随项目/全局工作区切换
  */
-import { jsonSchema } from 'ai'
+import { jsonSchema } from '../api'
 import type { ToolMap } from './registry'
 import { createFileOp, updateFileOp, getFileOp, setFileOpResolver } from '@/lib/fileOpManager'
 import { trackFileOp } from '@/lib/fileTracker'
@@ -168,17 +168,24 @@ export async function registerWorkspaceTools(tools: ToolMap) {
 
   tools['workspace_read_file'] = {
     description:
-      'Read file content. Supports lines range — use this first: lines="1-50", lines="100-end", ' +
-      'or lines="1-end" to read the entire file at once. Also supports offset+length (max 10000 chars). ' +
-      'Always returns total lines and chars at the end, so you never need a probe read. ' +
-      `Workspace root: ${root}. Docs (PPT/Word/Excel/PDF) auto-converted to Markdown.`,
+      'Reads a file from the local filesystem. You can access any file directly by using this tool.\n' +
+      'It is okay to read a file that does not exist; an error will be returned.\n\n' +
+      'Usage:\n' +
+      '- The path parameter must be an absolute path, not a relative path\n' +
+      '- Results are returned using cat -n format, with line numbers starting at 1\n' +
+      '- Use "lines" param: "1-50" = first 50 lines, "100-end" = from line 100 to EOF, "1-end" = entire file. Recommended to read the whole file without lines param for short files.\n' +
+      '- Always returns total lines and chars at the end, so you never need a probe read.\n' +
+      '- Supports images (PNG, JPG, etc.) — presented visually. If the user provides a path to a screenshot, ALWAYS use this tool to view it.\n' +
+      '- Supports Jupyter notebooks (.ipynb) — returns all cells with outputs.\n' +
+      `- Docs (PPT/Word/Excel/PDF) auto-converted to Markdown.\n` +
+      '- This tool can only read files, not directories.',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
-        path: { type: 'string', description: 'File path (absolute)' },
-        lines: { type: 'string', description: 'Line range. "1-50" = first 50 lines, "100-end" = from line 100 to EOF, "1-end" = entire file. Preferred over offset/length.' },
-        offset: { type: 'number', description: 'Start char position (0-based). Only use if you need character-level offset.' },
-        length: { type: 'number', description: 'Chars to read, default 8000, max 10000. Use lines param instead for predictable results.' },
+        path: { type: 'string', description: 'Absolute file path' },
+        lines: { type: 'string', description: 'Line range. "1-50" = first 50 lines, "100-end" = from line 100 to EOF, "1-end" = entire file. Recommended for large files.' },
+        offset: { type: 'number', description: 'Start char position (0-based). Prefer lines param.' },
+        length: { type: 'number', description: 'Chars to read, default 8000, max 10000. Prefer lines param.' },
       },
       required: ['path'],
     }),
@@ -236,9 +243,12 @@ export async function registerWorkspaceTools(tools: ToolMap) {
 
   tools['workspace_glob'] = {
     description:
-      'Find files by name pattern. Much faster than grep for locating files — use this first when you know the file name or extension. ' +
-      'Supports ** (any depth), * (any chars), ? (single char), {a,b} (options). E.g. "src/**/*.ts", "*.md". ' +
-      `Search scope: ${root}. Auto-excludes node_modules/.git. Max 200 results.`,
+      '- Fast file pattern matching tool that works with any codebase size.\n' +
+      '- Supports glob patterns like "**/*.js" or "src/**/*.ts"\n' +
+      '- Returns matching file paths sorted by modification time.\n' +
+      '- Use this tool when you need to find files by name patterns.\n' +
+      '- When you are doing an open-ended search that may require multiple rounds of globbing and grepping, use the delegate_task tool instead.\n' +
+      `- Search scope: ${root}. Auto-excludes node_modules/.git. Max 200 results.`,
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
@@ -295,31 +305,57 @@ export async function registerWorkspaceTools(tools: ToolMap) {
 
   tools['workspace_grep'] = {
     description:
-      'Search file contents with context lines. Use after glob to find specific code. Prefer workspace_glob for finding files by name. ' +
-      'Use context_before/context_after (default 2 each) to see surrounding code without extra read_file calls. ' +
-      'Supports regex. `file` param filters by type (e.g. "*.ts"). ' +
-      `Search scope: ${root}. Auto-excludes node_modules/.git/dist/build. Returns file:line:content with context.`,
+      'A powerful search tool built on ripgrep.\n\n' +
+      'Usage:\n' +
+      '- ALWAYS use workspace_grep for search tasks. NEVER invoke grep or rg as a run_terminal command. workspace_grep has been optimized for correct permissions and access.\n' +
+      '- Supports full regex syntax (e.g., "log.*Error", "function\\s+\\w+")\n' +
+      '- Filter files with file param (e.g., "*.js", "**/*.tsx")\n' +
+      '- Output modes: "content" shows matching lines, "files_with_matches" shows only file paths (default), "count" shows match counts\n' +
+      '- Use context_before/context_after (default 2 each) to see surrounding code without extra read_file calls.\n' +
+      '- Pattern syntax: Uses ripgrep (not grep) — literal braces need escaping (use `interface\\{\\}` to find `interface{}` in Go code)\n' +
+      '- Multi-line matching: By default patterns match within single lines only. For cross-line patterns, use multiline: true\n' +
+      `- Search scope: ${root}. Auto-excludes node_modules/.git/dist/build.`,
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
-        pattern: { type: 'string', description: 'Search regex or keyword' },
+        pattern: { type: 'string', description: 'Search regex or keyword. Literal braces {} require escaping: \\{\\}' },
         file: { type: 'string', description: 'File type filter, e.g. "*.ts", default all files' },
         path: { type: 'string', description: 'Search start path, default workspace root' },
         context_before: { type: 'number', description: 'Lines of context before each match, default 2' },
         context_after: { type: 'number', description: 'Lines of context after each match, default 2' },
+        output: { type: 'string', description: 'Output mode: "content" (matching lines), "files_with_matches" (file paths only, default), "count" (match counts)' },
+        multiline: { type: 'boolean', description: 'Enable multi-line matching (default false)' },
       },
       required: ['pattern'],
     }),
-    execute: async (args: { pattern: string; file?: string; path?: string; context_before?: number; context_after?: number }) => {
+    execute: async (args: { pattern: string; file?: string; path?: string; context_before?: number; context_after?: number; output?: string; multiline?: boolean }) => {
       const api = window.electronAPI?.fs
       if (!api?.grep) return 'grep 不可用'
       const basePath = args.path ? resolvePath(args.path) : getRoot()
       const ctxBefore = args.context_before ?? 2
       const ctxAfter = args.context_after ?? 2
+      const outputMode = args.output || 'files_with_matches'
 
       const result = await api.grep(basePath, args.pattern, args.file)
       if (!result.success) return `grep 失败: ${result.error}`
       if (!result.output?.trim()) return '(无匹配)'
+
+      // Output modes
+      if (outputMode === 'files_with_matches') {
+        // Only return unique file paths
+        const lines = result.output.split('\n')
+        const files = [...new Set(lines.map(l => l.match(/^(.+?):\d+:/)?.[1]).filter(Boolean))]
+        return files.length > 0 ? files.join('\n') : '(无匹配)'
+      }
+      if (outputMode === 'count') {
+        const lines = result.output.split('\n')
+        const counts: Record<string, number> = {}
+        for (const l of lines) {
+          const m = l.match(/^(.+?):\d+:/)
+          if (m) counts[m[1]] = (counts[m[1]] || 0) + 1
+        }
+        return Object.entries(counts).map(([f, c]) => `${f}:${c}`).join('\n') || '(无匹配)'
+      }
 
       // 无上下文请求 → 直接返回原始结果
       if (ctxBefore <= 0 && ctxAfter <= 0) return result.output
@@ -590,11 +626,16 @@ export async function registerWorkspaceTools(tools: ToolMap) {
 
   tools['workspace_edit_file'] = {
     description:
-      'Edit a file. Two modes:\n' +
-      '1. Line-based (RECOMMENDED): Use start_line + end_line + new_string. Replace lines start_line through end_line (inclusive). No uniqueness requirement.\n' +
-      '2. String-based (fallback): Use old_string + new_string. old_string must be unique unless replace_all=true.\n' +
-      'Returns a unified diff preview of the change, so you can verify before proceeding. ' +
-      'Prefer this over workspace_write_file for small edits.',
+      'Performs exact replacements in files.\n\n' +
+      'Usage:\n' +
+      '- You must use workspace_read_file at least once in the conversation before editing. This tool will error if you attempt an edit without reading the file.\n' +
+      '- Two modes:\n' +
+      '  1. Line-based (RECOMMENDED): start_line + end_line + new_string. Replace lines start_line through end_line (inclusive). No uniqueness requirement.\n' +
+      '  2. String-based (fallback): old_string + new_string. old_string must be unique in the file, or use replace_all=true.\n' +
+      '- When editing text from Read tool output, preserve the exact indentation (tabs/spaces) as it appears AFTER the line number prefix.\n' +
+      '- ALWAYS prefer editing existing files. NEVER create new files unless explicitly required.\n' +
+      '- Only use emojis if the user explicitly requests it. Avoid adding emojis to files unless asked.\n' +
+      '- Returns a unified diff preview of the change, so you can verify before proceeding.',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {

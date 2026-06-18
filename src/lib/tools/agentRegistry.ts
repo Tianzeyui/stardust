@@ -1,7 +1,7 @@
 /**
  * Agent Registry — 将活跃 Agent 注册为 AI 可调用工具
  */
-import { jsonSchema } from 'ai'
+import { jsonSchema } from '../api'
 import { listAgents, type Agent } from '../agentStore'
 import type { ToolMap } from './registry'
 

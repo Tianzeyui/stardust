@@ -1,7 +1,7 @@
 /**
  * Skill 工具：read_skill（按需读取技能文档，支持 section/lines/file）
  */
-import { jsonSchema } from 'ai'
+import { jsonSchema } from '../api'
 import { getInstalledSkills } from '../skillService'
 import type { SectionIndex } from '@/types/skill'
 import type { ToolMap } from './registry'

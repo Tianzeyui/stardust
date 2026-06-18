@@ -2,7 +2,7 @@
  * Git 工具：status / diff / log / add / reset / commit / branch / checkout
  * 在工作区根目录执行，commit 需用户确认
  */
-import { jsonSchema } from 'ai'
+import { jsonSchema } from '../api'
 import type { ToolMap } from './registry'
 import { createFileOp, setFileOpResolver } from '@/lib/fileOpManager'
 

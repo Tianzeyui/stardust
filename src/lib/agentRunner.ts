@@ -2,7 +2,7 @@
  * AgentRunner — Agent 独立执行引擎
  * 流式运行 Agent，支持工具调用，可将执行过程"开窗"到主对话
  */
-import { streamText, stepCountIs, type ModelMessage } from 'ai'
+import { streamChatWithTools, type ChatMessage } from './api'
 import { getChatModel } from './chatService'
 
 export interface AgentRunOpts {
@@ -25,10 +25,10 @@ export async function runAgent(
   agentName: string,
   opts?: AgentRunOpts,
 ): Promise<AgentRunResult> {
-  const model = getChatModel()
-  if (!model) return { success: false, text: '', toolCalls: [], error: '没有可用的 AI 模型' }
+  const config = getChatModel()
+  if (!config) return { success: false, text: '', toolCalls: [], error: '没有可用的 AI 模型' }
 
-  const messages: ModelMessage[] = [{ role: 'user', content: task }]
+  const messages: ChatMessage[] = [{ role: 'user', content: task }]
   const toolCalls: string[] = []
 
   try {
@@ -36,32 +36,31 @@ export async function runAgent(
     const allTools = await getMCPSdkTools(false)
     const availableTools = opts?.tools || allTools
 
-    const result = streamText({
-      model: model.instance,
-      system: systemPrompt,
+    const stream = streamChatWithTools({
+      config,
       messages,
-      tools: Object.keys(availableTools).length > 0 ? availableTools : undefined,
-      stopWhen: opts?.maxSteps ? stepCountIs(opts.maxSteps) : undefined,
+      tools: Object.keys(availableTools).length > 0 ? availableTools : {},
+      systemPrompt,
       abortSignal: opts?.abortSignal,
+      maxSteps: opts?.maxSteps ?? 25,
     })
 
     let fullText = ''
     const toolOutputs: string[] = []
-    for await (const chunk of result.fullStream) {
+    for await (const event of stream) {
       if (opts?.abortSignal?.aborted) break
-      if (chunk.type === 'reasoning-delta') {
-        opts?.onEvent?.({ type: 'agent-reasoning-delta', text: (chunk as any).text || (chunk as any).delta || '', agentName })
-      } else if (chunk.type === 'text-delta') {
-        fullText += chunk.text
-        opts?.onEvent?.({ type: 'agent-text-delta', text: chunk.text, agentName })
-      } else if (chunk.type === 'tool-call') {
-        const name = (chunk as any).toolName || 'unknown'
+      if (event.type === 'reasoning-delta') {
+        opts?.onEvent?.({ type: 'agent-reasoning-delta', text: event.text, agentName })
+      } else if (event.type === 'text-delta') {
+        fullText += event.text
+        opts?.onEvent?.({ type: 'agent-text-delta', text: event.text, agentName })
+      } else if (event.type === 'tool-call') {
+        const name = event.toolName
         toolCalls.push(name)
-        opts?.onEvent?.({ type: 'agent-tool-call', toolName: name, toolInput: (chunk as any).args, agentName })
-      } else if (chunk.type === 'tool-result') {
-        const c = chunk as any
-        const name = c.toolName || 'unknown'
-        const output = String(c.output ?? c.result ?? '')
+        opts?.onEvent?.({ type: 'agent-tool-call', toolName: name, toolInput: event.toolInput, agentName })
+      } else if (event.type === 'tool-result') {
+        const name = event.toolName
+        const output = String(event.toolOutput ?? '')
         toolOutputs.push(`${name}: ${output.slice(0, 800)}`)
         opts?.onEvent?.({ type: 'agent-tool-result', toolName: name, toolOutput: output, agentName })
       }

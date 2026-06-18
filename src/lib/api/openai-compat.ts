@@ -1,0 +1,306 @@
+/**
+ * OpenAI 兼容 API provider — 原生 fetch() + SSE 流解析
+ * 对齐 CC proxy: anthropicToOpenaiChat + openaiChatStreamToAnthropic
+ * 支持: DeepSeek, OpenAI, Qwen, OpenRouter, Groq, Together, Mistral, Ollama 等
+ */
+import type { ToolDef, StreamEvent, ChatMessage, ProviderConfig, Usage } from './types'
+
+// ====== 消息转换：brainPlus → OpenAI Chat Completions ======
+
+interface OpenAIMessage {
+  role: string
+  content: string | null
+  tool_calls?: Array<{
+    id: string
+    type: 'function'
+    function: { name: string; arguments: string }
+  }>
+  tool_call_id?: string
+  reasoning_content?: string
+}
+
+function convertMessages(messages: ChatMessage[], system?: string): OpenAIMessage[] {
+  const result: OpenAIMessage[] = []
+
+  // System prompt
+  if (system) {
+    result.push({ role: 'system', content: system })
+  }
+
+  for (const m of messages) {
+    if (m.role === 'system') {
+      result.push({ role: 'system', content: m.content })
+    } else if (m.role === 'user') {
+      result.push({ role: 'user', content: m.content })
+    } else if (m.role === 'assistant') {
+      const msg: OpenAIMessage = { role: 'assistant', content: m.content || '' }
+      if (m.toolCalls && m.toolCalls.length > 0) {
+        msg.tool_calls = m.toolCalls.map(tc => ({
+          id: tc.id,
+          type: 'function' as const,
+          function: { name: tc.name, arguments: JSON.stringify(tc.input) },
+        }))
+      }
+      result.push(msg)
+    } else if (m.role === 'tool') {
+      result.push({
+        role: 'tool',
+        content: m.content,
+        tool_call_id: m.toolCallId || '',
+      })
+    }
+  }
+
+  return result
+}
+
+// ====== 工具转换：brainPlus → OpenAI function ======
+
+interface OpenAITool {
+  type: 'function'
+  function: {
+    name: string
+    description: string
+    parameters: Record<string, unknown>
+  }
+}
+
+function convertTools(tools: Record<string, ToolDef>): OpenAITool[] {
+  return Object.entries(tools).map(([name, tool]) => ({
+    type: 'function' as const,
+    function: {
+      name,
+      description: tool.description,
+      parameters: (tool.inputSchema || { type: 'object', properties: {} }),
+    },
+  }))
+}
+
+// ====== SSE 流解析 ======
+
+interface SSEChunk {
+  choices?: Array<{
+    delta?: {
+      content?: string | null
+      reasoning_content?: string | null
+      tool_calls?: Array<{
+        index: number
+        id?: string
+        function?: { name?: string; arguments?: string }
+      }>
+    }
+    finish_reason?: string | null
+  }>
+  usage?: {
+    prompt_tokens?: number
+    completion_tokens?: number
+    prompt_cache_hit_tokens?: number
+  }
+}
+
+class SSELineDecoder {
+  private buffer = ''
+
+  push(chunk: string): string[] {
+    this.buffer += chunk
+    const lines = this.buffer.split('\n')
+    this.buffer = lines.pop() || ''
+    return lines.filter(l => l.trim()).map(l => l.trim())
+  }
+
+  flush(): string[] {
+    const lines = this.buffer.split('\n').filter(l => l.trim())
+    this.buffer = ''
+    return lines
+  }
+}
+
+function parseSSEChunk(line: string): SSEChunk | null {
+  if (!line.startsWith('data: ')) return null
+  const json = line.slice(6)
+  if (json === '[DONE]') return null
+  try {
+    return JSON.parse(json)
+  } catch {
+    return null
+  }
+}
+
+// ====== finish_reason 映射 (CC 对齐) ======
+
+function mapFinishReason(reason: string | null | undefined): string {
+  switch (reason) {
+    case 'stop': return 'stop'
+    case 'tool_calls': return 'tool_calls'
+    case 'length': return 'length'
+    case 'content_filter': return 'stop'
+    default: return 'stop'
+  }
+}
+
+// ====== 流式主函数 ======
+
+export async function* streamOpenAICompat(
+  config: ProviderConfig,
+  messages: ChatMessage[],
+  tools: Record<string, ToolDef>,
+  systemPrompt?: string,
+  signal?: AbortSignal,
+  maxOutputTokens?: number,
+): AsyncGenerator<StreamEvent> {
+  const baseUrl = (config.baseUrl || 'https://api.deepseek.com').replace(/\/+$/, '')
+  const url = `${baseUrl}/v1/chat/completions`
+
+  const openaiMessages = convertMessages(messages, systemPrompt)
+  const openaiTools = convertTools(tools)
+  const hasTools = openaiTools.length > 0
+
+  const body: Record<string, unknown> = {
+    model: config.modelId,
+    messages: openaiMessages,
+    stream: true,
+    stream_options: { include_usage: true },
+    temperature: 0.3,
+  }
+
+  // 对齐 CC: max_tokens 剥离策略 — 不传时让模型用自身默认值
+  if (maxOutputTokens != null) {
+    body.max_tokens = maxOutputTokens
+  }
+  if (hasTools) {
+    body.tools = openaiTools
+  }
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${config.apiKey}`,
+    },
+    body: JSON.stringify(body),
+    signal,
+  })
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '')
+    console.error('[openai-compat] DeepSeek error body:', text.slice(0, 500))
+    console.error('[openai-compat] Request body:', JSON.stringify(body).slice(0, 1000))
+    throw new Error(`API error ${response.status}: ${text.slice(0, 200)}`)
+  }
+
+  if (!response.body) {
+    throw new Error('No response body')
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  const lineDecoder = new SSELineDecoder()
+
+  // 工具调用状态机（对齐 CC openaiChatStreamToAnthropic）
+  const toolCalls: Map<number, {
+    id: string
+    name: string
+    argsBuffer: string
+  }> = new Map()
+
+  let inputTokens = 0
+  let outputTokens = 0
+  let finishReason = 'stop'
+  let textStarted = false
+  let aborted = false
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (signal?.aborted) { aborted = true; break }
+
+      const text = decoder.decode(value, { stream: true })
+      const lines = lineDecoder.push(text)
+
+      for (const line of lines) {
+        const chunk = parseSSEChunk(line)
+        if (!chunk) continue
+
+        // Usage
+        if (chunk.usage) {
+          inputTokens = chunk.usage.prompt_tokens ?? inputTokens
+          outputTokens = chunk.usage.completion_tokens ?? outputTokens
+        }
+
+        const choice = chunk.choices?.[0]
+        if (!choice) continue
+
+        // Finish reason
+        if (choice.finish_reason) {
+          finishReason = mapFinishReason(choice.finish_reason)
+        }
+
+        const delta = choice.delta
+        if (!delta) continue
+
+        // Reasoning (DeepSeek 特有)
+        if (delta.reasoning_content) {
+          yield {
+            type: 'reasoning-delta',
+            text: delta.reasoning_content,
+            reasoningId: 'reasoning-0',
+          }
+        }
+
+        // Text
+        if (delta.content) {
+          if (!textStarted) textStarted = true
+          yield { type: 'text-delta', text: delta.content }
+        }
+
+        // Tool calls
+        if (delta.tool_calls) {
+          for (const tc of delta.tool_calls) {
+            const idx = tc.index
+
+            if (!toolCalls.has(idx)) {
+              toolCalls.set(idx, { id: '', name: '', argsBuffer: '' })
+            }
+
+            const block = toolCalls.get(idx)!
+            if (tc.id) block.id = tc.id
+            if (tc.function?.name) block.name += tc.function.name
+            if (tc.function?.arguments) block.argsBuffer += tc.function.arguments
+          }
+        }
+      }
+    }
+  } catch (e: any) {
+    if (e.name === 'AbortError' || signal?.aborted) {
+      aborted = true
+    } else {
+      throw e
+    }
+  } finally {
+    reader.releaseLock()
+  }
+
+  if (aborted) {
+    yield { type: 'done', finishReason: 'abort', usage: { inputTokens, outputTokens } }
+    return
+  }
+
+  // Flush any pending tool calls
+  for (const [, block] of toolCalls) {
+    if (block.id && block.name) {
+      yield {
+        type: 'tool-call-start',
+        id: block.id,
+        name: block.name,
+        input: block.argsBuffer,
+      }
+    }
+  }
+
+  const usage: Usage = {
+    inputTokens,
+    outputTokens,
+  }
+  yield { type: 'done', finishReason, usage }
+}

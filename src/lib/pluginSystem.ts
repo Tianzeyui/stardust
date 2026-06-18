@@ -4,7 +4,7 @@
  *
  * 插件使用 React/TSX 模式：index.tsx / index.jsx 导出 register 函数
  */
-import { jsonSchema } from 'ai'
+import { jsonSchema } from './api'
 import type { Plugin, PluginContext, PluginAPI, PluginManifest, NavItemDef } from './pluginTypes'
 import { getSupabaseClient, isSupabaseConfigured } from './supabase'
 import { uploadToCloudinary, isCloudinaryConfigured, isAnySandboxEnabled, getAIModels } from './config'
@@ -251,18 +251,20 @@ class PluginSystemImpl {
         chat: async (opts) => {
           // 懒加载避免循环依赖
           const { getEnabledModel } = await import('./config')
-          const { generateText } = await import('ai')
           const model = getEnabledModel()
           if (!model) throw new Error('未启用任何 AI 模型，请先在设置中配置')
-          const { createOpenAI } = await import('@ai-sdk/openai')
-          const provider = createOpenAI({ apiKey: model.apiKey, baseURL: model.baseUrl || undefined })
-          const modelId = model.selectedModel || 'gpt-4o'
+          const { generateText } = await import('./api')
+          const system = opts.system
+          const prompt = opts.messages.map(m => `${m.role}: ${m.content}`).join('\n')
           const result = await generateText({
-            model: provider.chat(modelId),
-            messages: [
-              ...(opts.system ? [{ role: 'system' as const, content: opts.system }] : []),
-              ...opts.messages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
-            ],
+            config: {
+              provider: (model.name || model.id).toLowerCase(),
+              modelId: model.selectedModel || 'gpt-4o',
+              apiKey: model.apiKey || 'dummy',
+              baseUrl: model.baseUrl || undefined,
+            },
+            prompt,
+            systemPrompt: system,
             maxOutputTokens: opts.maxTokens,
           })
           return result.text

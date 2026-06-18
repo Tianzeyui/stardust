@@ -2,7 +2,7 @@
  * 外部搜索工具：Bing + DuckDuckGo
  * 各引擎独立开关和配置。HTTP 请求经主进程 IPC 代理（绕过 CORS）。
  */
-import { jsonSchema } from 'ai'
+import { jsonSchema } from '../api'
 import type { ToolMap } from './registry'
 import {
   getDuckDuckGoEnabled, getDDGResultCount, getDDGTimeout,

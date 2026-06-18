@@ -1,7 +1,7 @@
 /**
  * MCP 业务工具：从已启用 MCP 服务器动态注册
  */
-import { jsonSchema } from 'ai'
+import { jsonSchema } from '../api'
 import { getAllTools } from '../mcpClient'
 import type { ToolMap } from './registry'
 

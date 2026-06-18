@@ -8,7 +8,7 @@
  * - 必须输出 VERDICT: PASS / FAIL / PARTIAL
  */
 
-import { jsonSchema } from 'ai'
+import { jsonSchema } from '../api'
 
 // ====== 验证 Agent 系统提示词（完整版，对齐 CC verificationAgent） ======
 

@@ -61,17 +61,28 @@ export class SidecarManager extends EventEmitter {
 
     if (isDev) {
       // 开发模式：从源码目录找编译产物
-      const projectRoot = path.join(app.getAppPath(), '..')
-      const debugBinary = path.join(projectRoot, 'brainplus-engine', 'target', 'debug', 'brainplus-engine')
-      const releaseBinary = path.join(projectRoot, 'brainplus-engine', 'target', 'release', 'brainplus-engine')
+      // app.getAppPath() 在不同环境返回不同路径，多候选覆盖
+      const appPath = app.getAppPath()
+      const candidates = [
+        // 直接在 appPath 下（vite dev 可能返回项目根目录）
+        path.join(appPath, 'brainplus-engine', 'target', 'release', 'brainplus-engine'),
+        path.join(appPath, 'brainplus-engine', 'target', 'debug', 'brainplus-engine'),
+        // appPath 是 dist-electron/，上一级是项目根
+        path.join(appPath, '..', 'brainplus-engine', 'target', 'release', 'brainplus-engine'),
+        path.join(appPath, '..', 'brainplus-engine', 'target', 'debug', 'brainplus-engine'),
+      ]
 
-      // 优先用 release（性能好），回退 debug
-      if (fs.existsSync(releaseBinary)) return releaseBinary
-      if (fs.existsSync(debugBinary)) return debugBinary
+      for (const p of candidates) {
+        if (fs.existsSync(p)) {
+          console.log('[sidecar] 找到 binary:', p)
+          return p
+        }
+      }
 
       throw new Error(
-        `找不到 Rust Sidecar binary。请先编译：\n` +
-        `  cd brainplus-engine && cargo build --release`
+        `找不到 Rust Sidecar binary。检查路径:\n` +
+        `  ${candidates.slice(0, 2).join('\n  ')}\n` +
+        `请先编译: cd brainplus-engine && cargo build --release`
       )
     } else {
       // 生产模式：打包在 app.asar.unpacked 或 Resources 目录

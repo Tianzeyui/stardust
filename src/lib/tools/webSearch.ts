@@ -1,7 +1,7 @@
 /**
  * web_search 统一工具：多引擎 fallback 搜索
  */
-import { jsonSchema } from 'ai'
+import { jsonSchema } from '../api'
 import type { ToolMap } from './registry'
 
 interface SearchResult {

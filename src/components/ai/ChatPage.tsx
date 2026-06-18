@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useReducer } from 'react'
 import {
   ArrowRight, Loader2, Bot, X, ListTodo, Circle, CheckCircle2, File,
   Paperclip, FileText, Image, FolderOpen, ExternalLink, ArrowLeft, ArrowDown,
@@ -7,7 +7,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { chat, setAgentUIHandler, setTerminalUIHandler, type ChatStreamEvent, type AskUserEvent } from '@/lib/chatService'
-import type { ModelMessage } from 'ai'
+import type { ChatMessage as ChatMessageType } from '../lib/api'
 import { formatDuration, estimateTokens } from '@/lib/observability'
 import { ContextWindowManager } from '@/lib/contextWindowManager'
 import { useKonamiCode } from '@/hooks/useKonamiCode'
@@ -32,7 +32,9 @@ import { setSandboxOutputDir } from '@/lib/tools/sandbox'
 import { setWorkspaceRoots } from '@/lib/tools/workspace'
 import { setGitWorkspaceRoot } from '@/lib/tools/git'
 import { setTermWorkspaceRoot } from '@/lib/tools/terminal'
+import { killAll as killAllTerminals } from '@/lib/terminalManager'
 import { MemoryPopup } from './MemoryPopup'
+import { messageReducer, nextMsgId, type MessageAction } from './chatReducer'
 import { AgentPicker } from './AgentPicker'
 import { agentDisplayNames } from '@/lib/tools/agentRegistry'
 import { setTaskEventHandler } from '@/lib/taskManager'
@@ -68,7 +70,7 @@ function saveProjectId(pid: string | null) {
 
 export function ChatPage() {
   const { user } = useAuth()
-  const [messages, setMessages] = useState<UIMessage[]>([])
+  const [messages, dispatch] = useReducer(messageReducer, [])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [currentProjectId, setCurrentProjectIdRaw] = useState<string | null>(loadProjectId)
@@ -156,11 +158,11 @@ export function ChatPage() {
   const rafRef = useRef(0)
   const streamTickRef = useRef(0)
 
-  // 节流消息更新：每 16ms 最多刷一次（~60fps）
+  // 节流消息更新：流式期间 ~33ms（30fps），够平滑但减少渲染压力
   const tickMessages = useCallback((fn: () => void) => {
     const now = Date.now()
-    if (now - streamTickRef.current < 16) {
-      // 存最新的更新函数，延迟执行
+    const interval = 33  // 30fps — 流式文字不需要 60fps
+    if (now - streamTickRef.current < interval) {
       pendingUpdateRef.current = fn
       if (!rafRef.current) {
         rafRef.current = requestAnimationFrame(() => {
@@ -198,10 +200,14 @@ export function ChatPage() {
     el.addEventListener('scroll', onScroll, { passive: true })
 
     // ResizeObserver：内容高度变化 → 用户在底部才跟底
+    let scrollRaf = 0
     const ro = new ResizeObserver(() => {
-      if (atBottom) {
+      if (!atBottom) return
+      // RAF 延迟，避免在 layout 阶段写 scrollTop 导致 thrashing
+      cancelAnimationFrame(scrollRaf)
+      scrollRaf = requestAnimationFrame(() => {
         el.scrollTop = el.scrollHeight
-      }
+      })
     })
     ro.observe(el)
 
@@ -221,23 +227,19 @@ export function ChatPage() {
     return () => cancelAnimationFrame(id)
   }, [messages])
 
-  // 流式结束时重置 + 旧工具结果清理（仅清理一次）
+  // 流式结束时重置 + 旧工具结果清理（仅清理一次，防无限循环）
+  const cleanedVersionRef = useRef(0)
   useEffect(() => {
     const streaming = messages.some(m => m.streaming)
     if (!streaming && messages.length > 0) {
       setShowScrollBtn(false)
-      // 清理前20条之外的旧工具消息内容（只清理尚未清理的）
-      if (messages.length > 30) {
+      if (messages.length > 20 && cleanedVersionRef.current !== messages.length) {
         const needsClean = messages.some((m, i) =>
-          m.role === 'tool' && i < messages.length - 25 && m.content && m.content.length > 100 && m.content !== '[Content cleared]'
+          m.role === 'tool' && i < messages.length - 15 && m.content && m.content.length > 100
         )
         if (needsClean) {
-          setMessages(prev => prev.map((m, i) => {
-            if (m.role === 'tool' && i < prev.length - 25 && m.content && m.content.length > 100 && m.content !== '[Content cleared]') {
-              return { ...m, content: '[Content cleared]' }
-            }
-            return m
-          }))
+          cleanedVersionRef.current = messages.length
+          dispatch({ type: 'CLEAR_OLD_TOOLS' })
         }
       }
     }
@@ -371,14 +373,9 @@ export function ChatPage() {
   useEffect(() => {
     setTerminalUIHandler((event: any) => {
       if (event.type === 'terminal_created') {
-        setMessages(prev => [...prev, { role: 'assistant', content: '', terminal: event.terminal, streaming: false } as any])
+        dispatch({ type: 'ADD_TERMINAL', terminal: event.terminal })
       } else if (event.type === 'terminal_updated') {
-        setMessages(prev => prev.map(m => {
-          if ((m as any).terminal?.id === event.terminal.id) {
-            return { ...m, terminal: { ...event.terminal } }
-          }
-          return m
-        }))
+        dispatch({ type: 'UPDATE_TERMINAL', terminal: event.terminal })
       }
     })
     return () => { setTerminalUIHandler(() => {}) }
@@ -389,14 +386,9 @@ export function ChatPage() {
     const handler = (e: CustomEvent) => {
       const event = e.detail
       if (event.type === 'fileop_created') {
-        setMessages(prev => [...prev, { role: 'assistant', content: '', fileOp: event.fileOp, streaming: false } as any])
+        dispatch({ type: 'ADD_FILEOP', fileOp: event.fileOp })
       } else if (event.type === 'fileop_updated') {
-        setMessages(prev => prev.map(m => {
-          if ((m as any).fileOp?.id === event.fileOp.id) {
-            return { ...m, fileOp: { ...event.fileOp } }
-          }
-          return m
-        }))
+        dispatch({ type: 'UPDATE_FILEOP', fileOp: event.fileOp })
       }
     }
     window.addEventListener('brainplus:fileop', handler as EventListener)
@@ -412,7 +404,7 @@ export function ChatPage() {
     if (!api) return
     const project = currentProjectId ? projectStore.getById(currentProjectId) : null
     const c = await api.create('新对话', undefined, currentProjectId, project?.name)
-    setConvId(c.id); setConvTitle('新对话'); setMessages([]); setCompressionInfo(null); convIdRef.current = c.id
+    setConvId(c.id); setConvTitle('新对话'); dispatch({ type: 'RESET' }); setCompressionInfo(null); convIdRef.current = c.id
     setDisclosureResult(null); setActivatedToolNames(new Set()); setShortMemoryCount(0)
     setConvList(prev => [{ id: c.id, title: '新对话', messageCount: 0, updatedAt: c.updatedAt, projectId: currentProjectId }, ...prev])
   }, [currentProjectId])
@@ -426,7 +418,7 @@ export function ChatPage() {
     if (!api) return
     const c = await api.get(id)
     if (c) {
-      setConvId(c.id); setConvTitle(c.title); setMessages(c.messages || []); convIdRef.current = c.id
+      setConvId(c.id); setConvTitle(c.title); dispatch({ type: 'LOAD', messages: c.messages || [] }); convIdRef.current = c.id
       setDisclosureResult(null); setActivatedToolNames(new Set()); setShortMemoryCount(0)
       // 恢复压缩状态（若消息数未变化则有效，否则视为过期）
       const snap = (c as any).compression
@@ -630,7 +622,8 @@ export function ChatPage() {
     const modelName = usedModel ? `${usedModel.displayName} / ${usedModel.selectedModel}` : undefined
 
     const userMsg: UIMessage = { role: 'user', content: displaySummary, attachments: attachments.length > 0 ? attachments.map(a => ({ name: a.name, type: a.type, status: a.status === 'error' ? 'error' as const : 'done' as const, error: a.error })) : undefined }
-    setMessages(prev => [...prev, userMsg, { role: 'assistant', content: '', streaming: true, modelName }])
+    dispatch({ type: 'ADD_USER', content: userMsg.content, attachments: userMsg.attachments })
+    dispatch({ type: 'ADD_ASSISTANT', modelName })
     setInput('')
     setAttachments([])
     setLoading(true)
@@ -653,9 +646,19 @@ export function ChatPage() {
         }))
       }
 
-      const history: ModelMessage[] = [...messages, userMsg]
-        .filter(m => !m.streaming && m.role !== 'tool')
-        .map((m, i, arr) => ({ role: m.role as 'user' | 'assistant', content: i === arr.length - 1 ? resolvedContent as string : m.content }))
+      const history: ChatMessageType[] = [...messages, userMsg]
+        .filter(m => !m.streaming)
+        .map((m, i, arr) => {
+          if (i === arr.length - 1) {
+            return { role: m.role, content: resolvedContent as string }
+          }
+          return {
+            role: m.role,
+            content: m.content,
+            toolCallId: (m as any).toolCallId,
+            toolCalls: (m as any).toolCalls,
+          }
+        })
 
       let streamed = ''
       setConsoleLog([]); setTaskList([]); setActivatedToolNames(new Set())
@@ -686,20 +689,7 @@ export function ChatPage() {
           const timeline = [...agentTimelineRef.current]
           const content = agentStreamedRef.current
           const thinking = agentThinkingRef.current
-          setMessages(prev => {
-            const n = [...prev]
-            const l = n[n.length - 1]
-            const hasContainer = l?.role === 'assistant' && l.modelName?.startsWith('Agent:')
-            if (hasContainer) {
-              l.content = content
-              l.agentTimeline = timeline as any
-              l.thinking = thinking
-            } else {
-              if (l?.role === 'assistant' && l.streaming) { l.streaming = false }
-              n.push({ role: 'assistant', content, streaming: true, modelName: label, agentTimeline: timeline as any, thinking })
-            }
-            return [...n]
-          })
+          dispatch({ type: 'AGENT_TEXT', label, content, agentTimeline: timeline, thinking })
         }
         if (event.type === 'agent-tool-call') {
           const brief = briefArgs(event.toolInput)
@@ -723,18 +713,7 @@ export function ChatPage() {
           agentThinkingRef.current += event.text || ''
           const agentLabel = event.agentName ? `Agent: ${event.agentName}` : 'Agent'
           // 确保 Agent 容器存在并更新 thinking 字段
-          setMessages(prev => {
-            const n = prev.map(m => ({ ...m }))
-            const l = n[n.length - 1]
-            const hasContainer = l?.role === 'assistant' && l.modelName === agentLabel
-            if (hasContainer) {
-              n[n.length - 1] = { ...l, thinking: agentThinkingRef.current, thinkingLoading: true }
-            } else {
-              if (l?.role === 'assistant' && l.streaming) { n[n.length - 1] = { ...l, streaming: false } }
-              n.push({ role: 'assistant', content: '', streaming: true, modelName: agentLabel, agentTimeline: [...agentTimelineRef.current] as any, thinking: agentThinkingRef.current, thinkingLoading: true })
-            }
-            return n
-          })
+dispatch({ type: 'AGENT_THINKING', label: agentLabel, thinking: agentThinkingRef.current, thinkingLoading: true, agentTimeline: [...agentTimelineRef.current] })
         } else if (event.type === 'agent-text-delta') {
           const agentLabel = event.agentName ? `Agent: ${event.agentName}` : 'Agent'
           agentStreamedRef.current += event.text || ''
@@ -746,35 +725,12 @@ export function ChatPage() {
             agentTimelineRef.current.push({ type: 'text', content: event.text || '' })
           }
           const timeline = [...agentTimelineRef.current]
-          setMessages(prev => {
-            const n = prev.map(m => ({ ...m }))
-            const l = n[n.length - 1]
-            if (!l || l.role !== 'assistant' || l.modelName !== agentLabel) {
-              if (l?.role === 'assistant' && l.streaming) { n[n.length - 1] = { ...l, streaming: false } }
-              n.push({ role: 'assistant', content: agentStreamedRef.current, streaming: true, modelName: agentLabel, agentTimeline: timeline as any, thinking: agentThinkingRef.current, thinkingLoading: false })
-            } else {
-              n[n.length - 1] = { ...l, content: agentStreamedRef.current, agentTimeline: timeline as any, thinking: agentThinkingRef.current, thinkingLoading: false }
-            }
-            return n
-          })
+dispatch({ type: 'AGENT_TEXT', label: agentLabel, content: agentStreamedRef.current, agentTimeline: timeline, thinking: agentThinkingRef.current })
         } else if (event.type === 'agent-done') {
           // Agent 结束，确保有容器（纯工具调用无文本时兜底），关闭流式
           const agentLabel = event.agentName ? `Agent: ${event.agentName}` : 'Agent'
           const timeline = [...agentTimelineRef.current]
-          setMessages(prev => {
-            const n = prev.map(m => ({ ...m }))
-            const l = n[n.length - 1]
-            const hasContainer = l?.role === 'assistant' && l.modelName?.startsWith('Agent:')
-            if (!hasContainer && (agentStreamedRef.current.trim() || timeline.length > 0)) {
-              if (l?.role === 'assistant' && l.streaming) { l.streaming = false }
-              n.push({ role: 'assistant', content: agentStreamedRef.current, streaming: false, modelName: agentLabel, agentTimeline: timeline as any, thinking: agentThinkingRef.current })
-            } else if (hasContainer) {
-              n[n.length - 1] = { ...l, streaming: false, agentTimeline: timeline as any, thinking: agentThinkingRef.current }
-            } else {
-              n.forEach(m => { if (m.role === 'assistant' && m.streaming && m.modelName?.startsWith('Agent:')) m.streaming = false })
-            }
-            return [...n]
-          })
+dispatch({ type: 'AGENT_DONE', label: agentLabel, content: agentStreamedRef.current, agentTimeline: timeline, thinking: agentThinkingRef.current })
           agentStreamedRef.current = ''
           agentThinkingRef.current = ''
         } else if (event.type === 'reasoning-delta') {
@@ -787,17 +743,7 @@ export function ChatPage() {
             mainTimelineRef.current.push({ type: 'thinking', content: event.text || '' })
           }
           const tl = mainTimelineRef.current.map(t => ({ ...t }))
-          setMessages(prev => {
-            const n = prev.map(m => ({ ...m }))
-            const l = n[n.length - 1]
-            if (l?.role === 'assistant' && l.streaming) {
-              n[n.length - 1] = { ...l, thinking: thinkingRef.current, thinkingLoading: true, mainTimeline: tl }
-            } else {
-              if (l?.role === 'assistant') n[n.length - 1] = { ...l, streaming: false }
-              n.push({ role: 'assistant', content: '', streaming: true, modelName, thinking: thinkingRef.current, thinkingLoading: true, mainTimeline: tl })
-            }
-            return n
-          })
+tickMessages(() => dispatch({ type: 'REASONING_DELTA', thinking: thinkingRef.current, modelName, mainTimeline: tl }))
         } else if (event.type === 'text-delta') {
           streamed += event.text || ''
           // 推入时间线：合并连续 text
@@ -811,20 +757,7 @@ export function ChatPage() {
           // 如果上一个消息是 tool batch，关闭它并开始新 assistant
           const hadBatch = toolBatchRef.current.length > 0
           toolBatchRef.current = []
-          setMessages(prev => {
-            const n = prev.map(m => ({ ...m }))
-            const l = n[n.length - 1]
-            if (l?.role === 'assistant' && l.streaming) {
-              n[n.length - 1] = { ...l, content: streamed, thinking: thinkingRef.current, thinkingLoading: false, mainTimeline: tl }
-            } else if (l?.role === 'assistant') {
-              n[n.length - 1] = { ...l, streaming: false }
-              n.push({ role: 'assistant', content: streamed, streaming: true, modelName, thinking: thinkingRef.current, thinkingLoading: false, mainTimeline: tl })
-            } else {
-              // tool batch 后面：创建新的 assistant
-              n.push({ role: 'assistant', content: streamed, streaming: true, modelName, thinking: thinkingRef.current, thinkingLoading: false, mainTimeline: tl })
-            }
-            return n
-          })
+tickMessages(() => dispatch({ type: 'TEXT_DELTA', content: streamed, modelName, thinking: thinkingRef.current, thinkingLoading: false, mainTimeline: tl }))
         } else if (event.type === 'tool-call') {
           let toolName = event.toolName || 'unknown'
           let toolType = detectToolType(toolName)
@@ -854,23 +787,10 @@ export function ChatPage() {
 
           if (isFirstInBatch) {
             mainTimelineRef.current = []
-            setMessages(prev => {
-              const n = [...prev]; const l = n[n.length - 1]
-              if (l?.role === 'assistant' && l.streaming) {
-                l.content = textBeforeTool; l.streaming = false
-              }
-              // 创建并行工具组消息
-              n.push({ role: 'tool', content: '', toolBatch: toolBatchRef.current as any })
-              return [...n]
-            })
+dispatch({ type: 'TOOL_BATCH_CREATE', textBeforeTool, tools: toolBatchRef.current as any })
           } else {
-            // 追加到已有的工具组
-            setMessages(prev => prev.map(m => {
-              if (m.role === 'tool' && (m as any).toolBatch) {
-                return { ...m, toolBatch: toolBatchRef.current as any }
-              }
-              return m
-            }))
+            // 追加到已有的工具组——从后往前找，避免全量遍历
+            dispatch({ type: 'TOOL_BATCH_APPEND', tools: toolBatchRef.current as any })
           }
         } else if (event.type === 'tool-result') {
           const ok = !String(event.toolOutput ?? '').startsWith('Error')
@@ -896,18 +816,7 @@ export function ChatPage() {
               }
             }
           }
-          setMessages(prev => prev.map(m => {
-            if (m.role === 'tool' && (m as any).toolBatch) {
-              return { ...m, toolBatch: batch as any }
-            }
-            // 兼容旧的 toolCall 模式 + 超大结果截断
-            if (m.role === 'tool' && m.toolCall && (m.toolCall.name === matchName || m.toolCall.name === sdkName) && m.toolCall.status === 'running') {
-              const raw = String(event.toolOutput ?? '')
-              const truncated = raw.length > 30000 ? raw.slice(0, 30000) + `\n... (${raw.length} chars)` : raw
-              return { ...m, content: truncated, toolCall: { ...m.toolCall, status: ok ? 'done' : 'error', result: raw.length > 50000 ? raw.slice(0, 50000) + `\n... (${raw.length} chars)` : raw } }
-            }
-            return m
-          }))
+          tickMessages(() => dispatch({ type: 'TOOL_BATCH_RESULT', toolName: matchName, output: String(event.toolOutput ?? ''), ok }))
           pushLog(ok ? 'OK' : 'ERR', `${matchName} ${ok ? 'done' : 'fail'}`, ok ? 'ok' : 'error')
           // cleanup proxy mapping
           if (proxyName) toolNameProxyRef.current.delete(sdkName)
@@ -915,6 +824,12 @@ export function ChatPage() {
           setStatusText('')
         } else if (event.type === 'system-log') {
           pushLog('SYS', event.text || '', 'info')
+        } else if (event.type === 'retry-clear') {
+          // 截断重试：清空 RAF 队列、已展示文本、旧消息，下一段从头来
+          streamed = ''
+          pendingUpdateRef.current = null
+          if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0 }
+          dispatch({ type: 'RETRY_CLEAR' })
         } else if (event.type === 'task-status') {
           const s = event.taskStatus || '?'
           pushLog(s === 'running' ? '🔄' : s === 'completed' ? '✅' : '❌',
@@ -946,15 +861,9 @@ export function ChatPage() {
               t.toolCalls.length > 0 ? `${t.toolCalls.length} tools` : '',
             ].filter(Boolean)
             const info = parts.join(' · ')
-            // 附加到最后一条助手消息
-            setMessages(prev => {
-              const n = [...prev]
-              const last = n[n.length - 1]
-              if (last?.role === 'assistant') last.trace = info
-              return [...n]
-            })
+            // trace 信息通过 addTrace 保存，不存入消息状态
           }
-          setMessages(prev => { const n = prev.map(m => ({ ...m })); const l = n[n.length - 1]; if (l?.role === 'assistant' && l.streaming) { if (streamed) { n[n.length - 1] = { ...l, content: streamed, streaming: false } } else n.pop() } return n })
+          dispatch({ type: 'STREAM_END', streamed })
           // 保存本次用量追踪
           if (event.trace) {
             const t = event.trace
@@ -988,11 +897,7 @@ export function ChatPage() {
       const isAbort = e.name === 'AbortError'
         || e.message?.includes('abort')
         || controller.signal.aborted
-      setMessages(prev => prev.map(m => {
-        if (m.role === 'assistant' && m.streaming) return { ...m, content: (m.content || '') + `\n\n*[${isAbort ? '用户已中断' : '连接失败'}] *`, streaming: false }
-        if (m.role === 'tool' && m.toolCall?.status === 'running') return { ...m, toolCall: { ...m.toolCall, status: 'error' as const, result: isAbort ? '[已中断]' : '[连接失败]' } }
-        return m
-      }))
+      dispatch({ type: 'ABORT', isAbort })
       if (isAbort) {
         pushLog('STOP', '用户中断', 'info')
         setProgressMsg('')
@@ -1007,7 +912,7 @@ export function ChatPage() {
     // 后台异步提取记忆（fire-and-forget，不阻塞用户）
     const memMgr = memoryManager
     if (sessionMemoryEnabled && memMgr && messagesRef.current.length >= 2) {
-      const toExtract: ModelMessage[] = messagesRef.current
+      const toExtract: ChatMessageType[] = messagesRef.current
         .filter(m => m.role === 'user' || m.role === 'assistant')
         .slice(-10)
         .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
@@ -1068,7 +973,7 @@ export function ChatPage() {
 
   const handleAskAnswer = useCallback((answer: string) => {
     if (!askUser) return
-    setMessages(prev => [...prev, { role: 'user', content: answer }])
+    dispatch({ type: 'ADD_USER_REPLY', content: answer })
     const askLabel = askUser.title || askUser.question || '用户回答'
     pushLog('USR', `${askLabel} => ${answer.slice(0, 80)}`, 'ok')
     askUser.resolve(answer)
@@ -1360,7 +1265,7 @@ export function ChatPage() {
           />
           <div className="flex-1" />
           {loading ? (
-            <button className="p-0.5 rounded text-muted-foreground/50 hover:text-foreground transition-colors" onClick={() => abortRef.current?.abort()} title="停止生成">
+            <button className="p-0.5 rounded text-muted-foreground/50 hover:text-foreground transition-colors" onClick={() => { abortRef.current?.abort(); killAllTerminals(); sendingRef.current = false; setLoading(false) }} title="停止生成">
               <X className="h-4 w-4" />
             </button>
           ) : (
@@ -1383,7 +1288,7 @@ export function ChatPage() {
         onNew={handleNewConv}
         onProjectChange={(pid) => {
           setCurrentProjectId(pid)
-          setConvId(null); setConvTitle('新对话'); setMessages([]); setCompressionInfo(null); convIdRef.current = null
+          dispatch({ type: 'RESET' }); setConvId(null); setConvTitle('新对话'); setCompressionInfo(null); convIdRef.current = null
           setConvList([])
         }}
         onSwitch={handleSwitchConv}

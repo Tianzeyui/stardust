@@ -1,7 +1,7 @@
 /**
  * Agent 工具：ask_user, show_progress, notify_complete, update_task_list, delegate_task
  */
-import { jsonSchema } from 'ai'
+import { jsonSchema } from '../api'
 import type { ToolMap } from './registry'
 import { delegateToModel } from '../chatService'
 import type { AskQuestion } from '../chatService'
@@ -115,10 +115,10 @@ export function registerAgentTools(tools: ToolMap, autoMode?: boolean) {
 
   tools['update_task_list'] = {
     description:
-      '管理复杂任务的任务清单。首次调用时传入完整任务列表（全部 pending），' +
-      '之后每次只需传入状态有变化的任务项即可增量更新。' +
-      'id 为唯一标识，title 为任务描述，status: pending(待执行)/running(执行中)/done(已完成)/cancelled(取消)。' +
-      '用法：接到复杂任务时先创建清单 → 开始某项时标记 running → 完成后标记 done。',
+      'Break complex tasks into steps and track progress. Create a list of pending tasks, mark each running when you start, mark it done immediately when complete. ' +
+      'Do NOT batch up multiple completed tasks — update status after EACH step finishes. ' +
+      'This tool keeps you accountable: you cannot claim a task is done if a step is still pending. ' +
+      'id: unique identifier; title: task description; status: pending/running/done/cancelled.',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {

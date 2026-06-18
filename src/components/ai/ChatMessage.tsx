@@ -56,6 +56,10 @@ function ChatMessageInner({ msg }: ChatMessageProps) {
           const { reject } = await import('@/lib/terminalManager')
           reject(id)
         }}
+        onCancel={async (id) => {
+          const { killTerminal } = await import('@/lib/terminalManager')
+          await killTerminal(id)
+        }}
       />
     )
   }
@@ -71,7 +75,7 @@ function ChatMessageInner({ msg }: ChatMessageProps) {
     return (
       <div className="flex flex-col gap-1">
         {batch.map(tc => {
-          if (tc.name === 'run_terminal' || tc.name === 'run_terminal_input') return null
+          if (tc.name === 'run_terminal' ) return null
           if (tc.name === 'web_search') return <SearchBubble key={tc.id} tc={tc} />
           if (tc.name === 'web_fetch') return <FetchBubble key={tc.id} tc={tc} />
           return <ToolBubble key={tc.id} tc={tc} />
@@ -731,10 +735,11 @@ function FetchBubble({ tc }: { tc: ToolCallStatus }) {
 }
 
 /** 终端命令气泡 */
-export function TerminalBubble({ ts, onConfirm, onReject }: {
+export function TerminalBubble({ ts, onConfirm, onReject, onCancel }: {
   ts: TerminalStatus
   onConfirm: (id: string, persist: boolean) => void
   onReject: (id: string) => void
+  onCancel: (id: string) => void
 }) {
   const iconCls = ts.status === 'done' ? 'text-green-400'
     : ts.status === 'error' ? 'text-red-400'
@@ -779,17 +784,20 @@ export function TerminalBubble({ ts, onConfirm, onReject }: {
               </button>
             </div>
           )}
-
-          {/* 输出 */}
-          {(ts.stdout || ts.stderr) && (
-            <pre className="mt-2 max-h-96 overflow-auto custom-scrollbar rounded bg-zinc-950 px-2 py-1.5 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-all text-zinc-300" ref={el => { if (el) el.scrollTop = el.scrollHeight }}>
-              {ts.stdout}{ts.stderr && `\n\x1b[31m${ts.stderr}\x1b[0m`}
-            </pre>
+          {/* 运行中取消按钮 */}
+          {ts.status === 'running' && (
+            <div className="flex items-center gap-2 mt-2">
+              <button className="flex items-center gap-1 rounded bg-red-900/50 px-2.5 py-1 text-[10px] text-red-300 hover:bg-red-800 transition-colors"
+                onClick={() => onCancel(ts.id)}>
+                <X className="h-3 w-3" />终止 (Ctrl+C)
+              </button>
+            </div>
           )}
 
-          {/* 交互输入（PTY 模式） */}
-          {ts.status === 'running' && (
-            <PtyInput terminalId={ts.id} />
+          {/* 输出 */}
+          {/* 输出 */}
+          {(ts.stdout || ts.stderr) && (
+            <TerminalOutput stdout={ts.stdout} stderr={ts.stderr} />
           )}
         </div>
       </div>
@@ -797,33 +805,43 @@ export function TerminalBubble({ ts, onConfirm, onReject }: {
   )
 }
 
-/** PTY 交互输入框 */
-function PtyInput({ terminalId }: { terminalId: string }) {
-  const [val, setVal] = useState('')
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  const send = () => {
-    if (!val) return
-    const api = (window as any).electronAPI?.terminal
-    api?.ptyWrite(terminalId, val + '\n')
-    setVal('')
-    inputRef.current?.focus()
-  }
-
+/** 终端输出 — 用 useEffect + RAF 自动跟底，避免 ref callback 每帧触发布局 */
+function TerminalOutput({ stdout, stderr }: { stdout: string; stderr?: string }) {
+  const ref = useRef<HTMLPreElement>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    requestAnimationFrame(() => { el.scrollTop = el.scrollHeight })
+  }, [stdout, stderr])
   return (
-    <div className="flex items-center gap-1 mt-1.5">
-      <span className="text-green-400 text-[10px] font-mono shrink-0">$</span>
-      <input
-        ref={inputRef}
-        className="flex-1 bg-transparent border-none outline-none text-zinc-200 font-mono text-[11px] py-0.5"
-        value={val}
-        onChange={e => setVal(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Enter') send() }}
-        placeholder="输入并回车发送..."
-        autoFocus
-      />
-    </div>
+    <pre ref={ref} className="mt-2 max-h-96 overflow-auto custom-scrollbar rounded bg-zinc-950 px-2 py-1.5 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-all text-zinc-300">
+      {stdout}{stderr && `\n\x1b[31m${stderr}\x1b[0m`}
+    </pre>
   )
 }
 
-export const ChatMessage = memo(ChatMessageInner)
+/** 自定义比较：已完成消息内容不变就跳过渲染（对齐 Codex 不可变历史 cell） */
+function areEqual(prev: ChatMessageProps, next: ChatMessageProps) {
+  const p = prev.msg, n = next.msg
+  // 流式消息始终重渲染
+  if (p.streaming || n.streaming) return false
+  // 终端消息：状态变化需要重渲染（按钮状态切换）
+  if (p.terminal || n.terminal) {
+    return p.terminal?.status === n.terminal?.status &&
+      p.terminal?.stdout === n.terminal?.stdout &&
+      p.terminal?.stderr === n.terminal?.stderr
+  }
+  // 已完成消息：比较关键字段内容
+  return (
+    p.content === n.content &&
+    p.thinking === n.thinking &&
+    p.modelName === n.modelName &&
+    p.role === n.role &&
+    p.toolCall?.status === n.toolCall?.status &&
+    p.toolCall?.result === n.toolCall?.result &&
+    JSON.stringify(p.toolBatch) === JSON.stringify(n.toolBatch) &&
+    JSON.stringify(p.agentTimeline) === JSON.stringify(n.agentTimeline)
+  )
+}
+
+export const ChatMessage = memo(ChatMessageInner, areEqual)

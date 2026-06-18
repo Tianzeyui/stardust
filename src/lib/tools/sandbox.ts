@@ -2,7 +2,7 @@
  * 沙箱执行工具：JS (Node.js + npm 包) 和 Python (uv)
  * 各语言由独立开关控制
  */
-import { jsonSchema } from 'ai'
+import { jsonSchema } from '../api'
 import type { ToolMap } from './registry'
 import { getJSSandboxEnabled, getPythonSandboxEnabled } from '../config'
 

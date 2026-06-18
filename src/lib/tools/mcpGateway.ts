@@ -1,7 +1,7 @@
 /**
  * MCP 网关工具：资源/提示发现与读取
  */
-import { jsonSchema } from 'ai'
+import { jsonSchema } from '../api'
 import type { ToolMap } from './registry'
 
 export function registerMCPGatewayTools(tools: ToolMap) {

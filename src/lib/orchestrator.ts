@@ -2,7 +2,7 @@
  * Agent Orchestrator — A2A Task 驱动
  * 每次 Agent 执行对应一个 Task，完整生命周期追踪
  */
-import { streamText, stepCountIs, type ModelMessage } from 'ai'
+import { streamChatWithTools, type ChatMessage } from './api'
 import { getChatModel } from './chatService'
 import { getAgentStreamHandler } from './tools/agent'
 import { getAgentMaxSteps } from './config'
@@ -53,9 +53,9 @@ export async function delegateToAgent(
     return delegateToRemoteAgent(agent, taskInput, task, streamHandler, overrideSystemPrompt)
   }
 
-  // 本地 Agent：streamText
-  const model = getChatModel()
-  if (!model) return { agentName: agent.name, success: false, taskId: task.id, toolCount: 0, html: '', plainText: '', error: '没有可用模型' }
+  // 本地 Agent
+  const config = getChatModel()
+  if (!config) return { agentName: agent.name, success: false, taskId: task.id, toolCount: 0, html: '', plainText: '', error: '没有可用模型' }
 
   TaskManager.start(task)
   streamHandler?.({ type: 'task-status', taskId: task.id, taskAgentName: agent.name, taskStatus: 'running' } as any)
@@ -67,7 +67,7 @@ export async function delegateToAgent(
   const systemPrompt = overrideSystemPrompt
     || agent.systemPrompt
     || `You are "${agent.name}", a coding agent. ${agent.description}${skillDesc}\n\nUse tools directly. Report in one sentence. Do not explain.`
-  const messages: ModelMessage[] = [{ role: 'user', content: taskInput }]
+  const messages: ChatMessage[] = [{ role: 'user', content: taskInput }]
   const toolCalls: string[] = []
 
   try {
@@ -76,29 +76,27 @@ export async function delegateToAgent(
     const toolNames = Object.keys(allTools)
     log(`Task ${task.id} "${agent.name}" 开始，工具 ${toolNames.length} 个`)
 
-    const result = streamText({
-      model: model.instance,
-      system: systemPrompt,
+    const stream = streamChatWithTools({
+      config,
       messages,
-      tools: toolNames.length > 0 ? allTools : undefined,
-      stopWhen: stepCountIs(getAgentMaxSteps()),
+      tools: toolNames.length > 0 ? allTools : {},
+      systemPrompt,
+      maxSteps: getAgentMaxSteps(),
     })
 
     let fullText = ''
-    for await (const chunk of result.fullStream) {
-      if (chunk.type === 'text-delta') {
-        fullText += chunk.text
-        streamHandler?.({ type: 'agent-text-delta', text: chunk.text, agentName: agent.name })
-      } else if (chunk.type === 'tool-call') {
-        const c = chunk as any
-        const name = c.toolName || 'unknown'
+    for await (const event of stream) {
+      if (event.type === 'text-delta') {
+        fullText += event.text
+        streamHandler?.({ type: 'agent-text-delta', text: event.text, agentName: agent.name })
+      } else if (event.type === 'tool-call') {
+        const name = event.toolName
         toolCalls.push(name)
         log(`Task ${task.id} ▶ ${name}`)
-        streamHandler?.({ type: 'agent-tool-call', toolName: name, toolInput: c.args, agentName: agent.name })
-      } else if (chunk.type === 'tool-result') {
-        const c = chunk as any
-        const output = String(c.output ?? c.result ?? '')
-        streamHandler?.({ type: 'agent-tool-result', toolName: c.toolName || '?', toolOutput: output, agentName: agent.name })
+        streamHandler?.({ type: 'agent-tool-call', toolName: name, toolInput: event.toolInput, agentName: agent.name })
+      } else if (event.type === 'tool-result') {
+        const output = String(event.toolOutput ?? '')
+        streamHandler?.({ type: 'agent-tool-result', toolName: event.toolName, toolOutput: output, agentName: agent.name })
       }
     }
 
@@ -118,10 +116,6 @@ export async function delegateToAgent(
 
     // 获取 token 用量
     let tokenUsage: { input: number; output: number } | undefined
-    try {
-      const usage = await Promise.resolve((result as any).usage).catch(() => undefined)
-      if (usage) tokenUsage = { input: usage.inputTokens ?? usage.promptTokens ?? 0, output: usage.outputTokens ?? usage.completionTokens ?? 0 }
-    } catch {}
 
     TaskManager.complete(task, plainText, artifacts.length > 0 ? artifacts : undefined)
     streamHandler?.({ type: 'task-status', taskId: task.id, taskAgentName: agent.name, taskStatus: 'completed', text: plainText.slice(0, 100) } as any)

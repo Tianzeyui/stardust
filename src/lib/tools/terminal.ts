@@ -2,7 +2,7 @@
  * 终端工具：run_terminal + check_terminal
  * 助手可执行终端命令，需用户确认。支持同步/异步。
  */
-import { jsonSchema } from 'ai'
+import { jsonSchema } from '../api'
 import type { ToolMap } from './registry'
 import { getTerminalEnabled } from '@/lib/config'
 import { createTerminal, updateTerminal, getTerminal, setResolver } from '@/lib/terminalManager'
@@ -19,31 +19,26 @@ export function registerTerminalTool(tools: ToolMap) {
   if (!getTerminalEnabled()) return
 
   tools['run_terminal'] = {
-    description: 'Execute a shell command. Use for: package installs, build commands, test runners, git operations. NOT for file search — use workspace_glob/workspace_grep instead. mode="sync"=wait(default); "async"=background; "interactive"=user types directly.',
+    description: 'Execute a shell command and return the output. Use for: package installs (npm/pip), build commands, test runners, git operations. NOT for file reading/editing/searching — use the dedicated workspace_* tools.',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
-        command: { type: 'string', description: 'Shell command to execute. Use interactive=true for programs needing user input (npm init/python REPL/ssh). AI do NOT call run_terminal_input, user types directly.' },
+        command: { type: 'string', description: 'Shell command to execute' },
         cwd: { type: 'string', description: 'Working directory. Default: project root' },
-        mode: { type: 'string', description: 'sync=wait, async=background, interactive=PTY. Default sync' },
-        input: { type: 'string', description: 'Input to send to process (interactive=true only)' },
       },
       required: ['command'],
     }),
-    execute: async ({ command, cwd, mode }: { command: string; cwd?: string; mode?: string }) => {
+    execute: async ({ command, cwd }: { command: string; cwd?: string }) => {
       const id = 'term_' + Math.random().toString(36).slice(2, 8)
-      const isAsync = mode === 'async'
-      const term = createTerminal(id, command, cwd || undefined, isAsync)
+      const term = createTerminal(id, command, cwd || undefined, false)
       const permApi = (window as any).electronAPI?.perm
       const cmdPattern = command.split(/\s+/)[0] || command
 
-      // 权限预检：已授权则跳过确认
       let alreadyAllowed = false
       try { if (permApi) alreadyAllowed = await permApi.check(_termWorkspaceRoot, 'terminal', cmdPattern) } catch {}
 
       let confirmed = alreadyAllowed
       if (alreadyAllowed) {
-        // 已授权也发 created 事件，否则 UI 没有终端气泡
         notifyUI({ type: 'terminal_created', terminal: { ...term } })
       } else {
         notifyUI({ type: 'terminal_created', terminal: { ...term } })
@@ -71,61 +66,15 @@ export function registerTerminalTool(tools: ToolMap) {
         return '终端命令仅在桌面版本可用。'
       }
 
-      // 交互模式（PTY）
-      if (mode === 'interactive') {
-        const result = await api.ptySpawn(id, command, cwd || '')
-        if (!result.success) {
-          updateTerminal(id, { status: 'error', stderr: result.error || 'PTY启动失败', endTime: Date.now() })
-          notifyUI({ type: 'terminal_updated', terminal: { ...getTerminal(id)! } })
-          return `交互终端启动失败: ${result.error}`
-        }
-        updateTerminal(id, { status: 'running' })
-        notifyUI({ type: 'terminal_updated', terminal: { ...getTerminal(id)! } })
-        const unsub = api.onPtyOutput?.((data: any) => {
-          if (data.id !== id) return
-          const t = getTerminal(id)
-          if (t) {
-            updateTerminal(id, {
-              stdout: (t.stdout || '') + data.data,
-              status: data.done ? (data.exitCode === 0 ? 'done' : 'error') : 'running',
-              exitCode: data.exitCode,
-              endTime: data.done ? Date.now() : undefined,
-            })
-            notifyUI({ type: 'terminal_updated', terminal: { ...getTerminal(id)! } })
-            if (data.done) unsub?.()
-          }
-        })
-        return `交互终端已启动 (terminal_id: ${id})。用户正在 $ 输入框中操作。记住此 ID，用户结束后用 check_terminal("${id}") 查看输出历史。`
-      }
-
-      if (isAsync) {
-        const result = await api.spawn(id, command, cwd || '')
-        if (!result.success) {
-          updateTerminal(id, { status: 'error', stderr: result.error || '启动失败', endTime: Date.now() })
-          notifyUI({ type: 'terminal_updated', terminal: { ...getTerminal(id)! } })
-          return `异步执行启动失败: ${result.error}`
-        }
-        const unsub = api.onOutput?.((data: any) => {
-          if (data.id !== id) return
-          updateTerminal(id, {
-            stdout: data.stdout || '', stderr: data.stderr || '',
-            status: data.done ? (data.exitCode === 0 ? 'done' : 'error') : 'running',
-            exitCode: data.exitCode, endTime: data.done ? Date.now() : undefined,
-          })
-          notifyUI({ type: 'terminal_updated', terminal: { ...getTerminal(id)! } })
-          if (data.done) unsub?.()
-        })
-        return `命令正在后台异步执行 (terminal_id: ${id})。用 check_terminal("${id}") 查看输出。`
-      }
-
-      // 同步模式
       try {
         const result = await api.execute(id, command, cwd || '')
+        const wasCancelled = getTerminal(id)?.status === 'cancelled'
         updateTerminal(id, {
-          status: result.success ? 'done' : 'error',
+          status: wasCancelled ? 'cancelled' : result.success ? 'done' : 'error',
           stdout: result.stdout || '', stderr: result.stderr || result.error || '',
           exitCode: result.exitCode ?? (result.success ? 0 : -1), endTime: Date.now(),
         })
+        if (wasCancelled) return '用户已取消该命令。'
       } catch (e: any) {
         updateTerminal(id, { status: 'error', stderr: e.message || '执行异常', endTime: Date.now() })
       }
@@ -137,11 +86,11 @@ export function registerTerminalTool(tools: ToolMap) {
   }
 
   tools['check_terminal'] = {
-    description: '查看异步终端命令的当前输出和状态。传入 run_terminal(mode="async") 返回的 terminal_id。',
+    description: 'View output of a previously run terminal command by its ID.',
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
-        terminal_id: { type: 'string', description: 'Async terminal command ID' },
+        terminal_id: { type: 'string', description: 'Terminal command ID from run_terminal output' },
       },
       required: ['terminal_id'],
     }),
@@ -158,24 +107,6 @@ export function registerTerminalTool(tools: ToolMap) {
         }
       }
       return `未找到终端 ${terminal_id}。`
-    },
-  }
-
-  tools['run_terminal_input'] = {
-    description: 'Send input to interactive terminal. ONLY use when user explicitly asks "send this command". Normally user types in $input field, AI do NOT call this.',
-    inputSchema: jsonSchema({
-      type: 'object',
-      properties: {
-        terminal_id: { type: 'string', description: 'Interactive terminal ID' },
-        input: { type: 'string', description: 'Text to send, auto-appends newline' },
-      },
-      required: ['terminal_id', 'input'],
-    }),
-    execute: async ({ terminal_id, input }: { terminal_id: string; input: string }) => {
-      const api = (window as any).electronAPI?.terminal
-      if (!api?.ptyWrite) return 'PTY API 不可用'
-      await api.ptyWrite(terminal_id, input + '\n')
-      return `✅ 已发送 "${input}" 到终端 ${terminal_id}`
     },
   }
 }
