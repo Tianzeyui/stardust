@@ -249,30 +249,44 @@ export async function* streamOpenAICompat(
           yield { type: 'reasoning-delta', text: delta.reasoning_content, reasoningId: 'reasoning-0' }
         }
 
-        // Text：先累积，再与完整 reasoning 比对剥离回显
-        // 核心思路：content 增量累积，每步检查 reasoningAccum 是否以 contentAccum 开头。
-        // 若是 → echo 仍在继续，记录已吸收长度，不 yield。
-        // 若否 → echo 结束，只 yield 超出已吸收部分的新增内容。
+        // Text：先累积，再与 reasoning 比对剥离回显
+        // 两种 echo 模式都要处理：
+        //   A) content 是 reasoning 的前缀（content 比 reasoning 短，还在收 reasoning）
+        //   B) reasoning 是 content 的前缀（content 已超出 reasoning，只取超出部分）
+        //   C) 部分重叠：之前有 absorbedLen，只取超出部分
         if (delta.content) {
           if (!textStarted) textStarted = true
           contentAccum += delta.content
 
           if (!echoStripped && reasoningAccum) {
+            // 模式 A：content 短于 reasoning，是 reasoning 的前缀 → 吸收
             if (reasoningAccum.startsWith(contentAccum)) {
-              // 仍在回显：更新已吸收长度
               absorbedLen = contentAccum.length
               continue
             }
-            // 回显结束：只 yield 超出 echo 的新增部分
-            echoStripped = true
-            const newContent = contentAccum.slice(absorbedLen)
-            console.log('[echo-dedup] strip! reasoningLen:', reasoningAccum.length,
-              'absorbedLen:', absorbedLen, 'newLen:', newContent.length)
-            if (newContent) {
-              yield { type: 'text-delta', text: newContent }
+            // 模式 B：reasoning 短于 content，reasoning 是 content 的前缀 → 只取超出部分
+            if (contentAccum.startsWith(reasoningAccum)) {
+              echoStripped = true
+              const newContent = contentAccum.slice(reasoningAccum.length)
+              if (newContent) {
+                yield { type: 'text-delta', text: newContent }
+              }
+              continue
             }
+            // 模式 C：部分重叠 → 取超出吸收长度的部分
+            if (absorbedLen > 0) {
+              echoStripped = true
+              const newContent = contentAccum.slice(absorbedLen)
+              if (newContent) {
+                yield { type: 'text-delta', text: newContent }
+              }
+              continue
+            }
+            // 完全不重叠 → 不是 echo
+            echoStripped = true
+            yield { type: 'text-delta', text: contentAccum }
           } else {
-            // 已剥离或无 reasoning：正常 yield
+            // 已剥离或无 reasoning：正常 yield delta
             yield { type: 'text-delta', text: delta.content }
           }
         }
