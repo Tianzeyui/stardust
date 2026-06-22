@@ -285,9 +285,30 @@ export async function* streamOpenAICompat(
               }
               continue
             }
-            // 完全不重叠 → 不是 echo
+            // 模式 D：前缀不匹配，但可能同语言 echo——检查词级重叠
+            // content 累积到一定长度后再判断，避免短片段误判
+            if (contentAccum.length >= 20) {
+              const words = (s: string) => s.toLowerCase()
+                .split(/[\s,.;:!?\n()（）、，。；：！？　-〿＀-￯]+/)
+                .filter((w: string) => w.length > 1)
+              const cWords = words(contentAccum)
+              const rWords = new Set(words(reasoningAccum))
+              if (cWords.length >= 3) {
+                const overlap = cWords.filter((w: string) => rWords.has(w)).length
+                const ratio = overlap / cWords.length
+                if (ratio > 0.6) {
+                  // 60%+ 词在 reasoning 中出现 → echo，吸收
+                  echoStripped = true
+                  console.log('[echo] D word-overlap rLen:', reasoningAccum.length,
+                    'cLen:', contentAccum.length, 'overlapRatio:', ratio.toFixed(2), '→ absorbed')
+                  continue
+                }
+              }
+            }
+            // 词级也不匹配 → 真正不是 echo
+            if (contentAccum.length < 20) continue  // 内容还不够长，再等等
             echoStripped = true
-            console.log('[echo] D no-match rLen:', reasoningAccum.length, 'cLen:', contentAccum.length,
+            console.log('[echo] E yield-all rLen:', reasoningAccum.length, 'cLen:', contentAccum.length,
               'r[:30]:', JSON.stringify(reasoningAccum.slice(0, 30)),
               'c[:30]:', JSON.stringify(contentAccum.slice(0, 30)))
             yield { type: 'text-delta', text: contentAccum }
