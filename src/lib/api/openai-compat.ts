@@ -289,7 +289,7 @@ export async function* streamOpenAICompat(
             // content 累积到一定长度后再判断，避免短片段误判
             if (contentAccum.length >= 20) {
               const words = (s: string) => s.toLowerCase()
-                .split(/[\s,.;:!?\n()（）、，。；：！？　-〿＀-￯]+/)
+                .split(/[\p{P}\p{Z}\n]+/u)
                 .filter((w: string) => w.length > 1)
               const cWords = words(contentAccum)
               const rWords = new Set(words(reasoningAccum))
