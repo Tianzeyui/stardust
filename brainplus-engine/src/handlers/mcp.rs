@@ -11,6 +11,37 @@ use std::io::{BufRead, BufReader, Write};
 use std::sync::Mutex;
 use tokio::sync::mpsc;
 
+// ====== JSON-RPC 请求/响应辅助 ======
+
+/// 向 MCP 服务器发送 JSON-RPC 请求并读取一行响应
+fn mcp_send_json_rpc(conn: &mut McpConnection, method: &str, params: Value) -> Result<Value, String> {
+    let id = conn.next_id;
+    conn.next_id += 1;
+
+    let request = serde_json::json!({
+        "jsonrpc": "2.0", "id": id,
+        "method": method,
+        "params": params,
+    });
+
+    // 写 stdin
+    {
+        let stdin = conn.child.stdin.as_mut().ok_or("stdin not available")?;
+        writeln!(stdin, "{}", serde_json::to_string(&request).unwrap_or_default())
+            .map_err(|e| format!("write error: {e}"))?;
+        stdin.flush().map_err(|e| format!("flush error: {e}"))?;
+    }
+
+    // 读 stdout
+    {
+        let stdout = conn.child.stdout.as_mut().ok_or("stdout not available")?;
+        let mut reader = BufReader::new(stdout);
+        let mut line = String::new();
+        reader.read_line(&mut line).map_err(|e| format!("read error: {e}"))?;
+        serde_json::from_str::<Value>(&line).map_err(|e| format!("parse error: {e}"))
+    }
+}
+
 // ====== MCP 服务器连接池 ======
 
 struct McpConnection {
@@ -138,40 +169,13 @@ async fn mcp_call_tool(req: crate::protocol::Request, _tx: mpsc::Sender<OutputLi
         _ => return Ok(serde_json::json!({"success": false, "error": "服务器未连接"})),
     };
 
-    let id = conn.next_id;
-    conn.next_id += 1;
-
-    let req_json = serde_json::json!({
-        "jsonrpc": "2.0", "id": id,
-        "method": "tools/call",
-        "params": { "name": tool_name, "arguments": args }
-    });
-
-    let stdin = conn.child.stdin.as_mut().unwrap();
-    let _ = writeln!(stdin, "{}", serde_json::to_string(&req_json).unwrap_or_default());
-    let _ = stdin.flush();
-
-    // 读响应（需要从 stdout 读，但 conn 已经借走了）
-    // 简化实现：从 stdout 读取（需要 refactor 以支持多路复用）
-    drop(conns); // 释放锁
-
-    // 重新获取并读取
-    let mut conns = CONNECTIONS.lock().unwrap();
-    let conn = match conns.get_mut(server_id) {
-        Some(c) => c,
-        None => return Ok(serde_json::json!({"success": false, "error": "服务器已断开"})),
-    };
-
-    let reader = BufReader::new(conn.child.stdout.take().unwrap());
-    // 注意：这里简化了——实际应该用非阻塞读或带超时的读
-    drop(conns);
-
-    // 简化：直接在重获锁之后读取（stdout 已被 take）
-    let mut conns = CONNECTIONS.lock().unwrap();
-    let conn = conns.get_mut(server_id).unwrap();
-    conn.child.stdout = Some(reader.into_inner());
-
-    Ok(serde_json::json!({"success": true, "result": format!("MCP tool {tool_name} called")}))
+    match mcp_send_json_rpc(conn, "tools/call", serde_json::json!({"name": tool_name, "arguments": args})) {
+        Ok(response) => {
+            let content = response["result"]["content"].clone();
+            Ok(serde_json::json!({"success": true, "content": content}))
+        }
+        Err(e) => Ok(serde_json::json!({"success": false, "error": e})),
+    }
 }
 
 // ====== 获取所有工具 ======
@@ -270,6 +274,10 @@ async fn connect_server(server_id: &str, config: &Value) -> Result<usize, String
             .unwrap_or_default()
     } else { vec![] };
 
+    // 恢复 stdout 到 child，供后续 handler 使用
+    let stdout_back = reader.into_inner();
+    child.stdout = Some(stdout_back);
+
     let tool_count = tools.len();
     let mut conns = CONNECTIONS.lock().unwrap();
     conns.insert(server_id.to_string(), McpConnection {
@@ -280,28 +288,206 @@ async fn connect_server(server_id: &str, config: &Value) -> Result<usize, String
     Ok(tool_count)
 }
 
-// ====== 注册 ======
+// ====== 更新服务器配置 ======
 
-async fn stub_ok(_req: crate::protocol::Request, _tx: mpsc::Sender<OutputLine>) -> HandlerResult {
-    Ok(serde_json::json!({"success": true}))
+async fn mcp_update_server(req: crate::protocol::Request, _tx: mpsc::Sender<OutputLine>) -> HandlerResult {
+    let id = req.param_str("id").unwrap_or("");
+    let mut configs = SERVER_CONFIGS.lock().unwrap();
+    if let Some(cfg) = configs.iter_mut().find(|c| c["id"].as_str() == Some(id)) {
+        let new_config = req.params.clone();
+        // 合并字段
+        if let Some(name) = new_config.get("name") { cfg["name"] = name.clone(); }
+        if let Some(command) = new_config.get("command") { cfg["command"] = command.clone(); }
+        if let Some(args) = new_config.get("args") { cfg["args"] = args.clone(); }
+        if let Some(url) = new_config.get("url") { cfg["url"] = url.clone(); }
+        if let Some(enabled) = new_config.get("enabled") { cfg["enabled"] = enabled.clone(); }
+        Ok(serde_json::json!({"success": true}))
+    } else {
+        Ok(serde_json::json!({"success": false, "error": format!("服务器未找到: {id}")}))
+    }
 }
+
+// ====== 资源操作 ======
+
+async fn mcp_list_resources(req: crate::protocol::Request, _tx: mpsc::Sender<OutputLine>) -> HandlerResult {
+    let server_id = req.param_str("serverId").unwrap_or("");
+    let mut conns = CONNECTIONS.lock().unwrap();
+    let conn = match conns.get_mut(server_id) {
+        Some(c) if c.connected => c,
+        _ => return Ok(serde_json::json!({"success": false, "error": "服务器未连接"})),
+    };
+
+    match mcp_send_json_rpc(conn, "resources/list", serde_json::json!({})) {
+        Ok(response) => {
+            let resources: Vec<Value> = response["result"]["resources"]
+                .as_array().cloned().unwrap_or_default();
+            // 缓存
+            conn.resources = resources.clone();
+            Ok(serde_json::json!(resources))
+        }
+        Err(e) => Ok(serde_json::json!({"success": false, "error": e})),
+    }
+}
+
+async fn mcp_read_resource(req: crate::protocol::Request, _tx: mpsc::Sender<OutputLine>) -> HandlerResult {
+    let server_id = req.param_str("serverId").unwrap_or("");
+    let uri = req.param_str("uri").unwrap_or("");
+
+    let mut conns = CONNECTIONS.lock().unwrap();
+    let conn = match conns.get_mut(server_id) {
+        Some(c) if c.connected => c,
+        _ => return Ok(serde_json::json!({"success": false, "error": "服务器未连接"})),
+    };
+
+    match mcp_send_json_rpc(conn, "resources/read", serde_json::json!({"uri": uri})) {
+        Ok(response) => {
+            let content = response["result"]["contents"].clone();
+            Ok(serde_json::json!({"success": true, "content": content}))
+        }
+        Err(e) => Ok(serde_json::json!({"success": false, "error": e})),
+    }
+}
+
+async fn mcp_get_all_resources(_req: crate::protocol::Request, _tx: mpsc::Sender<OutputLine>) -> HandlerResult {
+    let mut conns = CONNECTIONS.lock().unwrap();
+    let mut all_resources: Vec<Value> = Vec::new();
+    let mut errors: Vec<Value> = Vec::new();
+
+    let server_ids: Vec<String> = conns.keys().cloned().collect();
+    for sid in &server_ids {
+        let needs_fetch = match conns.get(sid) {
+            Some(c) if c.connected => c.resources.is_empty(),
+            _ => continue,
+        };
+        if needs_fetch {
+            // fetch resources
+            let conn = conns.get_mut(sid).unwrap();
+            match mcp_send_json_rpc(conn, "resources/list", serde_json::json!({})) {
+                Ok(response) => {
+                    let resources: Vec<Value> = response["result"]["resources"]
+                        .as_array().cloned().unwrap_or_default();
+                    conn.resources = resources;
+                }
+                Err(e) => {
+                    errors.push(serde_json::json!({"serverName": sid, "error": e}));
+                    continue;
+                }
+            }
+        }
+        if let Some(conn) = conns.get(sid) {
+            let server_name = &conn.server_name;
+            for r in &conn.resources {
+                let mut with_server = r.clone();
+                if let Some(obj) = with_server.as_object_mut() {
+                    obj.insert("serverName".to_string(), serde_json::json!(server_name));
+                    obj.insert("serverId".to_string(), serde_json::json!(sid));
+                }
+                all_resources.push(with_server);
+            }
+        }
+    }
+
+    Ok(serde_json::json!({"resources": all_resources, "errors": errors}))
+}
+
+// ====== 提示操作 ======
+
+async fn mcp_list_prompts(req: crate::protocol::Request, _tx: mpsc::Sender<OutputLine>) -> HandlerResult {
+    let server_id = req.param_str("serverId").unwrap_or("");
+    let mut conns = CONNECTIONS.lock().unwrap();
+    let conn = match conns.get_mut(server_id) {
+        Some(c) if c.connected => c,
+        _ => return Ok(serde_json::json!({"success": false, "error": "服务器未连接"})),
+    };
+
+    match mcp_send_json_rpc(conn, "prompts/list", serde_json::json!({})) {
+        Ok(response) => {
+            let prompts: Vec<Value> = response["result"]["prompts"]
+                .as_array().cloned().unwrap_or_default();
+            // 缓存
+            conn.prompts = prompts.clone();
+            Ok(serde_json::json!(prompts))
+        }
+        Err(e) => Ok(serde_json::json!({"success": false, "error": e})),
+    }
+}
+
+async fn mcp_get_prompt(req: crate::protocol::Request, _tx: mpsc::Sender<OutputLine>) -> HandlerResult {
+    let server_id = req.param_str("serverId").unwrap_or("");
+    let prompt_name = req.param_str("promptName").unwrap_or("");
+    let args = req.params.get("args").cloned().unwrap_or(serde_json::json!({}));
+
+    let mut conns = CONNECTIONS.lock().unwrap();
+    let conn = match conns.get_mut(server_id) {
+        Some(c) if c.connected => c,
+        _ => return Ok(serde_json::json!({"success": false, "error": "服务器未连接"})),
+    };
+
+    match mcp_send_json_rpc(conn, "prompts/get", serde_json::json!({"name": prompt_name, "arguments": args})) {
+        Ok(response) => Ok(response["result"].clone()),
+        Err(e) => Ok(serde_json::json!({"success": false, "error": e})),
+    }
+}
+
+async fn mcp_get_all_prompts(_req: crate::protocol::Request, _tx: mpsc::Sender<OutputLine>) -> HandlerResult {
+    let mut conns = CONNECTIONS.lock().unwrap();
+    let mut all_prompts: Vec<Value> = Vec::new();
+    let mut errors: Vec<Value> = Vec::new();
+
+    let server_ids: Vec<String> = conns.keys().cloned().collect();
+    for sid in &server_ids {
+        let needs_fetch = match conns.get(sid) {
+            Some(c) if c.connected => c.prompts.is_empty(),
+            _ => continue,
+        };
+        if needs_fetch {
+            let conn = conns.get_mut(sid).unwrap();
+            match mcp_send_json_rpc(conn, "prompts/list", serde_json::json!({})) {
+                Ok(response) => {
+                    let prompts: Vec<Value> = response["result"]["prompts"]
+                        .as_array().cloned().unwrap_or_default();
+                    conn.prompts = prompts;
+                }
+                Err(e) => {
+                    errors.push(serde_json::json!({"serverName": sid, "error": e}));
+                    continue;
+                }
+            }
+        }
+        if let Some(conn) = conns.get(sid) {
+            let server_name = &conn.server_name;
+            for p in &conn.prompts {
+                let mut with_server = p.clone();
+                if let Some(obj) = with_server.as_object_mut() {
+                    obj.insert("serverName".to_string(), serde_json::json!(server_name));
+                    obj.insert("serverId".to_string(), serde_json::json!(sid));
+                }
+                all_prompts.push(with_server);
+            }
+        }
+    }
+
+    Ok(serde_json::json!({"prompts": all_prompts, "errors": errors}))
+}
+
+// ====== 注册 ======
 
 pub fn register(registry: &mut Registry) {
     registry.register("mcp.autoConnectBuiltins", |req, tx| Box::pin(mcp_auto_connect_builtins(req, tx)));
     registry.register("mcp.getServers", |req, tx| Box::pin(mcp_get_servers(req, tx)));
     registry.register("mcp.addServer", |req, tx| Box::pin(mcp_add_server(req, tx)));
     registry.register("mcp.removeServer", |req, tx| Box::pin(mcp_remove_server(req, tx)));
-    registry.register("mcp.updateServer", |req, tx| Box::pin(stub_ok(req, tx)));
+    registry.register("mcp.updateServer", |req, tx| Box::pin(mcp_update_server(req, tx)));
     registry.register("mcp.connect", |req, tx| Box::pin(mcp_connect(req, tx)));
     registry.register("mcp.disconnect", |req, tx| Box::pin(mcp_disconnect(req, tx)));
     registry.register("mcp.disconnectAll", |req, tx| Box::pin(mcp_disconnect_all(req, tx)));
     registry.register("mcp.listTools", |req, tx| Box::pin(mcp_list_tools(req, tx)));
     registry.register("mcp.callTool", |req, tx| Box::pin(mcp_call_tool(req, tx)));
     registry.register("mcp.getAllTools", |req, tx| Box::pin(mcp_get_all_tools(req, tx)));
-    registry.register("mcp.listResources", |req, tx| Box::pin(stub_ok(req, tx)));
-    registry.register("mcp.readResource", |req, tx| Box::pin(stub_ok(req, tx)));
-    registry.register("mcp.listPrompts", |req, tx| Box::pin(stub_ok(req, tx)));
-    registry.register("mcp.getPrompt", |req, tx| Box::pin(stub_ok(req, tx)));
-    registry.register("mcp.getAllResources", |req, tx| Box::pin(stub_ok(req, tx)));
-    registry.register("mcp.getAllPrompts", |req, tx| Box::pin(stub_ok(req, tx)));
+    registry.register("mcp.listResources", |req, tx| Box::pin(mcp_list_resources(req, tx)));
+    registry.register("mcp.readResource", |req, tx| Box::pin(mcp_read_resource(req, tx)));
+    registry.register("mcp.listPrompts", |req, tx| Box::pin(mcp_list_prompts(req, tx)));
+    registry.register("mcp.getPrompt", |req, tx| Box::pin(mcp_get_prompt(req, tx)));
+    registry.register("mcp.getAllResources", |req, tx| Box::pin(mcp_get_all_resources(req, tx)));
+    registry.register("mcp.getAllPrompts", |req, tx| Box::pin(mcp_get_all_prompts(req, tx)));
 }

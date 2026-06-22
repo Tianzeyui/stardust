@@ -259,7 +259,17 @@ export async function chat(
 
   // 两阶段调用：所有请求先 fast 无工具判断意图
   // 安全机制：已有工具调用的活跃编码会话直接走主模型（防止预检错误绕过工具）
-  const hasPriorToolCalls = messages.some(m => (m as any).role === 'tool' && (m as any).content)
+  // 同时兼容 ChatMessage 格式（toolCallId/content）和 UIMessage 格式（toolBatch 数组）
+  const hasPriorToolCalls = messages.some(m => {
+    const role = (m as any).role
+    if (role === 'tool') {
+      if ((m as any).content || (m as any).toolCallId) return true
+      const batch = (m as any).toolBatch
+      if (Array.isArray(batch) && batch.some((t: any) => t.result)) return true
+    }
+    if (role === 'assistant' && Array.isArray((m as any).toolCalls) && (m as any).toolCalls.length > 0) return true
+    return false
+  })
   if (opts?.autoMode && !hasPriorToolCalls) {
     const lastMsg = messages[messages.length - 1]?.content
     const userText = typeof lastMsg === 'string' ? lastMsg : ''

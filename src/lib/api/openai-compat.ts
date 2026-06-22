@@ -239,6 +239,7 @@ export async function* streamOpenAICompat(
   let aborted = false
   let reasoningAccum = ''   // 累积 reasoning，用于去重
   let echoStripped = false
+  let contentAccum = ''    // 累积 content（在剥离回显前不单独 yield）
   try {
     while (true) {
       const { done, value } = await reader.read()
@@ -275,16 +276,24 @@ export async function* streamOpenAICompat(
           yield { type: 'reasoning-delta', text: delta.reasoning_content, reasoningId: 'reasoning-0' }
         }
 
-        // Text：剥离 reasoning 回显
+        // Text：先累积，再与完整 reasoning 比对剥离回显
         if (delta.content) {
           if (!textStarted) textStarted = true
-          let text = delta.content
+          contentAccum += delta.content
+
           if (!echoStripped && reasoningAccum) {
-            text = stripEchoedReasoning(reasoningAccum, text)
-            if (text !== delta.content) echoStripped = true
-          }
-          if (text) {
-            yield { type: 'text-delta', text }
+            // 累积 content 仍是 reasoning 的前缀 → 还在回显中，不 yield
+            if (reasoningAccum.startsWith(contentAccum)) continue
+            // 回显结束：剥离重叠部分
+            echoStripped = true
+            const stripped = stripEchoedReasoning(reasoningAccum, contentAccum)
+            if (stripped) {
+              contentAccum = stripped
+              yield { type: 'text-delta', text: stripped }
+            }
+          } else {
+            // 已剥离或无 reasoning：正常 yield
+            yield { type: 'text-delta', text: delta.content }
           }
         }
 

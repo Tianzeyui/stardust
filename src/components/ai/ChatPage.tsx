@@ -67,6 +67,89 @@ function saveProjectId(pid: string | null) {
   try { if (pid) localStorage.setItem(PROJECT_ID_KEY, pid); else localStorage.removeItem(PROJECT_ID_KEY) } catch {}
 }
 
+/**
+ * 将 UI 消息列表转换为 API 格式（ChatMessage 数组）。
+ *
+ * UIMessage 的工具调用存储为 toolBatch（数组），而 ChatMessage 需要
+ * 展开为独立的 assistant（含 toolCalls）和 tool（含 toolCallId）消息。
+ * 不转换会导致 API 收不到工具调用历史，模型丢失上下文。
+ */
+function buildHistory(
+  messages: UIMessage[],
+  userMsg: UIMessage,
+  finalContent: string,
+): ChatMessageType[] {
+  const allMsgs = [...messages, userMsg]
+  const result: ChatMessageType[] = []
+
+  for (let i = 0; i < allMsgs.length; i++) {
+    const m = allMsgs[i]
+    // 跳过流式/终端/文件操作消息
+    if (m.streaming || (m as any).terminal || (m as any).fileOp) continue
+    if (m.modelName?.startsWith('Agent:')) continue  // Agent 子对话不纳入历史
+
+    const isLast = i === allMsgs.length - 1
+
+    if (m.role === 'user') {
+      result.push({
+        role: 'user',
+        content: isLast ? finalContent : m.content,
+      })
+      continue
+    }
+
+    if (m.role === 'assistant') {
+      // 检查下一条消息是否为工具批
+      const next = allMsgs[i + 1]
+      const toolBatch: ToolCallStatus[] | undefined =
+        next?.role === 'tool' ? (next as any).toolBatch : undefined
+      const toolCall: ToolCallStatus | undefined = (m as any).toolCall
+
+      if (toolBatch && toolBatch.length > 0) {
+        // assistant → 写入 toolCalls
+        result.push({
+          role: 'assistant',
+          content: m.content || '',
+          toolCalls: toolBatch.map(tc => ({
+            id: tc.id,
+            name: tc.name,
+            input: tc.input,
+          })),
+        })
+        i++ // 跳过工具批，在下个 case 中展开
+      } else if (toolCall) {
+        // 旧格式：单个工具调用
+        result.push({
+          role: 'assistant',
+          content: m.content || '',
+          toolCalls: [{ id: toolCall.id, name: toolCall.name, input: toolCall.input }],
+        })
+      } else {
+        // 纯文本 assistant
+        result.push({ role: 'assistant', content: m.content || '' })
+      }
+      continue
+    }
+
+    if (m.role === 'tool') {
+      const batch: ToolCallStatus[] | undefined = (m as any).toolBatch
+      if (batch && batch.length > 0) {
+        // 展开为独立的 tool 消息
+        for (const tc of batch) {
+          result.push({
+            role: 'tool',
+            content: tc.result || '',
+            toolCallId: tc.id,
+          })
+        }
+      }
+      continue
+    }
+  }
+
+  return result
+}
+
 export function ChatPage() {
   const { user } = useAuth()
   const [messages, dispatch] = useReducer(messageReducer, [])
@@ -644,19 +727,9 @@ export function ChatPage() {
         }))
       }
 
-      const history: ChatMessageType[] = [...messages, userMsg]
-        .filter(m => !m.streaming)
-        .map((m, i, arr) => {
-          if (i === arr.length - 1) {
-            return { role: m.role, content: resolvedContent as string }
-          }
-          return {
-            role: m.role,
-            content: m.content,
-            toolCallId: (m as any).toolCallId,
-            toolCalls: (m as any).toolCalls,
-          }
-        })
+      const history: ChatMessageType[] = buildHistory(
+        messages, userMsg, resolvedContent as string,
+      )
 
       let streamed = ''
       setConsoleLog([]); setTaskList([]); setActivatedToolNames(new Set())
