@@ -262,12 +262,14 @@ export async function* streamOpenAICompat(
             // 模式 A：content 短于 reasoning，是 reasoning 的前缀 → 吸收
             if (reasoningAccum.startsWith(contentAccum)) {
               absorbedLen = contentAccum.length
+              console.log('[echo] A absorb:', absorbedLen, 'rLen:', reasoningAccum.length, 'cLen:', contentAccum.length)
               continue
             }
             // 模式 B：reasoning 短于 content，reasoning 是 content 的前缀 → 只取超出部分
             if (contentAccum.startsWith(reasoningAccum)) {
               echoStripped = true
               const newContent = contentAccum.slice(reasoningAccum.length)
+              console.log('[echo] B content-outran rLen:', reasoningAccum.length, 'cLen:', contentAccum.length, 'yield:', newContent.length)
               if (newContent) {
                 yield { type: 'text-delta', text: newContent }
               }
@@ -277,6 +279,7 @@ export async function* streamOpenAICompat(
             if (absorbedLen > 0) {
               echoStripped = true
               const newContent = contentAccum.slice(absorbedLen)
+              console.log('[echo] C partial absorbed:', absorbedLen, 'cLen:', contentAccum.length, 'yield:', newContent.length)
               if (newContent) {
                 yield { type: 'text-delta', text: newContent }
               }
@@ -284,6 +287,9 @@ export async function* streamOpenAICompat(
             }
             // 完全不重叠 → 不是 echo
             echoStripped = true
+            console.log('[echo] D no-match rLen:', reasoningAccum.length, 'cLen:', contentAccum.length,
+              'r[:30]:', JSON.stringify(reasoningAccum.slice(0, 30)),
+              'c[:30]:', JSON.stringify(contentAccum.slice(0, 30)))
             yield { type: 'text-delta', text: contentAccum }
           } else {
             // 已剥离或无 reasoning：正常 yield delta
