@@ -116,7 +116,15 @@ function buildHistory(
             input: tc.input,
           })),
         })
-        i++ // 跳过工具批，在下个 case 中展开
+        i++ // 跳过工具批 UIMessage
+        // 展开为独立的 tool 结果消息（API 要求每个 tool_call_id 都有对应 tool 消息）
+        for (const tc of toolBatch) {
+          result.push({
+            role: 'tool',
+            content: tc.result || '(无输出)',
+            toolCallId: tc.id,
+          })
+        }
       } else if (toolCall) {
         // 旧格式：单个工具调用
         result.push({

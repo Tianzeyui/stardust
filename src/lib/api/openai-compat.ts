@@ -127,34 +127,6 @@ function parseSSEChunk(line: string): SSEChunk | null {
   }
 }
 
-// ====== reasoning 回显剥离 ======
-
-/**
- * DeepSeek R1 等推理模型会在 content 中回显 reasoning_content。
- * 此函数检测并剥离重复前缀，防止 UI 中“思考+正文”各出现一次。
- */
-function stripEchoedReasoning(reasoning: string, text: string): string {
-  if (!reasoning || !text) return text
-
-  // 精确前缀匹配
-  if (text.startsWith(reasoning)) {
-    return text.slice(reasoning.length)
-  }
-
-  // 模糊匹配：找最长公共前缀
-  let i = 0
-  while (i < reasoning.length && i < text.length && reasoning[i] === text[i]) {
-    i++
-  }
-
-  // 公共前缀超过 reasoning 的 80% → 判定为回显
-  if (i > reasoning.length * 0.8) {
-    return text.slice(i)
-  }
-
-  return text
-}
-
 // ====== finish_reason 映射 (CC 对齐) ======
 
 function mapFinishReason(reason: string | null | undefined): string {
@@ -240,6 +212,7 @@ export async function* streamOpenAICompat(
   let reasoningAccum = ''   // 累积 reasoning，用于去重
   let echoStripped = false
   let contentAccum = ''    // 累积 content（在剥离回显前不单独 yield）
+  let absorbedLen = 0      // contentAccum 中已被判定为 echo 前缀的字符数
   try {
     while (true) {
       const { done, value } = await reader.read()
@@ -277,19 +250,26 @@ export async function* streamOpenAICompat(
         }
 
         // Text：先累积，再与完整 reasoning 比对剥离回显
+        // 核心思路：content 增量累积，每步检查 reasoningAccum 是否以 contentAccum 开头。
+        // 若是 → echo 仍在继续，记录已吸收长度，不 yield。
+        // 若否 → echo 结束，只 yield 超出已吸收部分的新增内容。
         if (delta.content) {
           if (!textStarted) textStarted = true
           contentAccum += delta.content
 
           if (!echoStripped && reasoningAccum) {
-            // 累积 content 仍是 reasoning 的前缀 → 还在回显中，不 yield
-            if (reasoningAccum.startsWith(contentAccum)) continue
-            // 回显结束：剥离重叠部分
+            if (reasoningAccum.startsWith(contentAccum)) {
+              // 仍在回显：更新已吸收长度
+              absorbedLen = contentAccum.length
+              continue
+            }
+            // 回显结束：只 yield 超出 echo 的新增部分
             echoStripped = true
-            const stripped = stripEchoedReasoning(reasoningAccum, contentAccum)
-            if (stripped) {
-              contentAccum = stripped
-              yield { type: 'text-delta', text: stripped }
+            const newContent = contentAccum.slice(absorbedLen)
+            console.log('[echo-dedup] strip! reasoningLen:', reasoningAccum.length,
+              'absorbedLen:', absorbedLen, 'newLen:', newContent.length)
+            if (newContent) {
+              yield { type: 'text-delta', text: newContent }
             }
           } else {
             // 已剥离或无 reasoning：正常 yield
