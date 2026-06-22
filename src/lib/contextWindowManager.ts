@@ -314,8 +314,8 @@ export class ContextWindowManager {
     contextWindow: number,
     previousSummary?: string,
   ): Promise<CompressResult> {
-    // 激进策略：只保留最近 30%
-    const keepCount = Math.max(MIN_RECENT, Math.floor(messages.length * 0.3))
+    // 保留最近 50%（之前 30% 太激进，沙箱/短对话场景易丢失上下文）
+    const keepCount = Math.max(MIN_RECENT, Math.floor(messages.length * 0.5))
     let splitIdx = messages.length - keepCount
 
     // 工具原子性保护

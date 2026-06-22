@@ -64,12 +64,11 @@ export class SidecarManager extends EventEmitter {
       // app.getAppPath() 在不同环境返回不同路径，多候选覆盖
       const appPath = app.getAppPath()
       const candidates = [
-        // 直接在 appPath 下（vite dev 可能返回项目根目录）
-        path.join(appPath, 'brainplus-engine', 'target', 'release', 'brainplus-engine'),
+        // 开发模式优先用 debug（编译快），release 仅用于打包
         path.join(appPath, 'brainplus-engine', 'target', 'debug', 'brainplus-engine'),
-        // appPath 是 dist-electron/，上一级是项目根
-        path.join(appPath, '..', 'brainplus-engine', 'target', 'release', 'brainplus-engine'),
         path.join(appPath, '..', 'brainplus-engine', 'target', 'debug', 'brainplus-engine'),
+        path.join(appPath, 'brainplus-engine', 'target', 'release', 'brainplus-engine'),
+        path.join(appPath, '..', 'brainplus-engine', 'target', 'release', 'brainplus-engine'),
       ]
 
       for (const p of candidates) {

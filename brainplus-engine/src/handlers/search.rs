@@ -12,8 +12,7 @@
 
 use crate::handlers::{OutputLine, Registry};
 use crate::protocol::HandlerResult;
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-use std::collections::HashMap;
+use reqwest::header::{HeaderName, HeaderValue};
 use std::time::Duration;
 use tokio::sync::mpsc;
 

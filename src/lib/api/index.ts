@@ -179,6 +179,8 @@ export async function* streamChatWithTools(
 
   // 收集当前轮次的文本（单次 API 调用的文本输出）
   let roundText = ''
+  // 收集当前轮次的 reasoning（用于写入 assistant 消息 history，DeepSeek R1 等需要）
+  let roundReasoning = ''
   // 收集当前轮次的工具调用
   const pendingToolCalls: Array<{
     id: string; name: string; input: unknown; output?: unknown; ok?: boolean
@@ -190,6 +192,7 @@ export async function* streamChatWithTools(
     if (abortSignal?.aborted) break
 
     roundText = ''
+    roundReasoning = ''
     pendingToolCalls.length = 0
     assistantContent = ''
     let hadToolCalls = false
@@ -211,6 +214,7 @@ export async function* streamChatWithTools(
           break
 
         case 'reasoning-delta':
+          roundReasoning += event.text
           yield event
           break
 
@@ -280,6 +284,7 @@ export async function* streamChatWithTools(
         name: tc.name,
         input: tc.input,
       })),
+      reasoning_content: roundReasoning || undefined,
     })
 
     for (const tc of pendingToolCalls) {

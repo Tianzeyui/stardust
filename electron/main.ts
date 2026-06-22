@@ -1,28 +1,32 @@
-import { app, BrowserWindow, ipcMain, dialog, shell, Menu } from 'electron'
+/**
+ * BrainPlus Electron 主进程入口
+ *
+ * 职责：
+ * - 窗口生命周期管理
+ * - App 菜单（macOS）
+ * - Rust Sidecar 子进程启停与事件转发
+ * - IPC handler 通过 ipc/ 目录下的模块按功能域注册
+ */
+import { app, BrowserWindow, Menu } from 'electron'
 import path from 'path'
 import fs from 'fs'
-import { exec } from 'child_process'
 import { fileURLToPath } from 'url'
 import { initSidecar, getSidecar } from './main/sidecarManager.js'
-import { forwardToSidecar, forwardStreamToSidecar, forwardMany, mapPath, mapPathContent, mapCwdArgs, mapGrep } from './main/ipcForwarder.js'
-import { startA2AServer, stopA2AServer, completeA2ATask, getA2ATask, syncAgents, setA2AToken } from './main/a2aServer.js'
-// sandboxService → Rust Sidecar (sandbox.preInit / sandbox.executeJS / sandbox.executePython)
-import { initWorkspace, getWorkspacePaths, getWorkspaceInfo, listOutputFiles, openFile, deleteFile, clearOutputFiles, setWorkspaceRoot, pickWorkspaceRoot, resetWorkspaceRoot, isBrainPlusWorkspace } from './main/workspace.js'
-import { writeSkillFiles, readSkillFile, deleteSkillFiles } from './main/skillDiskStore.js'
-import { downloadPluginFiles } from './main/pluginDownloader.js'
-import { cloneRepo, pullRepo, readRepoPluginsJson, parseGitHubUrl, cloneToTemp, removeTempDir } from './main/pluginRepoManager.js'
-// graphService → Rust Sidecar (graph.* handlers)
-// fileConvert → Rust Sidecar (file.checkType / file.convert)
-// localModelManager + localInference → Rust Sidecar (model.* handlers)
-import {
-  listConversations, getConversation, saveConversation,
-  deleteConversation, createConversation,
-} from './main/conversationStore.js'
-import {
-  getSupabase, saveSupabase as saveSupabaseCfg, clearSupabase as clearSupabaseCfg,
-  getCloudinary, saveCloudinary as saveCloudinaryCfg, clearCloudinary as clearCloudinaryCfg,
-  getAIModels as getAIModelsCfg, saveAIModels as saveAIModelsCfg,
-} from './main/configStore.js'
+import { startA2AServer } from './main/a2aServer.js'
+import { initWorkspace } from './main/workspace.js'
+
+// ====== IPC 模块导入 ======
+import { registerSidecarIpc } from './ipc/sidecarIpc.js'
+import { registerDialogIpc } from './ipc/dialogIpc.js'
+import { registerWorkspaceIpc } from './ipc/workspaceIpc.js'
+import { registerShellIpc } from './ipc/shellIpc.js'
+import { registerConfigIpc } from './ipc/configIpc.js'
+import { registerConversationIpc } from './ipc/conversationIpc.js'
+import { registerAiWindowIpc } from './ipc/aiWindowIpc.js'
+import { registerA2aIpc } from './ipc/a2aIpc.js'
+import { registerPluginIpc } from './ipc/pluginIpc.js'
+import { registerSkillIpc } from './ipc/skillIpc.js'
+import { registerPermissionIpc } from './ipc/permissionIpc.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -33,6 +37,8 @@ let mainWindow: BrowserWindow | null = null
 
 const appIconPath = path.join(__dirname, '../public/assets/icons/icon.png')
 const appIcon = fs.existsSync(appIconPath) ? appIconPath : undefined
+
+// ====== 窗口创建 ======
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -63,358 +69,47 @@ function createWindow() {
   })
 }
 
-// MCP → Rust Sidecar (mcp.* handlers via forwardMany)
-
-// ==================== Dialog IPC ====================
-
-ipcMain.handle('dialog:openDirectory', async () => {
-  try {
-    const result = await dialog.showOpenDialog(mainWindow!, {
-      properties: ['openDirectory'],
-      title: '选择 Skill 目录',
-    })
-    if (result.canceled || result.filePaths.length === 0) {
-      return { success: false, error: '用户取消选择' }
-    }
-    return { success: true, path: result.filePaths[0] }
-  } catch (e: any) {
-    return { success: false, error: e.message }
-  }
-})
-
-// ==================== File Dialog IPC ====================
-
-ipcMain.handle('dialog:openFile', async (_event, opts?: { filters?: Array<{ name: string; extensions: string[] }> }) => {
-  try {
-    const result = await dialog.showOpenDialog(mainWindow!, {
-      properties: ['openFile', 'multiSelections'],
-      title: '选择文件',
-      filters: opts?.filters ?? [
-        { name: '所有支持的文件', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'pdf', 'csv', 'txt', 'md'] },
-        { name: '图片', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'] },
-        { name: '文档', extensions: ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'pdf', 'csv', 'txt', 'md'] },
-      ],
-    })
-    if (result.canceled || result.filePaths.length === 0) {
-      return { success: false, error: '用户取消选择' }
-    }
-    return { success: true, files: result.filePaths }
-  } catch (e: any) {
-    return { success: false, error: e.message }
-  }
-})
-
-// ==================== File Convert IPC → Rust Sidecar ====================
-
-forwardToSidecar('file:checkType', 'file.checkType', (args) => ({ path: args[0] }))
-forwardToSidecar('file:convert', 'file.convert', (args) => ({ path: args[0] }))
-
-// ==================== File System IPC → Rust Sidecar ====================
-
-// 简单转发（单 path 参数）
-forwardMany(['fs:readFile', 'fs:readFileBase64', 'fs:exists', 'fs:listDir', 'fs:stat', 'fs:mkdir', 'fs:unlink'])
-forwardToSidecar('fs:writeFile', 'fs.writeFile', mapPathContent)
-forwardToSidecar('fs:copyDir', 'fs.copyDir', (args) => ({ src: args[0], dest: args[1] }))
-
-// 流式转发（带结果转换以兼容已有前端接口）
-forwardStreamToSidecar(
-  'fs:find',
-  ['event.fs.findResult', 'event.fs.findBatch', 'event.fs.findComplete'],
-  'fs.find', mapPath,
-  (r) => ({ success: true, files: r._events?.map((e: any) => e.path).filter(Boolean) ?? [], count: r.count }),
-)
-forwardStreamToSidecar(
-  'fs:grep',
-  ['event.fs.grepResult', 'event.fs.grepBatch', 'event.fs.grepComplete'],
-  'fs.grep', mapGrep,
-  (r) => {
-    const lines = r._events
-      ?.filter((e: any) => e.event === 'event.fs.grepResult')
-      ?.map((e: any) => `${e.file}:${e.line}:${e.text}`) ?? []
-    return { success: true, output: lines.slice(0, 200).join('\n') || '(无匹配)', count: r.count }
-  },
-)
-
-// ==================== Git IPC → Rust Sidecar ====================
-
-forwardToSidecar('git:exec', 'git.exec', mapCwdArgs)
-
-// ==================== Terminal IPC → Rust Sidecar ====================
-
-// terminal:execute(id, command, cwd) → terminal.exec({ id, command, cwd })
-forwardToSidecar('terminal:execute', 'terminal.exec',
-  (args) => ({ id: args[0], command: args[1], cwd: args[2] }),
-)
-// terminal:spawn(id, command, cwd) → terminal.spawn({ id, command, cwd })
-forwardToSidecar('terminal:spawn', 'terminal.spawn',
-  (args) => ({ id: args[0], command: args[1], cwd: args[2] }),
-)
-// terminal:kill(id) → terminal.kill({ id })
-forwardToSidecar('terminal:kill', 'terminal.kill', (args) => ({ id: args[0] }))
-// terminal:check(id) → terminal.check({ id })
-forwardToSidecar('terminal:check', 'terminal.check', (args) => ({ id: args[0] }))
-// PTY
-forwardToSidecar('terminal:ptySpawn', 'terminal.ptySpawn',
-  (args) => ({ id: args[0], command: args[1], cwd: args[2] }),
-)
-forwardToSidecar('terminal:ptyWrite', 'terminal.ptyWrite',
-  (args) => ({ id: args[0], data: args[1] }),
-)
-forwardToSidecar('terminal:ptyResize', 'terminal.ptyResize',
-  (args) => ({ id: args[0], cols: args[1], rows: args[2] }),
-)
-
-// ==================== Search & HTTP → Rust Sidecar ====================
-
-forwardToSidecar('search:google', 'search.google',
-  (args) => ({ query: args[0], apiKey: args[1], cx: args[2] }),
-)
-forwardToSidecar('search:brave', 'search.brave',
-  (args) => ({ query: args[0], apiKey: args[1] }),
-)
-forwardToSidecar('search:ddg', 'search.ddg',
-  (args) => ({ query: args[0] }),
-)
-forwardToSidecar('search:bing', 'search.bing',
-  (args) => ({ query: args[0], count: args[1] }),
-)
-forwardToSidecar('search:fetch', 'search.fetch',
-  (args) => ({ url: args[0], timeout: args[1] }),
-)
-forwardToSidecar('http:fetch', 'http.fetch',
-  (args) => ({ url: args[0], method: args[1]?.method, headers: args[1]?.headers, body: args[1]?.body, timeout: args[1]?.timeout }),
-)
-
-// ==================== Graph → Rust Sidecar ====================
-
-forwardToSidecar('graph:configure', 'graph.configure',
-  (args) => ({ uri: args[0], username: args[1], password: args[2] }),
-)
-forwardToSidecar('graph:getConfig', 'graph.getConfig')
-forwardToSidecar('graph:testConnection', 'graph.testConnection')
-forwardToSidecar('graph:query', 'graph.query',
-  (args) => ({ cypher: args[0] }),
-)
-forwardToSidecar('graph:close', 'graph.close')
-
-// ==================== Local Model → Rust Sidecar ====================
-
-forwardToSidecar('model:getStatus', 'model.getStatus')
-forwardToSidecar('model:isInstalled', 'model.isInstalled', (args) => ({ id: args[0] }))
-forwardToSidecar('model:delete', 'model.delete', (args) => ({ id: args[0] }))
-forwardToSidecar('model:toggleEnabled', 'model.toggleEnabled', (args) => ({ id: args[0], enabled: args[1] }))
-forwardToSidecar('model:openDir', 'model.openDir')
-forwardToSidecar('model:load', 'model.load', (args) => ({ id: args[0] }))
-forwardToSidecar('model:download', 'model.download', (args) => ({ id: args[0] }))
-forwardToSidecar('model:unload', 'model.unload')
-forwardToSidecar('model:chat', 'model.chat',
-  (args) => ({ id: args[0], messages: args[1] }),
-)
-
-// ==================== Sidecar bridge IPC ====================
-
-// 渲染进程 → Sidecar 的直接调用通道
-ipcMain.handle('sidecar:call', async (_event, method: string, params?: any, timeout?: number) => {
-  try { return await getSidecar().call(method, params || {}, timeout) }
-  catch (e: any) { return { success: false, error: e.message } }
-})
-
-// ==================== MCP → Rust Sidecar ====================
-
-forwardMany([
-  'mcp:getServers', 'mcp:addServer', 'mcp:removeServer',
-  'mcp:connect', 'mcp:disconnect', 'mcp:listTools', 'mcp:callTool',
-  'mcp:getAllTools', 'mcp:getAllResources', 'mcp:getAllPrompts',
-  'mcp:updateServer', 'mcp:listResources', 'mcp:readResource',
-  'mcp:listPrompts', 'mcp:getPrompt',
-])
-
-// ==================== AI Chat → Rust Sidecar (Phase 5) ====================
-
-// chat:send 目前作为 opt-in 功能：TS 侧可通过此 IPC 委托 Rust AI 引擎
-// 未来 chatService.ts 将变为薄包装，直接调用此接口
-forwardToSidecar('chat:send', 'chat.send')
-
-// ==================== Skills Disk IPC ====================
-
-ipcMain.handle('skills:writeFiles', async (_event, skillId: string, files: Record<string, string>) => {
-  return writeSkillFiles(skillId, files)
-})
-
-ipcMain.handle('skills:readFile', async (_event, skillId: string, filePath: string) => {
-  return readSkillFile(skillId, filePath)
-})
-
-ipcMain.handle('skills:deleteFiles', async (_event, skillId: string) => {
-  return deleteSkillFiles(skillId)
-})
-
-// ==================== Sandbox IPC → Rust Sidecar ====================
-
-forwardToSidecar('sandbox:executeJS', 'sandbox.executeJS',
-  (args) => ({ code: args[0], packages: args[1], outputDir: args[2] }),
-)
-forwardToSidecar('sandbox:executePython', 'sandbox.executePython',
-  (args) => ({ code: args[0], packages: args[1], outputDir: args[2] }),
-)
-
-// ==================== Workspace IPC ====================
-
-ipcMain.handle('workspace:getPaths', () => getWorkspacePaths())
-ipcMain.handle('workspace:info', () => getWorkspaceInfo())
-ipcMain.handle('workspace:setRoot', async (_event, newRoot: string) => setWorkspaceRoot(newRoot))
-ipcMain.handle('workspace:pickRoot', async () => {
-  const win = BrowserWindow.getFocusedWindow()
-  if (!win) return null
-  return pickWorkspaceRoot(win)
-})
-ipcMain.handle('workspace:resetRoot', () => { resetWorkspaceRoot(); return getWorkspaceInfo() })
-ipcMain.handle('workspace:isBrainPlus', async (_event, dirPath: string) => isBrainPlusWorkspace(dirPath))
-ipcMain.handle('workspace:listOutputs', () => listOutputFiles())
-ipcMain.handle('workspace:openFile', (_event, filePath: string) => openFile(filePath))
-ipcMain.handle('workspace:deleteFile', (_event, filePath: string) => deleteFile(filePath))
-ipcMain.handle('workspace:clearOutputs', () => clearOutputFiles())
-
-// ==================== Shell IPC ====================
-
-ipcMain.handle('shell:openInExplorer', async (_event, targetPath: string) => {
-  try {
-    const stat = fs.statSync(targetPath)
-    if (stat.isFile()) {
-      shell.showItemInFolder(targetPath)
-    } else {
-      shell.openPath(targetPath)
-    }
-  } catch {
-    shell.openPath(path.dirname(targetPath))
-  }
-})
-
-ipcMain.handle('shell:openInTerminal', async (_event, targetPath: string) => {
-  let dirPath: string
-  try {
-    const stat = fs.statSync(targetPath)
-    dirPath = stat.isDirectory() ? targetPath : path.dirname(targetPath)
-  } catch {
-    dirPath = path.dirname(targetPath)
-  }
-
-  const platform = process.platform
-  if (platform === 'darwin') {
-    exec(`open -a Terminal "${dirPath}"`)
-  } else if (platform === 'win32') {
-    exec(`start cmd /K "cd /d ${dirPath}"`)
-  } else {
-    // Linux: try common terminals
-    const terminals = ['gnome-terminal', 'konsole', 'xfce4-terminal', 'x-terminal-emulator']
-    for (const term of terminals) {
-      try {
-        exec(`cd "${dirPath}" && ${term}`)
-        break
-      } catch { continue }
-    }
-  }
-})
-
-ipcMain.handle('shell:openExternal', async (_event, url: string) => {
-  try {
-    await shell.openExternal(url)
-    return { success: true }
-  } catch (e: any) {
-    return { success: false, error: e.message }
-  }
-})
-
-// ==================== Config IPC ====================
-
-ipcMain.handle('config:getSupabase', () => getSupabase())
-ipcMain.handle('config:saveSupabase', (_e, c: any) => saveSupabaseCfg(c))
-ipcMain.handle('config:clearSupabase', () => { clearSupabaseCfg(); return true })
-
-ipcMain.handle('config:getCloudinary', () => getCloudinary())
-ipcMain.handle('config:saveCloudinary', (_e, c: any) => saveCloudinaryCfg(c))
-ipcMain.handle('config:clearCloudinary', () => { clearCloudinaryCfg(); return true })
-
-ipcMain.handle('config:getAIModels', () => getAIModelsCfg())
-ipcMain.handle('config:saveAIModels', (_e, models: any[]) => saveAIModelsCfg(models))
-
-// model:chat → Rust Sidecar (llama-cpp-2 streaming inference)
-
-// ==================== Conversation IPC ====================
-
-ipcMain.handle('conv:list', (_e, projectId?: string | null) => listConversations(projectId))
-ipcMain.handle('conv:get', (_e, id: string) => getConversation(id))
-ipcMain.handle('conv:save', (_e, conv: any) => { saveConversation(conv); return true })
-ipcMain.handle('conv:delete', (_e, id: string) => deleteConversation(id))
-ipcMain.handle('conv:create', (_e, title?: string, modelName?: string, projectId?: string | null, projectName?: string) => createConversation(title, modelName, projectId, projectName))
-
-// ==================== AI 模型独立窗口 ====================
-
-ipcMain.handle('ai:openModel', async (_e, url: string, iconUrl?: string) => {
-  // 尝试下载模型图标作为窗口图标
-  let winIcon = appIcon
-  if (iconUrl) {
-    try {
-      const { nativeImage } = require('electron')
-      const https = require('https')
-      const http = require('http')
-      const imgData: Buffer = await new Promise((resolve, reject) => {
-        const get = iconUrl.startsWith('https') ? https.get : http.get
-        get(iconUrl, (res: any) => {
-          if (res.statusCode !== 200) return reject(new Error(`HTTP ${res.statusCode}`))
-          const chunks: Buffer[] = []
-          res.on('data', (c: Buffer) => chunks.push(c))
-          res.on('end', () => resolve(Buffer.concat(chunks)))
-        }).on('error', reject)
-      })
-      winIcon = nativeImage.createFromBuffer(imgData)
-    } catch { /* 回退到默认图标 */ }
-  }
-
-  const modelWindow = new BrowserWindow({
-    width: 1100,
-    height: 750,
-    title: 'AI 模型',
-    icon: winIcon,
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-    },
-  })
-  modelWindow.setMenu(null)
-  modelWindow.loadURL(url)
-
-  modelWindow.webContents.on('did-fail-load', (_e, code, desc) => {
-    modelWindow.webContents.loadURL(`data:text/html,<h2 style="font-family:sans-serif;text-align:center;margin-top:40vh;color:%23666">无法加载页面</h2><p style="text-align:center;color:%23999">${desc}</p>`)
-  })
-})
-
-// ==================== 关于窗口 ====================
+// ====== 关于窗口 ======
 
 function showAbout() {
   mainWindow?.webContents.send('showAbout')
 }
 
-// ==================== App Lifecycle ====================
+// ====== App 生命周期 ======
 
 app.whenReady().then(async () => {
-  getSidecar().call('sandbox.preInit').catch(() => {})  // preInit → Rust
-  startA2AServer(9090)  // A2A HTTP Server
+  // ---- IPC handler 注册（所有注册在 sidecar 启动前完成） ----
+  registerSidecarIpc()
+  registerDialogIpc(() => mainWindow)
+  registerWorkspaceIpc()
+  registerShellIpc()
+  registerConfigIpc()
+  registerConversationIpc()
+  registerAiWindowIpc(appIcon)
+  registerA2aIpc()
+  registerPluginIpc()
+  registerSkillIpc()
+  registerPermissionIpc()
+
+  // ---- 预初始化 ----
+  getSidecar().call('sandbox.preInit').catch(() => {})
+  startA2AServer(9090)
   initWorkspace()
 
-  // 启动 Rust Sidecar
+  // ---- Rust Sidecar 启动 ----
   try {
     const sidecar = initSidecar()
     await sidecar.start()
     console.log('[main] 🦀 Rust Sidecar 已就绪')
 
+    // 自动连接内置 MCP 服务器（Filesystem, GitHub, PostgreSQL）
+    getSidecar().call('mcp.autoConnectBuiltins').then((r: any) => {
+      console.log(`[main] 🔌 内置 MCP: ${r?.connected || 0} 个已连接, ${r?.failed || 0} 个失败`)
+    }).catch((e: any) => {
+      console.warn('[main] ⚠️ 内置 MCP 自动连接失败:', e.message)
+    })
+
     // 全局事件转发：Sidecar 事件 → 渲染进程
-    sidecar.onEvent('event.chat.textDelta', (p) => mainWindow?.webContents.send('sidecar:event', { event: 'event.chat.textDelta', params: p }))
-    sidecar.onEvent('event.chat.reasoningDelta', (p) => mainWindow?.webContents.send('sidecar:event', { event: 'event.chat.reasoningDelta', params: p }))
-    sidecar.onEvent('event.chat.toolCall', (p) => mainWindow?.webContents.send('sidecar:event', { event: 'event.chat.toolCall', params: p }))
-    sidecar.onEvent('event.chat.toolResult', (p) => mainWindow?.webContents.send('sidecar:event', { event: 'event.chat.toolResult', params: p }))
-    sidecar.onEvent('event.chat.done', (p) => mainWindow?.webContents.send('sidecar:event', { event: 'event.chat.done', params: p }))
-    sidecar.onEvent('event.chat.error', (p) => mainWindow?.webContents.send('sidecar:event', { event: 'event.chat.error', params: p }))
     sidecar.onEvent('event.model.chatChunk', (p) => mainWindow?.webContents.send('sidecar:event', { event: 'event.model.chatChunk', params: p }))
     sidecar.onEvent('event.model.chatDone', (p) => mainWindow?.webContents.send('sidecar:event', { event: 'event.model.chatDone', params: p }))
     sidecar.onEvent('event.model.chatError', (p) => mainWindow?.webContents.send('sidecar:event', { event: 'event.model.chatError', params: p }))
@@ -423,7 +118,8 @@ app.whenReady().then(async () => {
   }
 
   createWindow()
-  // macOS Dock 图标 + 关于信息
+
+  // ---- macOS Dock 图标 + 关于信息 ----
   if (process.platform === 'darwin' && appIcon && app.dock) {
     app.dock.setIcon(appIcon)
   }
@@ -435,7 +131,8 @@ app.whenReady().then(async () => {
     website: 'https://github.com/Tianzeyui/brainPlus',
     iconPath: appIcon,
   })
-  // Windows/Linux 移除菜单栏；macOS 保留应用名 + Edit 菜单
+
+  // ---- 菜单栏 ----
   if (process.platform === 'darwin') {
     Menu.setApplicationMenu(Menu.buildFromTemplate([
       {
@@ -492,299 +189,6 @@ app.on('activate', () => {
   if (mainWindow === null) {
     createWindow()
   }
-})
-
-// ==================== A2A IPC ====================
-
-ipcMain.handle('a2a:completeTask', (_e, taskId: string, output: string, error?: string) => {
-  completeA2ATask(taskId, output, error)
-  return true
-})
-
-ipcMain.handle('a2a:getTask', (_e, taskId: string) => {
-  return getA2ATask(taskId) || null
-})
-
-ipcMain.handle('a2a:getPort', () => 9090)
-ipcMain.handle('a2a:syncAgents', (_e, agents: any[]) => { syncAgents(agents); return true })
-ipcMain.handle('a2a:start', (_e, port: number) => { startA2AServer(port); return true })
-ipcMain.handle('a2a:stop', () => { stopA2AServer(); return true })
-ipcMain.handle('a2a:status', () => ({ running: true, port: 9090 }))  // TODO: track actual running state
-ipcMain.handle('a2a:setToken', (_e, token: string) => { setA2AToken(token); return true })
-
-// ==================== Plugin IPC ====================
-
-ipcMain.handle('plugin:load', async (_e, dirPath: string) => {
-  try {
-    const fs = await import('fs')
-    const path = await import('path')
-    const manifestPath = path.join(dirPath, 'manifest.json')
-    if (!fs.existsSync(manifestPath)) return { success: false, error: '未找到 manifest.json' }
-    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
-    return { success: true, manifest, pluginDir: dirPath }
-  } catch (e: any) {
-    return { success: false, error: e.message }
-  }
-})
-
-// 安装插件：复制到 appData 目录，后续与原路径无关
-ipcMain.handle('plugin:install', async (_e, dirPath: string) => {
-  try {
-    const fs = await import('fs')
-    const path = await import('path')
-    const manifestPath = path.join(dirPath, 'manifest.json')
-    if (!fs.existsSync(manifestPath)) return { success: false, error: '未找到 manifest.json' }
-    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
-    const pluginId = manifest.id || path.basename(dirPath)
-
-    // 目标目录：{userData}/plugins/{pluginId}/
-    const pluginsDir = path.join(app.getPath('userData'), 'plugins')
-    const destDir = path.join(pluginsDir, pluginId)
-
-    // 如果已存在，先删除旧版本再覆盖
-    if (fs.existsSync(destDir)) fs.rmSync(destDir, { recursive: true, force: true })
-    fs.mkdirSync(destDir, { recursive: true })
-
-    // 递归复制
-    fs.cpSync(dirPath, destDir, { recursive: true })
-
-    // 安装 npm 依赖
-    const pkgPath = path.join(destDir, 'package.json')
-    if (fs.existsSync(pkgPath)) {
-      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'))
-      if (pkg.dependencies && Object.keys(pkg.dependencies).length > 0) {
-        if (!pkg.name) { pkg.name = pluginId; pkg.private = true; fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2), 'utf-8') }
-        if (!fs.existsSync(path.join(destDir, 'node_modules'))) {
-          const { execFile } = await import('child_process')
-          await new Promise<void>((resolve, reject) => {
-            execFile('npm', ['install', '--no-audit', '--no-fund', '--ignore-scripts'], { cwd: destDir, timeout: 120000 }, (err) => {
-              if (err) reject(err); else resolve()
-            })
-          })
-        }
-      }
-    }
-
-    // 加载 manifest
-    return { success: true, manifest, pluginDir: destDir }
-  } catch (e: any) {
-    return { success: false, error: e.message }
-  }
-})
-
-ipcMain.handle('plugin:installDeps', async (_e, dirPath: string) => {
-  try {
-    const fs = await import('fs')
-    const path = await import('path')
-    const pkgPath = path.join(dirPath, 'package.json')
-    if (!fs.existsSync(pkgPath)) return { success: true }
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'))
-    if (!pkg.dependencies || Object.keys(pkg.dependencies).length === 0) return { success: true }
-    if (!pkg.name) {
-      pkg.name = path.basename(dirPath)
-      pkg.private = true
-      fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2), 'utf-8')
-    }
-    if (fs.existsSync(path.join(dirPath, 'node_modules'))) return { success: true }
-    const { execFile } = await import('child_process')
-    return new Promise((resolve) => {
-      execFile('npm', ['install', '--no-audit', '--no-fund', '--ignore-scripts'], { cwd: dirPath, timeout: 120000 }, (err) => {
-        if (err) resolve({ success: false, error: err.message })
-        else resolve({ success: true })
-      })
-    })
-  } catch (e: any) {
-    return { success: false, error: e.message }
-  }
-})
-
-ipcMain.handle('plugin:compile', async (_e, dirPath: string) => {
-  try {
-    const fs = await import('fs')
-    const path = await import('path')
-    const tsxPath = path.join(dirPath, 'index.tsx')
-    const jsxPath = path.join(dirPath, 'index.jsx')
-    const entryPath = fs.existsSync(tsxPath) ? tsxPath : fs.existsSync(jsxPath) ? jsxPath : null
-    if (!entryPath) return { success: false, error: '未找到 index.tsx 或 index.jsx' }
-
-    const esbuild = await import('esbuild')
-    const result = await esbuild.build({
-      entryPoints: [entryPath],
-      bundle: true,
-      write: false,
-      format: 'cjs',
-      platform: 'browser',
-      // 强制 transform 模式（忽略项目 tsconfig 的 react-jsx），用 React.createElement
-      jsx: 'transform',
-      jsxFactory: 'React.createElement',
-      jsxFragment: 'React.Fragment',
-      tsconfigRaw: JSON.stringify({ compilerOptions: { jsx: 'react' } }),
-      external: ['react', 'react-dom', 'lucide-react', '@/lib/utils', '@/components/ui/*', '@/components/diary/*', '@/components/inspiration/*'],
-      target: 'es2020',
-      banner: { js: "const React = require('react');" },
-      plugins: [{
-        name: 'resolve-at-alias',
-        setup(build) {
-          // 将动态 import 中的 @/ 替换为 /src/，浏览器才能解析
-          build.onResolve({ filter: /^@\/components\/(diary|inspiration)\// }, args => ({
-            path: args.path.replace('@/', '/src/'), external: true,
-          }))
-        },
-      }],
-    })
-    const code = result.outputFiles?.[0]?.text || ''
-    return { success: true, code }
-  } catch (e: any) {
-    return { success: false, error: e.message }
-  }
-})
-
-// 卸载插件：删除 appData 中的插件目录
-ipcMain.handle('plugin:uninstall', async (_e, pluginId: string) => {
-  try {
-    const fs = await import('fs')
-    const path = await import('path')
-    const destDir = path.join(app.getPath('userData'), 'plugins', pluginId)
-    if (fs.existsSync(destDir)) fs.rmSync(destDir, { recursive: true, force: true })
-    return { success: true }
-  } catch (e: any) {
-    return { success: false, error: e.message }
-  }
-})
-
-// 从社区仓库安装插件（通过 jsDelivr CDN 下载）
-ipcMain.handle('plugin:installFromGithub', async (event, pluginId: string, fileList: string[], manifestId?: string) => {
-  try {
-    const pluginsDir = path.join(app.getPath('userData'), 'plugins')
-    const actualId = manifestId || pluginId
-    const destDir = path.join(pluginsDir, actualId)
-
-    // 如果已存在，先删除
-    if (fs.existsSync(destDir)) fs.rmSync(destDir, { recursive: true, force: true })
-    fs.mkdirSync(destDir, { recursive: true })
-
-    // 通过 jsDelivr CDN 下载所有文件
-    await downloadPluginFiles(pluginId, fileList, destDir, (file, current, total) => {
-      event.sender.send('plugin:githubProgress', { pluginId, file, current, total })
-    })
-
-    // 读取 manifest 用于返回
-    const manifestPath = path.join(destDir, 'manifest.json')
-    const manifest = fs.existsSync(manifestPath)
-      ? JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
-      : { id: actualId }
-
-    // 安装 npm 依赖（复用现有逻辑）
-    const pkgPath = path.join(destDir, 'package.json')
-    if (fs.existsSync(pkgPath)) {
-      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'))
-      if (pkg.dependencies && Object.keys(pkg.dependencies).length > 0) {
-        if (!pkg.name) { pkg.name = actualId; pkg.private = true; fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2), 'utf-8') }
-        if (!fs.existsSync(path.join(destDir, 'node_modules'))) {
-          const { execFile } = await import('child_process')
-          await new Promise<void>((resolve, reject) => {
-            execFile('npm', ['install', '--no-audit', '--no-fund', '--ignore-scripts'], { cwd: destDir, timeout: 120000 }, (err) => {
-              if (err) reject(err); else resolve()
-            })
-          })
-        }
-      }
-    }
-
-    return { success: true, manifest, pluginDir: destDir }
-  } catch (e: any) {
-    return { success: false, error: e.message }
-  }
-})
-
-// 插件仓库管理
-ipcMain.handle('plugin:cloneRepo', async (_event, url: string) => {
-  try {
-    const reposDir = path.join(app.getPath('userData'), 'plugin-repos')
-    const result = await cloneRepo(url, reposDir)
-    if (!result.success) return result
-
-    // 读取插件索引
-    const plugins = readRepoPluginsJson(result.repoDir!)
-    return { success: true, repoDir: result.repoDir, plugins: plugins || [] }
-  } catch (e: any) {
-    return { success: false, error: e.message }
-  }
-})
-
-ipcMain.handle('plugin:pullRepo', async (_event, repoDir: string) => {
-  try {
-    const result = await pullRepo(repoDir)
-    if (!result.success) return result
-    const plugins = readRepoPluginsJson(repoDir)
-    return { success: true, plugins: plugins || [] }
-  } catch (e: any) {
-    return { success: false, error: e.message }
-  }
-})
-
-// Skill 从 GitHub URL 安装
-ipcMain.handle('skill:cloneFromUrl', async (_event, url: string) => {
-  try {
-    const parsed = parseGitHubUrl(url)
-    if (!parsed) return { success: false, error: '无法解析 GitHub URL，支持的格式：https://github.com/user/repo 或 .../tree/branch/path' }
-
-    const result = await cloneToTemp(parsed.repoUrl)
-    if (!result.success) return result
-
-    const fullPath = parsed.subPath ? path.join(result.localPath!, parsed.subPath) : result.localPath!
-    return { success: true, localPath: fullPath, tempDir: result.localPath }
-  } catch (e: any) {
-    return { success: false, error: e.message }
-  }
-})
-
-ipcMain.handle('skill:cleanupTemp', async (_event, dirPath: string) => {
-  try {
-    removeTempDir(dirPath)
-    return { success: true }
-  } catch (e: any) {
-    return { success: false, error: e.message }
-  }
-})
-
-// graph → Rust Sidecar (graph.configure / graph.getConfig / graph.testConnection / graph.query)
-
-// ====== 权限管理 ======
-import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'fs'
-import { join, dirname } from 'path'
-
-function getPermissionsFile(workspaceRoot: string): string {
-  return join(workspaceRoot, '.brainplus', 'settings.local.json')
-}
-function getGlobalPermissionsFile(): string {
-  return join(app.getPath('userData'), 'permissions.json')
-}
-
-ipcMain.handle('perm:check', async (_event, workspaceRoot: string, type: string, value: string) => {
-  try {
-    const files = [getPermissionsFile(workspaceRoot), getGlobalPermissionsFile()]
-    for (const f of files) {
-      if (existsSync(f)) {
-        const data = JSON.parse(readFileSync(f, 'utf-8'))
-        if (data.deny?.some((e: any) => e.type === type && value.startsWith(e.pattern))) return false
-        if (data.allow?.some((e: any) => e.type === type && value.startsWith(e.pattern))) return true
-      }
-    }
-    return false
-  } catch { return false }
-})
-
-ipcMain.handle('perm:grant', async (_event, workspaceRoot: string, type: string, pattern: string) => {
-  try {
-    const f = getPermissionsFile(workspaceRoot)
-    mkdirSync(dirname(f), { recursive: true })
-    let data: any = { version: 1, allow: [], deny: [] }
-    if (existsSync(f)) data = JSON.parse(readFileSync(f, 'utf-8'))
-    data.allow.push({ type, pattern, approvedAt: Date.now() })
-    writeFileSync(f, JSON.stringify(data, null, 2), 'utf-8')
-    return true
-  } catch { return false }
 })
 
 app.on('before-quit', async () => {

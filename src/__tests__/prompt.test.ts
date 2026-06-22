@@ -4,7 +4,7 @@
  * 完全对齐 CC prompts.ts 真实源码后的新提示词
  */
 import { describe, test, expect } from 'vitest'
-import { DEFAULT_PROMPT_CODE, DEFAULT_PROMPT_CHAT } from '../lib/config'
+import { DEFAULT_PROMPT_CODE } from '../lib/config'
 
 describe('DEFAULT_PROMPT_CODE 核心规则', () => {
   const p = DEFAULT_PROMPT_CODE
@@ -139,9 +139,3 @@ describe('DEFAULT_PROMPT_CODE 核心规则', () => {
   })
 })
 
-describe('DEFAULT_PROMPT_CHAT', () => {
-  test('对话模式基础规则', () => {
-    expect(DEFAULT_PROMPT_CHAT).toContain('friendly')
-    expect(DEFAULT_PROMPT_CHAT).toContain('Use tools')
-  })
-})

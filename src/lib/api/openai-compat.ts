@@ -41,6 +41,7 @@ function convertMessages(messages: ChatMessage[], system?: string): OpenAIMessag
           function: { name: tc.name, arguments: JSON.stringify(tc.input) },
         }))
       }
+      if (m.reasoning_content) msg.reasoning_content = m.reasoning_content
       result.push(msg)
     } else if (m.role === 'tool') {
       result.push({
@@ -126,6 +127,34 @@ function parseSSEChunk(line: string): SSEChunk | null {
   }
 }
 
+// ====== reasoning 回显剥离 ======
+
+/**
+ * DeepSeek R1 等推理模型会在 content 中回显 reasoning_content。
+ * 此函数检测并剥离重复前缀，防止 UI 中“思考+正文”各出现一次。
+ */
+function stripEchoedReasoning(reasoning: string, text: string): string {
+  if (!reasoning || !text) return text
+
+  // 精确前缀匹配
+  if (text.startsWith(reasoning)) {
+    return text.slice(reasoning.length)
+  }
+
+  // 模糊匹配：找最长公共前缀
+  let i = 0
+  while (i < reasoning.length && i < text.length && reasoning[i] === text[i]) {
+    i++
+  }
+
+  // 公共前缀超过 reasoning 的 80% → 判定为回显
+  if (i > reasoning.length * 0.8) {
+    return text.slice(i)
+  }
+
+  return text
+}
+
 // ====== finish_reason 映射 (CC 对齐) ======
 
 function mapFinishReason(reason: string | null | undefined): string {
@@ -208,7 +237,8 @@ export async function* streamOpenAICompat(
   let finishReason = 'stop'
   let textStarted = false
   let aborted = false
-
+  let reasoningAccum = ''   // 累积 reasoning，用于去重
+  let echoStripped = false
   try {
     while (true) {
       const { done, value } = await reader.read()
@@ -239,19 +269,23 @@ export async function* streamOpenAICompat(
         const delta = choice.delta
         if (!delta) continue
 
-        // Reasoning (DeepSeek 特有)
+        // Reasoning：累积并透传
         if (delta.reasoning_content) {
-          yield {
-            type: 'reasoning-delta',
-            text: delta.reasoning_content,
-            reasoningId: 'reasoning-0',
-          }
+          reasoningAccum += delta.reasoning_content
+          yield { type: 'reasoning-delta', text: delta.reasoning_content, reasoningId: 'reasoning-0' }
         }
 
-        // Text
+        // Text：剥离 reasoning 回显
         if (delta.content) {
           if (!textStarted) textStarted = true
-          yield { type: 'text-delta', text: delta.content }
+          let text = delta.content
+          if (!echoStripped && reasoningAccum) {
+            text = stripEchoedReasoning(reasoningAccum, text)
+            if (text !== delta.content) echoStripped = true
+          }
+          if (text) {
+            yield { type: 'text-delta', text }
+          }
         }
 
         // Tool calls

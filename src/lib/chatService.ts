@@ -71,12 +71,14 @@ export function getChatModel(): ProviderConfig | null {
   if (!enabled) return null
 
   const providerName = (enabled.name || enabled.id).toLowerCase()
+  const selectedModelInfo = enabled.availableModels?.find(m => m.id === enabled.selectedModel)
   console.log('[getChatModel] 选中模型:', enabled.name, '| provider:', providerName, '| baseUrl:', enabled.baseUrl)
   return {
     provider: providerName,
     modelId: enabled.selectedModel || 'gpt-4o',
     apiKey: enabled.apiKey || 'dummy',
     baseUrl: enabled.baseUrl || undefined,
+    capabilities: selectedModelInfo?.capabilities,
   }
 }
 
@@ -229,60 +231,10 @@ function formatCompactSummary(raw: string): string {
 /** 暴露文件追踪（供工具调用，实际实现在 fileTracker.ts 避免循环依赖） */
 export { trackFileOp } from './fileTracker'
 
-// ====== Rust AI 引擎开关 ======
-const USE_RUST_ENGINE = true
-
-async function chatViaSidecar(
-  config: ProviderConfig,
-  messages: ChatMessage[],
-  systemPrompt: string,
-  onEvent?: (event: ChatStreamEvent) => void,
-): Promise<string> {
-  const api = (window as any).electronAPI
-  if (!api?.sidecar?.onEvent) throw new Error('Sidecar 不可用')
-
-  let fullText = ''
-  // 注册流式事件监听（工具调用）
-  const unsubs: Array<() => void> = [
-    api.sidecar.onEvent('event.chat.toolCall', (p: any) => {
-      onEvent?.({ type: 'tool-call', toolName: p.toolName, toolInput: p.toolInput })
-    }),
-    api.sidecar.onEvent('event.chat.toolResult', (p: any) => {
-      onEvent?.({ type: 'tool-result', toolName: p.toolName, toolOutput: p.toolOutput })
-    }),
-    api.sidecar.onEvent('event.chat.error', (p: any) => { throw new Error(p.error) }),
-  ]
-
-  try {
-    console.log('[RustEngine] →', config.provider, config.modelId)
-    const result = await api.sidecar.call('chat.send', {
-      provider: config.provider, modelId: config.modelId,
-      apiKey: config.apiKey, baseUrl: config.baseUrl,
-      messages, systemPrompt, maxSteps: 25,
-    }, 180000)
-
-    if (!result.success) throw new Error(result.error || 'Sidecar 调用失败')
-    const text = result.text || ''
-    console.log('[RustEngine] ←', text.length, '字')
-
-    // 逐字模拟打字机效果
-    for (let i = 0; i < text.length; i += 2) {
-      const chunk = text.slice(i, i + 2)
-      fullText += chunk
-      onEvent?.({ type: 'text-delta', text: chunk })
-      await new Promise(r => setTimeout(r, 15))
-    }
-    onEvent?.({ type: 'done' })
-    return fullText || '(无输出)'
-  } finally {
-    unsubs.forEach(fn => fn())
-  }
-}
-
 export async function chat(
   messages: ChatMessage[],
   onEvent?: (event: ChatStreamEvent) => void,
-  opts?: { abortSignal?: AbortSignal; autoMode?: boolean; codingMode?: boolean; localModelId?: string; forceCompression?: boolean; memoryInjection?: string; userId?: string; modelOverride?: { provider: string; modelId: string } },
+  opts?: { abortSignal?: AbortSignal; autoMode?: boolean; localModelId?: string; forceCompression?: boolean; memoryInjection?: string; userId?: string; modelOverride?: { provider: string; modelId: string } },
 ) {
   // 本地模型路径
   if (opts?.localModelId) {
@@ -302,8 +254,8 @@ export async function chat(
   setAgentStreamHandler(onEvent as any || null)
 
   // Agent 行为规则：提前声明（pre-check 和后续流程共用）
-  const { getPromptCode, getPromptChat } = await import('@/lib/config')
-  const agentRules = opts?.codingMode === false ? getPromptChat() : getPromptCode()
+  const { getPromptCode } = await import('@/lib/config')
+  const agentRules = getPromptCode()
 
   // 两阶段调用：所有请求先 fast 无工具判断意图
   // 安全机制：已有工具调用的活跃编码会话直接走主模型（防止预检错误绕过工具）
@@ -672,17 +624,6 @@ export async function chat(
     capturedUsage = null
 
     try {
-      // === Rust AI 引擎路径 ===
-      if (USE_RUST_ENGINE && !opts?.localModelId) {
-        const result = await chatViaSidecar(currentConfig, currentMessages as any, finalSystem || '', onEvent)
-        fullText = result
-        if (finalUsage) {
-          cwm.updateRealTokens(finalUsage.inputTokens || 0, finalUsage.outputTokens || 0)
-        }
-        onEvent?.({ type: 'done' })
-        return fullText
-      }
-
       const stream = streamChatWithTools({
         config: currentConfig,
         messages: currentMessages as any,

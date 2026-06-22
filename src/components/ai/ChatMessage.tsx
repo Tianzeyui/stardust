@@ -131,7 +131,7 @@ function ChatMessageInner({ msg }: ChatMessageProps) {
               <AgentCardButton agentName={msg.modelName?.replace('Agent: ', '') || ''} />
             </div>
             <div className="px-3 py-2">
-              <ThinkingBlock thinking={msg.thinking || ''} loading={msg.thinkingLoading} />
+              <ThinkingBlock thinking={msg.thinking || ''} loading={msg.thinkingLoading} content={msg.content || ''} />
               {msg.streaming && !msg.content && !msg.agentTimeline?.length && !msg.thinking && (
                 <p className="text-sm text-muted-foreground/40 py-2 select-none">
                   <span className="animate-dots"><span>.</span><span>.</span><span>.</span></span>
@@ -197,7 +197,7 @@ function ChatMessageInner({ msg }: ChatMessageProps) {
             ) : (
               /* 兼容旧消息：无时间线时用 thinking + content 字段 */
               <>
-                <ThinkingBlock thinking={msg.thinking || ''} loading={msg.thinkingLoading} />
+                <ThinkingBlock thinking={msg.thinking || ''} loading={msg.thinkingLoading} content={msg.content || ''} />
                 {msg.streaming && !msg.content && !msg.thinking && (
                   <p className="text-sm text-muted-foreground/40 py-2 select-none">
                     <span className="animate-dots"><span>.</span><span>.</span><span>.</span></span>
@@ -382,10 +382,12 @@ function AgentToolCallItem({ tc }: { tc: AgentToolCallEntry }) {
   )
 }
 
-/** 思考区块：默认折叠 */
-function ThinkingBlock({ thinking, loading }: { thinking: string; loading?: boolean }) {
+/** 思考区块：默认折叠。如果 thinking 和 content 重复（DeepSeek 回显），不渲染 */
+function ThinkingBlock({ thinking, loading, content }: { thinking: string; loading?: boolean; content?: string }) {
   const [expanded, setExpanded] = useState(false)
   if (!thinking) return null
+  // 去重：如果正文和思考内容一致，隐藏思考块
+  if (content && (content.startsWith(thinking) || thinking.startsWith(content))) return null
 
   return (
     <div className="mb-2 rounded-md border border-border/50 bg-muted/30 overflow-hidden">

@@ -7,6 +7,8 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
+    "dev:rust": "cargo watch -w brainplus-engine/src -x build",
+    "dev:all": "npm run dev:rust & npm run dev",
     "build": "vite build",
     "preview": "vite preview",
     "build:electron": "npm run build && electron-builder",

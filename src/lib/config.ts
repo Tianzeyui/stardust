@@ -344,10 +344,7 @@ export function getCtxWindow(): number {
 }
 export function saveCtxWindow(v: number): void { localStorage.setItem(CTX_WINDOW_KEY, String(v)) }
 
-// ========== 系统提示词（双模式） ==========
-
-const PROMPT_CODE_KEY = 'brainplus_prompt_code'
-const PROMPT_CHAT_KEY = 'brainplus_prompt_chat'
+// ========== 系统提示词（仅 Code 模式） ==========
 
 // ====== 编码模式系统提示词（完全对齐 CC prompts.ts 真实源码） ======
 // 结构 = CC: Intro → System → Doing Tasks → Actions → Using Your Tools → Tone & Style → Output Efficiency
@@ -453,28 +450,9 @@ export const DEFAULT_PROMPT_CODE = [
   PROMPT_SECTION_OUTPUT_EFFICIENCY,
 ].join('\n\n')
 
-export const DEFAULT_PROMPT_CHAT =
-  "You are a friendly, professional assistant. Chat freely, explain concepts, offer advice. " +
-  "Use tools when operating on code, reply directly otherwise."
-
 export function getPromptCode(): string {
-  try { const v = localStorage.getItem(PROMPT_CODE_KEY); if (v != null) return v } catch {}
   return DEFAULT_PROMPT_CODE
 }
-export function savePromptCode(v: string): void { localStorage.setItem(PROMPT_CODE_KEY, v) }
-
-export function getPromptChat(): string {
-  try { const v = localStorage.getItem(PROMPT_CHAT_KEY); if (v != null) return v } catch {}
-  return DEFAULT_PROMPT_CHAT
-}
-export function savePromptChat(v: string): void { localStorage.setItem(PROMPT_CHAT_KEY, v) }
-
-/** 统一获取：如果用户自定义了编程提示词，用那个；否则默认编程模式 */
-export function getSystemPrompt(): string {
-  const code = getPromptCode()
-  return code !== DEFAULT_PROMPT_CODE ? code : DEFAULT_PROMPT_CODE
-}
-export function saveSystemPrompt(v: string): void { savePromptCode(v) }
 
 // ========== 终端开关 ==========
 

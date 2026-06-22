@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! JSON-RPC 2.0 协议类型（Electron ↔ Rust Sidecar）
 //!
 //! 通信方式：stdin/stdout，每行一个 JSON（newline-delimited JSON）

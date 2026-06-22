@@ -2,7 +2,6 @@ import { useState, useRef, useEffect, useCallback, useReducer } from 'react'
 import {
   ArrowRight, Loader2, Bot, X, ListTodo, Circle, CheckCircle2, File,
   Paperclip, FileText, Image, FolderOpen, ExternalLink, ArrowLeft, ArrowDown,
-  Code, MessageSquare,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -91,8 +90,6 @@ export function ChatPage() {
   })()
   const [showModelPicker, setShowModelPicker] = useState(false)
   const [autoMode, setAutoMode] = useState(true)
-  const [codingMode, setCodingMode] = useState(true)
-  const [showModeMenu, setShowModeMenu] = useState(false)
   const [routeScore, setRouteScore] = useState(0)
   const [routeModel, setRouteModel] = useState('')
   const [outputFiles, setOutputFiles] = useState<Array<{ name: string; path: string; size: number }>>([])
@@ -110,6 +107,7 @@ export function ChatPage() {
   const [workspacePath, setWorkspacePath] = useState('')
   const [workspaceEntries, setWorkspaceEntries] = useState<Array<{ name: string; path: string; isDir: boolean }>>([])
   const [disclosureResult, setDisclosureResult] = useState<DisclosureResult | null>(null)
+  const [lastRealInputTokens, setLastRealInputTokens] = useState(0)  // 上一轮 API 返回的真实 inputTokens
   // 本轮实际激活的工具名（用于披露面板展示）
   const [activatedToolNames, setActivatedToolNames] = useState<Set<string>>(new Set())
   // 记忆开关（本次会话）
@@ -757,7 +755,7 @@ tickMessages(() => dispatch({ type: 'REASONING_DELTA', thinking: thinkingRef.cur
           // 如果上一个消息是 tool batch，关闭它并开始新 assistant
           const hadBatch = toolBatchRef.current.length > 0
           toolBatchRef.current = []
-tickMessages(() => dispatch({ type: 'TEXT_DELTA', content: streamed, modelName, thinking: thinkingRef.current, thinkingLoading: false, mainTimeline: tl }))
+tickMessages(() => dispatch({ type: 'TEXT_DELTA', content: streamed, modelName, thinkingLoading: false, mainTimeline: tl }))
         } else if (event.type === 'tool-call') {
           let toolName = event.toolName || 'unknown'
           let toolType = detectToolType(toolName)
@@ -864,9 +862,10 @@ dispatch({ type: 'TOOL_BATCH_CREATE', textBeforeTool, tools: toolBatchRef.curren
             // trace 信息通过 addTrace 保存，不存入消息状态
           }
           dispatch({ type: 'STREAM_END', streamed })
-          // 保存本次用量追踪
+          // 保存本次用量追踪 + 更新真实 token 显示
           if (event.trace) {
             const t = event.trace
+            if (t.inputTokens > 0) setLastRealInputTokens(t.inputTokens)
             addTrace({
               id: 'tr_' + Date.now(),
               timestamp: Date.now(),
@@ -883,7 +882,6 @@ dispatch({ type: 'TOOL_BATCH_CREATE', textBeforeTool, tools: toolBatchRef.curren
       }, {
         abortSignal: controller.signal,
         autoMode,
-        codingMode,
         modelOverride: usedModel !== activeModel ? { provider: usedModel.name, modelId: usedModel.selectedModel } : undefined,
         forceCompression: forceCompressRef.current ? true : undefined,
         memoryInjection: sessionMemoryEnabled
@@ -980,10 +978,13 @@ dispatch({ type: 'TOOL_BATCH_CREATE', textBeforeTool, tools: toolBatchRef.curren
     setAskUser(null)
   }, [askUser])
 
-  // Token 用量（排除 tool 消息——它们不会被发给 API，只用于 UI 展示）
-  const estimatedTokens = messages
+  // Token 用量 = 可见消息 + 后台开销（系统提示词 + 上下文注入 + 工具定义）
+  const visibleTokens = messages
     .filter(m => m.role !== 'tool')
     .reduce((sum, m) => sum + estimateTokens(m.content) + 4, 0)
+  // 后台开销估算：系统提示词 ~4200 tok + 上下文注入 ~1500 tok + 工具定义 ~2000 tok
+  const promptOverhead = 4200 + 1500 + 2000
+  const estimatedTokens = lastRealInputTokens > 0 ? lastRealInputTokens : (visibleTokens + promptOverhead)
   const contextWindowLimit =
     compressionInfo?.limit
     || activeModel?.availableModels?.find(m => m.id === activeModel.selectedModel)?.contextWindow
@@ -1112,36 +1113,6 @@ dispatch({ type: 'TOOL_BATCH_CREATE', textBeforeTool, tools: toolBatchRef.curren
                 return undefined
               })()}
             />
-          </div>
-          {/* 编码/对话模式切换 */}
-          <div className="relative shrink-0">
-            <button
-              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-colors"
-              onClick={() => setShowModeMenu(!showModeMenu)}
-              title={codingMode ? '编码模式' : '对话模式'}
-            >
-              {codingMode ? <Code className="h-3 w-3" /> : <MessageSquare className="h-3 w-3" />}
-              <span className="max-w-[40px] truncate">{codingMode ? 'Code' : 'Chat'}</span>
-            </button>
-            {showModeMenu && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowModeMenu(false)} />
-                <div className="absolute left-0 bottom-full z-50 mb-1 w-36 rounded-lg border border-border bg-card shadow-lg py-1">
-                  <button
-                    className={`flex items-center gap-2 w-full px-3 py-1.5 text-xs transition-colors ${codingMode ? 'bg-accent' : 'hover:bg-muted/50'}`}
-                    onClick={() => { setCodingMode(true); setShowModeMenu(false) }}
-                  >
-                    <Code className="h-3.5 w-3.5" />编码模式
-                  </button>
-                  <button
-                    className={`flex items-center gap-2 w-full px-3 py-1.5 text-xs transition-colors ${!codingMode ? 'bg-accent' : 'hover:bg-muted/50'}`}
-                    onClick={() => { setCodingMode(false); setShowModeMenu(false) }}
-                  >
-                    <MessageSquare className="h-3.5 w-3.5" />对话模式
-                  </button>
-                </div>
-              </>
-            )}
           </div>
           <MemoryPopup
             manager={memoryManager}

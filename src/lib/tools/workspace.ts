@@ -171,7 +171,8 @@ export async function registerWorkspaceTools(tools: ToolMap) {
       'Reads a file from the local filesystem. You can access any file directly by using this tool.\n' +
       'It is okay to read a file that does not exist; an error will be returned.\n\n' +
       'Usage:\n' +
-      '- The path parameter must be an absolute path, not a relative path\n' +
+      '- Pass the filename from workspace_list_dir output directly as the path parameter.\n' +
+      '- Relative paths are resolved from the workspace root. Example: {"path": "package.json"} reads the workspace root package.json.\n' +
       '- Results are returned using cat -n format, with line numbers starting at 1\n' +
       '- Use "lines" param: "1-50" = first 50 lines, "100-end" = from line 100 to EOF, "1-end" = entire file. Recommended to read the whole file without lines param for short files.\n' +
       '- Always returns total lines and chars at the end, so you never need a probe read.\n' +
@@ -182,7 +183,7 @@ export async function registerWorkspaceTools(tools: ToolMap) {
     inputSchema: jsonSchema({
       type: 'object',
       properties: {
-        path: { type: 'string', description: 'Absolute file path' },
+        path: { type: 'string', description: 'File path from workspace_list_dir output, e.g. "package.json" or "src/main.ts"' },
         lines: { type: 'string', description: 'Line range. "1-50" = first 50 lines, "100-end" = from line 100 to EOF, "1-end" = entire file. Recommended for large files.' },
         offset: { type: 'number', description: 'Start char position (0-based). Prefer lines param.' },
         length: { type: 'number', description: 'Chars to read, default 8000, max 10000. Prefer lines param.' },
@@ -190,13 +191,17 @@ export async function registerWorkspaceTools(tools: ToolMap) {
       required: ['path'],
     }),
     execute: async (args: { path: string; offset?: number; length?: number; lines?: string }) => {
-      trackFileOp(args.path)
+      if (!args.path) {
+        return '缺少 path 参数。请指定文件名，例如: {"path": "package.json"}。先执行 workspace_list_dir 查看可用文件。'
+      }
+      const resolvedPath = resolvePath(args.path)
+      trackFileOp(resolvedPath)
       const fsApi = window.electronAPI!.fs
       const ext = (args.path.split('.').pop() || '').toLowerCase()
       const needsConvert = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'pdf'].includes(ext)
 
       if (needsConvert && window.electronAPI?.file) {
-        const convertResult = await window.electronAPI.file.convert(args.path)
+        const convertResult = await window.electronAPI.file.convert(resolvedPath)
         if (convertResult.success && convertResult.content) {
           const total = convertResult.content.length
           const off = Math.max(0, args.offset || 0)
@@ -208,7 +213,7 @@ export async function registerWorkspaceTools(tools: ToolMap) {
         return `文档转换失败: ${convertResult.error || '未知错误'}。`
       }
 
-      const readResult = await fsApi.readFile(args.path)
+      const readResult = await fsApi.readFile(resolvedPath)
       if (!readResult.success || readResult.content == null) {
         return `读取失败: ${readResult.error || '文件不存在'}`
       }

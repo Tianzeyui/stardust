@@ -11,6 +11,8 @@ export interface ChatMessage {
   toolCallId?: string
   /** 工具调用列表（role='assistant' 且有工具调用时） */
   toolCalls?: Array<{ id: string; name: string; input: unknown }>
+  /** 推理/思考内容（DeepSeek R1 等推理模型） */
+  reasoning_content?: string
 }
 
 export interface ToolMessage {
@@ -72,4 +74,6 @@ export interface ProviderConfig {
   apiKey: string
   /** API Base URL (DeepSeek/OpenAI 兼容时必需) */
   baseUrl?: string
+  /** 模型能力标签，如 ['reasoning', 'vision'] */
+  capabilities?: string[]
 }

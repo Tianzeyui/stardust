@@ -3,7 +3,7 @@
 
 use crate::handlers::{emit, OutputLine, Registry};
 use crate::protocol::HandlerResult;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tokio::sync::mpsc;
 
 // ====== 可用模型目录 ======
@@ -23,7 +23,7 @@ fn available_models() -> Vec<serde_json::Value> {
 
 async fn model_get_status(_req: crate::protocol::Request, _tx: mpsc::Sender<OutputLine>) -> HandlerResult {
     let available = available_models();
-    let dir = models_dir();
+    let _dir = models_dir();
 
     let status: Vec<serde_json::Value> = available.iter().map(|m| {
         let id = m["id"].as_str().unwrap_or("");

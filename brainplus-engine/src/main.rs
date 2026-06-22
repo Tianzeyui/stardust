@@ -12,11 +12,9 @@
 //! 确保事件一定在响应之前发出。
 
 mod api;
-mod error;
 mod handlers;
 mod inference;
 mod protocol;
-mod tools;
 
 use protocol::Response;
 use std::io::{self, BufRead, Write};

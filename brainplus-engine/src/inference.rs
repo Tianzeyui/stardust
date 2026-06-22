@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 //! 本地模型推理——llama.cpp 流式文本生成
 //! 使用 llama-cpp-2 v0.1 crate 直接调用 C API。
 

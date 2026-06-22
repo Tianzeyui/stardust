@@ -1,3 +1,4 @@
+#![allow(dead_code, unused_assignments)]
 //! 终端命令执行 & PTY handler
 //!
 //! 替换 electron/main.ts 中的 terminal:* IPC handler：
@@ -139,9 +140,8 @@ async fn terminal_spawn(req: crate::protocol::Request, tx: mpsc::Sender<OutputLi
         let mut stdout_reader = child.stdout.take();
         let mut stderr_reader = child.stderr.take();
 
-        let mut exit_code: Option<i32> = None;
-
         #[allow(unused_assignments)]
+        let mut exit_code: Option<i32> = None;
         let mut _all_stdout = String::new();
         #[allow(unused_assignments)]
         let mut _all_stderr = String::new();
