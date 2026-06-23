@@ -113,7 +113,7 @@ describe('DEFAULT_PROMPT_CODE 核心规则', () => {
     expect(p).toContain('Code over 20 lines')
   })
 
-  // ====== Agent 行为 (CC Verification Contract + brainPlus 增强) ======
+  // ====== Agent 行为 (CC Verification Contract + stardust 增强) ======
 
   test('Agent 行为：委托 + 验证', () => {
     expect(p).toContain('delegate_task')

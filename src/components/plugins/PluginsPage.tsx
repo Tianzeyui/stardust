@@ -363,7 +363,7 @@ export function PluginsPage() {
 
             {/* 底部提示 */}
             <p className="text-[10px] text-muted-foreground/40 text-center pt-2">
-              插件来自 <a href="https://github.com/Tianzeyui/brainPlus-community-plugins" target="_blank" className="underline hover:text-muted-foreground">GitHub 社区仓库</a>
+              插件来自 <a href="https://github.com/Tianzeyui/stardust-community-plugins" target="_blank" className="underline hover:text-muted-foreground">GitHub 社区仓库</a>
             </p>
           </>
         )}

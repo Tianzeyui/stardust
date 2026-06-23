@@ -33,15 +33,15 @@
 
 **加载顺序**（从远到近）：
 ```
-/Users/.../brainPlusRules.md              ← 全局
-/Users/.../Develop/brainPlusRules.md       ← 父目录
-<项目根>/brainPlusRules.md                 ← 项目规则
-<项目根>/.brainplus/rules.md               ← 项目本地
-<项目根>/.brainplus/rules/*.md             ← 条件规则（paths: glob）
-<项目根>/brainPlusRules.local.md           ← 个人私有（gitignored）
+/Users/.../stardustRules.md              ← 全局
+/Users/.../Develop/stardustRules.md       ← 父目录
+<项目根>/stardustRules.md                 ← 项目规则
+<项目根>/.stardust/rules.md               ← 项目本地
+<项目根>/.stardust/rules/*.md             ← 条件规则（paths: glob）
+<项目根>/stardustRules.local.md           ← 个人私有（gitignored）
 ```
 
-**条件规则**：`.brainplus/rules/*.md` 带 `paths:` frontmatter 时，仅在操作匹配文件时注入。
+**条件规则**：`.stardust/rules/*.md` 带 `paths:` frontmatter 时，仅在操作匹配文件时注入。
 
 ---
 

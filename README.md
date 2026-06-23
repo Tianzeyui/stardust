@@ -3,19 +3,19 @@
   <a href="./README_zh.md">中文</a>
 </p>
 
-# BrainPlus
+# Stardust
 
 <div align="center">
 
 **Open-source AI Agent Platform — Build, Extend, Automate.**
 
-[![Version](https://img.shields.io/github/package-json/v/Tianzeyui/brainPlus)](package.json)
+[![Version](https://img.shields.io/github/package-json/v/Tianzeyui/stardust)](package.json)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)]()
 
 </div>
 
-BrainPlus is a desktop AI agent platform that combines a powerful chat interface with an extensible plugin system. It integrates with 60+ AI models, supports MCP (Model Context Protocol) tools, sandboxed code execution, and multi-project management — all wrapped in a clean, modern UI.
+Stardust is a desktop AI agent platform that combines a powerful chat interface with an extensible plugin system. It integrates with 60+ AI models, supports MCP (Model Context Protocol) tools, sandboxed code execution, and multi-project management — all wrapped in a clean, modern UI.
 
 ## Features
 
@@ -32,7 +32,7 @@ BrainPlus is a desktop AI agent platform that combines a powerful chat interface
 - **AI tool injection** — plugins can register custom Function Calling tools for the AI to use
 - **Permission model** — declarative permissions in `manifest.json`, sandboxed file system access
 - **Crash isolation** — each plugin wrapped in ErrorBoundary, single plugin failure won't crash the app
-- **Community Plugins** — browse and install community plugins at [brainPlus-community-plugins](https://github.com/Tianzeyui/brainPlus-community-plugins)
+- **Community Plugins** — browse and install community plugins at [stardust-community-plugins](https://github.com/Tianzeyui/stardust-community-plugins)
 
 ### 🛠 Built-in Tools
 - **MCP Gateway** — connect to any MCP-compatible server (SSE, stdio, Streamable HTTP)
@@ -76,8 +76,8 @@ BrainPlus is a desktop AI agent platform that combines a powerful chat interface
 
 ```bash
 # Clone the repository
-git clone https://github.com/Tianzeyui/brainPlus.git
-cd brainPlus
+git clone https://github.com/Tianzeyui/stardust.git
+cd stardust
 
 # Install dependencies
 npm install
@@ -102,11 +102,11 @@ Build outputs are placed in the `release/` directory.
 
 ## Plugin Development
 
-Plugins use React/TSX. Start by copying the template from [brainPlus-community-plugins](https://github.com/Tianzeyui/brainPlus-community-plugins):
+Plugins use React/TSX. Start by copying the template from [stardust-community-plugins](https://github.com/Tianzeyui/stardust-community-plugins):
 
 ```bash
-git clone https://github.com/Tianzeyui/brainPlus-community-plugins.git
-cp -r brainPlus-community-plugins/_template plugins/my-feature
+git clone https://github.com/Tianzeyui/stardust-community-plugins.git
+cp -r stardust-community-plugins/_template plugins/my-feature
 ```
 
 ### Directory Structure
@@ -202,11 +202,11 @@ Or declaratively in `manifest.json`:
 
 Contributions are welcome! Here's how you can help:
 
-1. **Create plugins** — build plugins using the [community plugins template](https://github.com/Tianzeyui/brainPlus-community-plugins)
+1. **Create plugins** — build plugins using the [community plugins template](https://github.com/Tianzeyui/stardust-community-plugins)
 2. **Add APIs** — extend `src/lib/pluginTypes.ts` and `src/lib/pluginSystem.ts` to add new host capabilities
 3. **Improve the core** — fix bugs, improve performance, enhance the UI
 
-See the plugin documentation in the [community plugins repo](https://github.com/Tianzeyui/brainPlus-community-plugins) under `_template/docs/` for detailed development guides.
+See the plugin documentation in the [community plugins repo](https://github.com/Tianzeyui/stardust-community-plugins) under `_template/docs/` for detailed development guides.
 
 ## Release Notes
 
@@ -221,5 +221,5 @@ Apache 2.0 © 沉浸位工作室
 ---
 
 <div align="center">
-  <sub>Built with ❤️ by the BrainPlus community</sub>
+  <sub>Built with ❤️ by the Stardust community</sub>
 </div>

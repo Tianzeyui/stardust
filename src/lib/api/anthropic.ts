@@ -28,7 +28,7 @@ function createClient(config: ProviderConfig): Anthropic {
 }
 
 /**
- * 把 brainPlus 工具定义转成 Anthropic API 工具格式
+ * 把 stardust 工具定义转成 Anthropic API 工具格式
  */
 function convertTools(tools: Record<string, ToolDef>): Anthropic.Tool[] {
   return Object.entries(tools).map(([name, tool]) => ({
@@ -39,7 +39,7 @@ function convertTools(tools: Record<string, ToolDef>): Anthropic.Tool[] {
 }
 
 /**
- * 把 brainPlus 消息转成 Anthropic API 消息格式
+ * 把 stardust 消息转成 Anthropic API 消息格式
  */
 function convertMessages(
   messages: ChatMessage[],

@@ -1,6 +1,6 @@
 /**
  * 社区插件服务
- * 从 GitHub brainPlus-community-plugins 仓库获取插件列表
+ * 从 GitHub stardust-community-plugins 仓库获取插件列表
  * 使用 raw.githubusercontent.com 直接获取文件，避免 API 限流和 base64 解码
  */
 
@@ -14,11 +14,11 @@ export interface CommunityPlugin {
   files?: string[]
 }
 
-const REPO = 'Tianzeyui/brainPlus-community-plugins'
+const REPO = 'Tianzeyui/stardust-community-plugins'
 // jsDelivr CDN 代理 GitHub 文件，国内可访问
 const INDEX_URL = `https://cdn.jsdelivr.net/gh/${REPO}@main/plugins.json`
-const CACHE_KEY = 'brainplus_community_plugins'
-const CACHE_TIME_KEY = 'brainplus_community_plugins_time'
+const CACHE_KEY = 'stardust_community_plugins'
+const CACHE_TIME_KEY = 'stardust_community_plugins_time'
 const CACHE_TTL_MS = 5 * 60 * 1000 // 5 分钟
 
 /**

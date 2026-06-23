@@ -79,10 +79,10 @@ export function ProjectsPage() {
     if (!newName.trim()) return
     const p = await projectStore.create(newName.trim(), newDesc.trim(), newPath.trim() || undefined)
     if (p) {
-      // 自动创建 .brainplus/rules.md
+      // 自动创建 .stardust/rules.md
       if (createRules && window.electronAPI?.fs) {
         const content = `# ${newName.trim()}\n\n${newDesc.trim() || '项目规则文件。AI 每次对话自动读取。'}`
-        await window.electronAPI.fs.writeFile(`${p.path}/.brainplus/rules.md`, content).catch(() => {})
+        await window.electronAPI.fs.writeFile(`${p.path}/.stardust/rules.md`, content).catch(() => {})
       }
       setNewName(''); setNewDesc(''); setNewPath(''); setShowCreate(false)
       setSelectedId(p.id)
@@ -187,7 +187,7 @@ export function ProjectsPage() {
                 <Label className="text-xs">工作区目录（可选，留空自动生成）</Label>
                 <div className="flex gap-2">
                   <Input className="h-8 text-xs font-mono flex-1" value={newPath} onChange={e => setNewPath(e.target.value)}
-                    placeholder="留空自动创建到 ~/BrainPlus/projects/ 下" onKeyDown={e => e.key === 'Enter' && handleCreate()} />
+                    placeholder="留空自动创建到 ~/Stardust/projects/ 下" onKeyDown={e => e.key === 'Enter' && handleCreate()} />
                   <Button size="sm" variant="outline" className="h-8 shrink-0" onClick={browseProjectPath}>
                     <FolderSearch className="h-3.5 w-3.5" />
                   </Button>
@@ -200,7 +200,7 @@ export function ProjectsPage() {
                 >
                   <span className={`inline-block h-3 w-3 rounded-full bg-white transition-transform ${createRules ? 'translate-x-3' : 'translate-x-0.5'}`} />
                 </button>
-                <span className="text-[10px] text-muted-foreground">自动创建 .brainplus/rules.md</span>
+                <span className="text-[10px] text-muted-foreground">自动创建 .stardust/rules.md</span>
               </div>
               <div className="flex gap-2">
                 <Button size="sm" onClick={handleCreate} disabled={!newName.trim()}>创建</Button>

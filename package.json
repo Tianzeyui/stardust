@@ -1,13 +1,13 @@
 {
-  "name": "brain-plus-desktop",
+  "name": "stardust-desktop",
   "private": true,
   "type": "module",
   "version": "0.23.0",
-  "description": "BrainPlus Desktop - Electron + React + TypeScript",
+  "description": "Stardust Desktop - Electron + React + TypeScript",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
-    "dev:rust": "cargo watch -w brainplus-engine/src -x build",
+    "dev:rust": "cargo watch -w stardust-engine/src -x build",
     "dev:all": "npm run dev:rust & npm run dev",
     "build": "vite build",
     "preview": "vite preview",
@@ -55,8 +55,8 @@
     "vite-plugin-electron-renderer": "^0.14.6"
   },
   "build": {
-    "appId": "com.brainplus.desktop",
-    "productName": "BrainPlus",
+    "appId": "com.stardust.desktop",
+    "productName": "Stardust",
     "directories": {
       "output": "release"
     },
@@ -97,6 +97,6 @@
       "maintainer": "tianzeyu@outlook.com"
     }
   },
-  "repository": "https://github.com/Tianzeyui/brainPlus.git",
+  "repository": "https://github.com/Tianzeyui/stardust.git",
   "author": "沉浸位工作室"
 }

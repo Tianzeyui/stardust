@@ -130,19 +130,19 @@ export interface MCPServerConfig {
 
 export function getMCPServers(): MCPServerConfig[] {
   try {
-    const raw = localStorage.getItem('brainplus_mcp_servers')
+    const raw = localStorage.getItem('stardust_mcp_servers')
     if (raw) return JSON.parse(raw)
   } catch {}
   return []
 }
 
 export function saveMCPServers(servers: MCPServerConfig[]): void {
-  localStorage.setItem('brainplus_mcp_servers', JSON.stringify(servers))
+  localStorage.setItem('stardust_mcp_servers', JSON.stringify(servers))
 }
 
 // ========== 渐进式披露阈值 ==========
 
-const DISCLOSURE_THRESHOLD_KEY = 'brainplus_disclosure_threshold'
+const DISCLOSURE_THRESHOLD_KEY = 'stardust_disclosure_threshold'
 const DEFAULT_THRESHOLD = 8
 
 export function getDisclosureThreshold(): number {
@@ -160,7 +160,7 @@ export function saveDisclosureThreshold(threshold: number): void {
 
 // ========== Agent 最大任务步数 ==========
 
-const AGENT_MAX_STEPS_KEY = 'brainplus_agent_max_steps'
+const AGENT_MAX_STEPS_KEY = 'stardust_agent_max_steps'
 const DEFAULT_MAX_STEPS = 25
 
 export function getAgentMaxSteps(): number {
@@ -178,7 +178,7 @@ export function saveAgentMaxSteps(steps: number): void {
 
 // ========== 记忆功能开关 ==========
 
-const MEMORY_ENABLED_KEY = 'brainplus_memory_enabled'
+const MEMORY_ENABLED_KEY = 'stardust_memory_enabled'
 
 export function getMemoryEnabled(): boolean {
   try {
@@ -194,8 +194,8 @@ export function saveMemoryEnabled(enabled: boolean): void {
 
 // ========== A2A Server ==========
 
-const A2A_ENABLED_KEY = 'brainplus_a2a_enabled'
-const A2A_PORT_KEY = 'brainplus_a2a_port'
+const A2A_ENABLED_KEY = 'stardust_a2a_enabled'
+const A2A_PORT_KEY = 'stardust_a2a_port'
 
 export function getA2AEnabled(): boolean {
   return localStorage.getItem(A2A_ENABLED_KEY) !== 'false'  // 默认开启
@@ -217,7 +217,7 @@ export function saveA2APort(port: number): void {
   localStorage.setItem(A2A_PORT_KEY, String(port))
 }
 
-const A2A_TOKEN_KEY = 'brainplus_a2a_token'
+const A2A_TOKEN_KEY = 'stardust_a2a_token'
 
 export function getA2AToken(): string {
   return localStorage.getItem(A2A_TOKEN_KEY) || ''
@@ -229,7 +229,7 @@ export function saveA2AToken(token: string): void {
 
 // ========== 上下文压缩阈值 ==========
 
-const COMPRESS_THRESHOLD_KEY = 'brainplus_compress_threshold'
+const COMPRESS_THRESHOLD_KEY = 'stardust_compress_threshold'
 
 export function getCompressThreshold(): number {
   try {
@@ -243,7 +243,7 @@ export function saveCompressThreshold(pct: number): void {
   localStorage.setItem(COMPRESS_THRESHOLD_KEY, String(Math.max(30, Math.min(95, pct))))
 }
 
-const TOKEN_LIMIT_KEY = 'brainplus_token_limit'
+const TOKEN_LIMIT_KEY = 'stardust_token_limit'
 
 export function getTokenLimit(): number {
   try {
@@ -259,7 +259,7 @@ export function saveTokenLimit(limit: number): void {
 
 // ========== 智能路由层级配置 ==========
 
-const TIER_MAP_KEY = 'brainplus_tier_map'
+const TIER_MAP_KEY = 'stardust_tier_map'
 
 export type ModelTier = 'fast' | 'balanced' | 'powerful'
 
@@ -297,7 +297,7 @@ export function setModelTier(modelId: string, tier: ModelTier): void {
 
 // ========== 搜索引擎配置 ==========
 
-const SEARCH_COUNT_KEY = 'brainplus_search_count'
+const SEARCH_COUNT_KEY = 'stardust_search_count'
 
 export function getSearchCount(): number {
   try { const v = localStorage.getItem(SEARCH_COUNT_KEY); if (v) return parseInt(v) } catch {}
@@ -305,10 +305,10 @@ export function getSearchCount(): number {
 }
 export function saveSearchCount(v: number): void { localStorage.setItem(SEARCH_COUNT_KEY, String(v)) }
 
-const SEARCH_ENGINE_KEY = 'brainplus_search_engine'
-const GOOGLE_API_KEY = 'brainplus_google_api_key'
-const GOOGLE_CX_KEY = 'brainplus_google_cx'
-const BRAVE_API_KEY = 'brainplus_brave_api_key'
+const SEARCH_ENGINE_KEY = 'stardust_search_engine'
+const GOOGLE_API_KEY = 'stardust_google_api_key'
+const GOOGLE_CX_KEY = 'stardust_google_cx'
+const BRAVE_API_KEY = 'stardust_brave_api_key'
 
 export type SearchEngine = 'auto' | 'google' | 'brave' | 'bing' | 'ddg'
 
@@ -335,7 +335,7 @@ export function saveBraveApiKey(v: string): void { localStorage.setItem(BRAVE_AP
 
 // ========== 上下文窗口 ==========
 
-const CTX_WINDOW_KEY = 'brainplus_ctx_window'
+const CTX_WINDOW_KEY = 'stardust_ctx_window'
 
 export const DEFAULT_CTX_WINDOW = 128000
 export function getCtxWindow(): number {
@@ -348,7 +348,7 @@ export function saveCtxWindow(v: number): void { localStorage.setItem(CTX_WINDOW
 
 // ====== 编码模式系统提示词（完全对齐 CC prompts.ts 真实源码） ======
 // 结构 = CC: Intro → System → Doing Tasks → Actions → Using Your Tools → Tone & Style → Output Efficiency
-// 保留 brainPlus 的反工具放弃增强（CC 外部版没有这些规则，CC 靠模型训练防放弃）
+// 保留 stardust 的反工具放弃增强（CC 外部版没有这些规则，CC 靠模型训练防放弃）
 
 const PROMPT_SECTION_INTRO = `You are an interactive agent that helps users with software engineering tasks. Use the instructions below and the tools available to you to assist the user.
 
@@ -456,7 +456,7 @@ export function getPromptCode(): string {
 
 // ========== 终端开关 ==========
 
-const TERMINAL_KEY = 'brainplus_terminal_enabled'
+const TERMINAL_KEY = 'stardust_terminal_enabled'
 
 export function getTerminalEnabled(): boolean {
   try { const v = localStorage.getItem(TERMINAL_KEY); if (v !== null) return v === 'true' } catch {}
@@ -466,8 +466,8 @@ export function saveTerminalEnabled(v: boolean): void { localStorage.setItem(TER
 
 // ========== 沙箱开关（JS / Python 独立） ==========
 
-const SANDBOX_JS_KEY = 'brainplus_sandbox_js'
-const SANDBOX_PYTHON_KEY = 'brainplus_sandbox_python'
+const SANDBOX_JS_KEY = 'stardust_sandbox_js'
+const SANDBOX_PYTHON_KEY = 'stardust_sandbox_python'
 
 export function getJSSandboxEnabled(): boolean {
   try { const v = localStorage.getItem(SANDBOX_JS_KEY); if (v !== null) return v === 'true' } catch {}
@@ -488,7 +488,7 @@ export function isAnySandboxEnabled(): boolean {
 
 // ========== DuckDuckGo 搜索开关 ==========
 
-const DUCKDUCKGO_ENABLED_KEY = 'brainplus_duckduckgo_enabled'
+const DUCKDUCKGO_ENABLED_KEY = 'stardust_duckduckgo_enabled'
 
 export function getDuckDuckGoEnabled(): boolean {
   try {
@@ -502,8 +502,8 @@ export function saveDuckDuckGoEnabled(enabled: boolean): void {
   localStorage.setItem(DUCKDUCKGO_ENABLED_KEY, String(enabled))
 }
 
-const DDG_RESULT_COUNT_KEY = 'brainplus_ddg_result_count'
-const DDG_TIMEOUT_KEY = 'brainplus_ddg_timeout'
+const DDG_RESULT_COUNT_KEY = 'stardust_ddg_result_count'
+const DDG_TIMEOUT_KEY = 'stardust_ddg_timeout'
 
 export function getDDGResultCount(): number {
   try {
@@ -531,9 +531,9 @@ export function saveDDGTimeout(sec: number): void {
 
 // ========== Bing 搜索开关 ==========
 
-const BING_ENABLED_KEY = 'brainplus_bing_enabled'
-const BING_RESULT_COUNT_KEY = 'brainplus_bing_result_count'
-const BING_TIMEOUT_KEY = 'brainplus_bing_timeout'
+const BING_ENABLED_KEY = 'stardust_bing_enabled'
+const BING_RESULT_COUNT_KEY = 'stardust_bing_result_count'
+const BING_TIMEOUT_KEY = 'stardust_bing_timeout'
 
 export function getBingEnabled(): boolean {
   try { const v = localStorage.getItem(BING_ENABLED_KEY); if (v !== null) return v === 'true' } catch {}
@@ -559,7 +559,7 @@ export function saveBingTimeout(sec: number): void {
 
 // ========== 图数据库开关 ==========
 
-const GRAPH_ENABLED_KEY = 'brainplus_graph_enabled'
+const GRAPH_ENABLED_KEY = 'stardust_graph_enabled'
 
 export function getGraphEnabled(): boolean {
   try { const v = localStorage.getItem(GRAPH_ENABLED_KEY); if (v !== null) return v === 'true' } catch {}

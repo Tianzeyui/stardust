@@ -100,7 +100,7 @@ export function parseGitHubUrl(url: string): { repoUrl: string; subPath: string 
  */
 export async function cloneToTemp(url: string): Promise<{ success: boolean; localPath?: string; error?: string }> {
   const os = await import('os')
-  const tmpDir = path.join(os.tmpdir(), `brainplus-skill-${Date.now()}`)
+  const tmpDir = path.join(os.tmpdir(), `stardust-skill-${Date.now()}`)
 
   return new Promise((resolve) => {
     execFile('git', ['clone', '--depth', '1', url, tmpDir], { timeout: 120000 }, (err) => {

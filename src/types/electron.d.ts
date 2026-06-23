@@ -55,11 +55,11 @@ export interface ElectronAPI {
     onConvertProgress: (cb: (data: { filePath: string; message: string }) => void) => () => void
   }
   workspace: {
-    getPaths: () => Promise<{ root: string; output: string; brainplusDir?: string; isCustom?: boolean }>
-    info: () => Promise<{ root: string; output: string; brainplusDir: string; isCustom: boolean }>
+    getPaths: () => Promise<{ root: string; output: string; stardustDir?: string; isCustom?: boolean }>
+    info: () => Promise<{ root: string; output: string; stardustDir: string; isCustom: boolean }>
     setRoot: (newRoot: string) => Promise<boolean>
     pickRoot: () => Promise<string | null>
-    resetRoot: () => Promise<{ root: string; output: string; brainplusDir: string; isCustom: boolean }>
+    resetRoot: () => Promise<{ root: string; output: string; stardustDir: string; isCustom: boolean }>
     listOutputs: () => Promise<Array<{ name: string; path: string; size: number }>>
     openFile: (filePath: string) => Promise<void>
     deleteFile: (filePath: string) => Promise<boolean>

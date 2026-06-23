@@ -15,7 +15,7 @@ export interface TraceRecord {
   duration: number
 }
 
-const KEY = 'brainplus_traces'
+const KEY = 'stardust_traces'
 const MAX = 200
 
 export function getTraces(): TraceRecord[] {

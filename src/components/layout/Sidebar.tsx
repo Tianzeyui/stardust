@@ -58,9 +58,9 @@ export function Sidebar({ activeNav, onNavChange, collapsed, onToggleCollapse, o
       <div className={cn('mb-6 flex items-center', collapsed ? 'flex-col gap-2' : 'justify-between')}>
         <div className={cn('flex items-center gap-2', collapsed && 'flex-col')}>
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary">
-            <img src="/assets/icons/iconWhite.svg" alt="BrainPlus" className="h-7 w-7" />
+            <img src="/assets/icons/iconWhite.svg" alt="Stardust" className="h-7 w-7" />
           </div>
-          {!collapsed && <span className="text-lg font-bold tracking-tight">BrainPlus</span>}
+          {!collapsed && <span className="text-lg font-bold tracking-tight">Stardust</span>}
         </div>
         <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
           onClick={onToggleCollapse} title={collapsed ? '展开侧边栏' : '收起侧边栏'}>

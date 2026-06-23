@@ -1,8 +1,8 @@
 /**
  * 项目规则多层发现系统
  *
- * - 从项目根向上遍历到 /，每层读取 brainPlusRules.md + .brainplus/rules.md
- * - 支持 .brainplus/rules/*.md 条件规则（frontmatter paths: glob）
+ * - 从项目根向上遍历到 /，每层读取 stardustRules.md + .stardust/rules.md
+ * - 支持 .stardust/rules/*.md 条件规则（frontmatter paths: glob）
  * - 越靠近项目根的规则优先级越高（后加载 > 先加载）
  */
 
@@ -45,34 +45,34 @@ export async function discoverRules(projectRoot: string): Promise<DiscoveredRule
   for (let i = 1; i <= parts.length; i++) {
     const dir = '/' + parts.slice(0, i).join('/')
 
-    // brainPlusRules.md（新名称）
-    const rules1 = await fsApi.readFile(`${dir}/brainPlusRules.md`).catch(() => null)
+    // stardustRules.md（新名称）
+    const rules1 = await fsApi.readFile(`${dir}/stardustRules.md`).catch(() => null)
     if (rules1?.success && rules1.content) {
       ruleFiles.push({
-        path: `${dir}/brainPlusRules.md`,
+        path: `${dir}/stardustRules.md`,
         level: i === parts.length ? 'project' : 'parent',
         content: rules1.content,
         priority: i,
       })
     }
 
-    // .brainplus/rules.md（项目本地规则）
-    const dotRules = await fsApi.readFile(`${dir}/.brainplus/rules.md`).catch(() => null)
+    // .stardust/rules.md（项目本地规则）
+    const dotRules = await fsApi.readFile(`${dir}/.stardust/rules.md`).catch(() => null)
     if (dotRules?.success && dotRules.content) {
       ruleFiles.push({
-        path: `${dir}/.brainplus/rules.md`,
+        path: `${dir}/.stardust/rules.md`,
         level: i === parts.length ? 'project' : 'parent',
         content: dotRules.content,
         priority: i,
       })
     }
 
-    // .brainplus/rules/*.md（条件规则）
-    const rulesDir = await fsApi.listDir(`${dir}/.brainplus/rules`).catch(() => null)
+    // .stardust/rules/*.md（条件规则）
+    const rulesDir = await fsApi.listDir(`${dir}/.stardust/rules`).catch(() => null)
     if (rulesDir?.success && rulesDir.files) {
       for (const name of rulesDir.files) {
         if (!name.endsWith('.md')) continue
-        const file = await fsApi.readFile(`${dir}/.brainplus/rules/${name}`).catch(() => null)
+        const file = await fsApi.readFile(`${dir}/.stardust/rules/${name}`).catch(() => null)
         if (!file?.success || !file.content) continue
 
         // 解析 frontmatter 中的 paths: glob
@@ -84,13 +84,13 @@ export async function discoverRules(projectRoot: string): Promise<DiscoveredRule
             conditionalRules.push({
               glob,
               content: body,
-              path: `${dir}/.brainplus/rules/${name}`,
+              path: `${dir}/.stardust/rules/${name}`,
             })
           }
         } else {
           // 无 paths: → 无条件规则
           ruleFiles.push({
-            path: `${dir}/.brainplus/rules/${name}`,
+            path: `${dir}/.stardust/rules/${name}`,
             level: 'project',
             content: file.content,
             priority: i + 0.5, // 略高于同级 rules.md
@@ -100,11 +100,11 @@ export async function discoverRules(projectRoot: string): Promise<DiscoveredRule
     }
   }
 
-  // brainPlusRules.local.md（gitignored 个人私有规则）
-  const localRules = await fsApi.readFile(`${projectRoot}/brainPlusRules.local.md`).catch(() => null)
+  // stardustRules.local.md（gitignored 个人私有规则）
+  const localRules = await fsApi.readFile(`${projectRoot}/stardustRules.local.md`).catch(() => null)
   if (localRules?.success && localRules.content) {
     ruleFiles.push({
-      path: `${projectRoot}/brainPlusRules.local.md`,
+      path: `${projectRoot}/stardustRules.local.md`,
       level: 'local',
       content: localRules.content,
       priority: parts.length + 1, // 最高优先级

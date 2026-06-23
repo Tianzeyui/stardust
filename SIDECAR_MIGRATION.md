@@ -1,4 +1,4 @@
-# BrainPlus → Codex 架构对齐计划
+# Stardust → Codex 架构对齐计划
 
 ## 目标架构
 
@@ -64,7 +64,7 @@ TS 工具 (`src/lib/tools/*.ts`) 保持现有函数签名不变，内部从 `win
 
 ### 1.1 Rust 项目初始化 ✅
 
-- [x] `brainplus-engine/` crate，tokio multi-thread 运行时
+- [x] `stardust-engine/` crate，tokio multi-thread 运行时
 - [x] 技术栈：serde + serde_json + tracing + ignore + walkdir + regex + base64 + humantime
 - [x] 编译：debug + release profile (opt-level=3, lto)
 
@@ -150,7 +150,7 @@ TS 工具 (`src/lib/tools/*.ts`) 保持现有函数签名不变，内部从 `win
 
 - [ ] `sandbox.executePython` → spawn python3/uv + 限制
 - [ ] macOS `sandbox-exec` 文件系统 jail
-- [ ] 输出文件收集到 `.brainplus/output/`
+- [ ] 输出文件收集到 `.stardust/output/`
 - [ ] `sandbox:executePython` → `forwardToSidecar('sandbox:executePython')`
 
 ### 3.3 文档转换 ⏳

@@ -4,7 +4,7 @@
  */
 import type { Memory, MemoryStore } from './types'
 
-const PREFIX = 'brainplus_memory_'
+const PREFIX = 'stardust_memory_'
 
 function key(convId: string): string {
   return PREFIX + convId

@@ -17,8 +17,8 @@ export function setWorkspaceRoots(root: string, output: string) {
   if (output) _workspaceOutput = output
 }
 
-function getRoot(): string { return _workspaceRoot || '~/BrainPlus/workspace' }
-function getOutput(): string { return _workspaceOutput || '~/BrainPlus/workspace/.brainplus/output' }
+function getRoot(): string { return _workspaceRoot || '~/Stardust/workspace' }
+function getOutput(): string { return _workspaceOutput || '~/Stardust/workspace/.stardust/output' }
 
 /** 检查路径是否在工作区内 */
 function isInsideWorkspace(filePath: string): boolean {
@@ -28,7 +28,7 @@ function isInsideWorkspace(filePath: string): boolean {
 }
 
 function notifyUI(event: any) {
-  window.dispatchEvent(new CustomEvent('brainplus:fileop', { detail: event }))
+  window.dispatchEvent(new CustomEvent('stardust:fileop', { detail: event }))
 }
 
 /** 确认流程：工作区外操作需用户确认。返回 { confirmed, id }，调用方用 id 更新状态 */
@@ -279,7 +279,7 @@ export async function registerWorkspaceTools(tools: ToolMap) {
       // 系统命令不可用时回退 IPC 遍历
       if (allFiles.length === 0) {
         const fallback: string[] = []
-        const skip = ['node_modules','.git','.brainplus','dist','build','.next','__pycache__','.DS_Store']
+        const skip = ['node_modules','.git','.stardust','dist','build','.next','__pycache__','.DS_Store']
         async function walk(dir: string, depth: number) {
           if (depth > 15 || fallback.length >= 500) return
           const api = window.electronAPI?.fs

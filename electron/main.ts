@@ -1,5 +1,5 @@
 /**
- * BrainPlus Electron 主进程入口
+ * Stardust Electron 主进程入口
  *
  * 职责：
  * - 窗口生命周期管理
@@ -31,7 +31,7 @@ import { registerPermissionIpc } from './ipc/permissionIpc.js'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // macOS 开发模式下替换菜单栏显示名称
-if (process.platform === 'darwin') app.setName('BrainPlus')
+if (process.platform === 'darwin') app.setName('Stardust')
 
 let mainWindow: BrowserWindow | null = null
 
@@ -44,7 +44,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
-    title: 'BrainPlus',
+    title: 'Stardust',
     icon: appIcon,
     titleBarStyle: process.platform === 'darwin' ? 'hidden' : 'default',
     ...(process.platform !== 'darwin' ? {
@@ -124,11 +124,11 @@ app.whenReady().then(async () => {
     app.dock.setIcon(appIcon)
   }
   app.setAboutPanelOptions({
-    applicationName: 'BrainPlus',
+    applicationName: 'Stardust',
     applicationVersion: app.getVersion(),
     copyright: `© ${__BUILD_YEAR__} 沉浸位工作室`,
     credits: 'AI 赋能创作，让灵感自由流淌。',
-    website: 'https://github.com/Tianzeyui/brainPlus',
+    website: 'https://github.com/Tianzeyui/stardust',
     iconPath: appIcon,
   })
 
@@ -136,9 +136,9 @@ app.whenReady().then(async () => {
   if (process.platform === 'darwin') {
     Menu.setApplicationMenu(Menu.buildFromTemplate([
       {
-        label: 'BrainPlus',
+        label: 'Stardust',
         submenu: [
-          { label: '关于 BrainPlus', click: showAbout },
+          { label: '关于 Stardust', click: showAbout },
           { type: 'separator' },
           { role: 'hide' },
           { role: 'hideOthers' },

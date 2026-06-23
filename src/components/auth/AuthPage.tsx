@@ -26,15 +26,15 @@ export function AuthPage() {
       {/* 头部 */}
       <div className="flex items-center gap-3">
         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary">
-          <img src="/assets/icons/iconWhite.svg" alt="BrainPlus" className="h-10 w-10" />
+          <img src="/assets/icons/iconWhite.svg" alt="Stardust" className="h-10 w-10" />
         </div>
-        <h1 className="text-3xl font-bold tracking-tight">BrainPlus</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Stardust</h1>
       </div>
 
       {/* 右上角按钮 */}
       <div className="absolute right-4 top-4 flex items-center gap-1">
         <a
-          href="https://github.com/Tianzeyui/brainPlus"
+          href="https://github.com/Tianzeyui/stardust"
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center justify-center h-9 w-9 text-muted-foreground/40 hover:text-muted-foreground transition-colors"
@@ -72,8 +72,8 @@ export function AuthPage() {
           </CardTitle>
           <CardDescription>
             {view === 'login'
-              ? '使用邮箱和密码登录您的 BrainPlus 账号'
-              : '注册一个新的 BrainPlus 账号'}
+              ? '使用邮箱和密码登录您的 Stardust 账号'
+              : '注册一个新的 Stardust 账号'}
           </CardDescription>
         </CardHeader>
         <CardContent>

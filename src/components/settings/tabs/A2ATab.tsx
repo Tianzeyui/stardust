@@ -15,7 +15,7 @@ export function A2ATab() {
       <fieldset className="rounded-lg border border-border p-4">
         <legend className="px-2 text-sm font-semibold">A2A 服务器</legend>
         <p className="text-xs text-muted-foreground leading-relaxed mb-3">
-          Agent-to-Agent 协议。开启后 BrainPlus 可以作为 A2A 服务端接收其他 Agent 的任务请求。
+          Agent-to-Agent 协议。开启后 Stardust 可以作为 A2A 服务端接收其他 Agent 的任务请求。
         </p>
         <div className="flex items-center gap-2 mb-3">
           <button className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${enabled ? 'bg-primary' : 'bg-muted'}`} onClick={() => {

@@ -5,7 +5,7 @@
  */
 import type { ToolDef, StreamEvent, ChatMessage, ProviderConfig, Usage } from './types'
 
-// ====== 消息转换：brainPlus → OpenAI Chat Completions ======
+// ====== 消息转换：stardust → OpenAI Chat Completions ======
 
 interface OpenAIMessage {
   role: string
@@ -55,7 +55,7 @@ function convertMessages(messages: ChatMessage[], system?: string): OpenAIMessag
   return result
 }
 
-// ====== 工具转换：brainPlus → OpenAI function ======
+// ====== 工具转换：stardust → OpenAI function ======
 
 interface OpenAITool {
   type: 'function'

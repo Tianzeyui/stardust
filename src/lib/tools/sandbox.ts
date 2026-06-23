@@ -15,7 +15,7 @@ export async function registerSandboxTools(tools: ToolMap) {
 
   if (getJSSandboxEnabled()) {
     tools['sandbox_execute_js'] = {
-      description: `Execute JS in sandbox. Pass packages to install npm deps (e.g. ["pptxgenjs"]). Uses Worker thread for fast execution. Output to .brainplus/output/.`,
+      description: `Execute JS in sandbox. Pass packages to install npm deps (e.g. ["pptxgenjs"]). Uses Worker thread for fast execution. Output to .stardust/output/.`,
       inputSchema: jsonSchema({
         type: 'object',
         properties: {
@@ -33,7 +33,7 @@ export async function registerSandboxTools(tools: ToolMap) {
 
   if (getPythonSandboxEnabled()) {
     tools['sandbox_execute_python'] = {
-      description: `Execute Python 3/uv. Pass packages for auto pip install. Output to .brainplus/output/. Prefer this for third-party lib needs.`,
+      description: `Execute Python 3/uv. Pass packages for auto pip install. Output to .stardust/output/. Prefer this for third-party lib needs.`,
       inputSchema: jsonSchema({
         type: 'object',
         properties: {

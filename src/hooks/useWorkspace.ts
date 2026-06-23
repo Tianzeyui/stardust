@@ -1,7 +1,7 @@
 /**
  * useWorkspace — 获取当前工作区路径
  * - 选中项目 → 使用项目目录作为工作区根
- * - 全局 → 使用 Electron workspace 配置（默认 ~/BrainPlus/workspace 或用户自定义）
+ * - 全局 → 使用 Electron workspace 配置（默认 ~/Stardust/workspace 或用户自定义）
  */
 import { useState, useEffect, useCallback } from 'react'
 import { projectStore } from '@/lib/projectStore'
@@ -22,7 +22,7 @@ export function useWorkspace(projectId?: string | null): WorkspacePaths & { refr
     if (projectId) {
       const p = projectStore.getById(projectId)
       if (p?.path) {
-        setPaths({ root: p.path, output: `${p.path}/.brainplus/output`, isCustom: true })
+        setPaths({ root: p.path, output: `${p.path}/.stardust/output`, isCustom: true })
         return
       }
       // store 还没初始化完 → 不 fallback，等 onChange 触发重 resolve
@@ -43,7 +43,7 @@ export function useWorkspace(projectId?: string | null): WorkspacePaths & { refr
       const ws = await api.getPaths()
       setPaths({ root: ws.root, output: ws.output })
     } else {
-      setPaths({ root: '~/BrainPlus/workspace', output: '~/BrainPlus/workspace/.brainplus/output' })
+      setPaths({ root: '~/Stardust/workspace', output: '~/Stardust/workspace/.stardust/output' })
     }
   }, [projectId])
 

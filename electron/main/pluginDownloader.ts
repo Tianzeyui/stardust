@@ -6,9 +6,9 @@ import fs from 'fs'
 import path from 'path'
 import https from 'https'
 
-const REPO = 'Tianzeyui/brainPlus-community-plugins'
+const REPO = 'Tianzeyui/stardust-community-plugins'
 const CDN_BASE = `https://cdn.jsdelivr.net/gh/${REPO}@main`
-const UA = 'BrainPlus/1.0'
+const UA = 'Stardust/1.0'
 
 /**
  * 通过 HTTPS 下载文件，返回 Buffer

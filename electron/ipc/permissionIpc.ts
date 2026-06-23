@@ -6,7 +6,7 @@ import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'fs'
 import { join, dirname } from 'path'
 
 function getPermissionsFile(workspaceRoot: string): string {
-  return join(workspaceRoot, '.brainplus', 'settings.local.json')
+  return join(workspaceRoot, '.stardust', 'settings.local.json')
 }
 
 function getGlobalPermissionsFile(): string {

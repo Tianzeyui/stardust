@@ -3,19 +3,19 @@
   <a href="./README_zh.md">中文</a>
 </p>
 
-# BrainPlus
+# Stardust
 
 <div align="center">
 
 **开源 AI Agent 平台 — 构建、扩展、自动化。**
 
-[![Version](https://img.shields.io/github/package-json/v/Tianzeyui/brainPlus)](package.json)
+[![Version](https://img.shields.io/github/package-json/v/Tianzeyui/stardust)](package.json)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)]()
 
 </div>
 
-BrainPlus 是一个桌面端 AI Agent 平台，融合了强大的聊天界面与可扩展的插件系统。它集成了 60+ 个 AI 模型，支持 MCP（模型上下文协议）工具、沙箱化代码执行和多项目管理——全部包裹在简洁现代的 UI 中。
+Stardust 是一个桌面端 AI Agent 平台，融合了强大的聊天界面与可扩展的插件系统。它集成了 60+ 个 AI 模型，支持 MCP（模型上下文协议）工具、沙箱化代码执行和多项目管理——全部包裹在简洁现代的 UI 中。
 
 ## 功能特性
 
@@ -32,7 +32,7 @@ BrainPlus 是一个桌面端 AI Agent 平台，融合了强大的聊天界面与
 - **AI 工具注入** — 插件可为 AI 注册自定义 Function Calling 工具
 - **权限模型** — 在 `manifest.json` 中声明式配置权限，文件系统访问沙箱化
 - **崩溃隔离** — 每个插件包裹在 ErrorBoundary 中，单个插件崩溃不会影响整个应用
-- **社区插件** — 浏览并安装社区插件：[brainPlus-community-plugins](https://github.com/Tianzeyui/brainPlus-community-plugins)
+- **社区插件** — 浏览并安装社区插件：[stardust-community-plugins](https://github.com/Tianzeyui/stardust-community-plugins)
 
 ### 🛠 内置工具
 - **MCP 网关** — 连接任何兼容 MCP 的服务器（SSE、stdio、Streamable HTTP）
@@ -76,8 +76,8 @@ BrainPlus 是一个桌面端 AI Agent 平台，融合了强大的聊天界面与
 
 ```bash
 # 克隆仓库
-git clone https://github.com/Tianzeyui/brainPlus.git
-cd brainPlus
+git clone https://github.com/Tianzeyui/stardust.git
+cd stardust
 
 # 安装依赖
 npm install
@@ -102,11 +102,11 @@ npm run build:linux
 
 ## 插件开发
 
-插件使用 React/TSX。从 [brainPlus-community-plugins](https://github.com/Tianzeyui/brainPlus-community-plugins) 获取模板开始：
+插件使用 React/TSX。从 [stardust-community-plugins](https://github.com/Tianzeyui/stardust-community-plugins) 获取模板开始：
 
 ```bash
-git clone https://github.com/Tianzeyui/brainPlus-community-plugins.git
-cp -r brainPlus-community-plugins/_template plugins/my-feature
+git clone https://github.com/Tianzeyui/stardust-community-plugins.git
+cp -r stardust-community-plugins/_template plugins/my-feature
 ```
 
 ### 目录结构
@@ -202,11 +202,11 @@ ctx.onToolRegister((tools) => {
 
 欢迎贡献！参与方式：
 
-1. **创建插件** — 使用[社区插件模板](https://github.com/Tianzeyui/brainPlus-community-plugins)构建插件
+1. **创建插件** — 使用[社区插件模板](https://github.com/Tianzeyui/stardust-community-plugins)构建插件
 2. **扩展 API** — 修改 `src/lib/pluginTypes.ts` 和 `src/lib/pluginSystem.ts` 添加新的宿主能力
 3. **改进核心** — 修复 Bug、提升性能、美化 UI
 
-详细的插件开发指南请参见[社区插件仓库](https://github.com/Tianzeyui/brainPlus-community-plugins)中 `_template/docs/` 目录。
+详细的插件开发指南请参见[社区插件仓库](https://github.com/Tianzeyui/stardust-community-plugins)中 `_template/docs/` 目录。
 
 ## 版本发布
 
@@ -221,5 +221,5 @@ Apache 2.0 © 沉浸位工作室
 ---
 
 <div align="center">
-  <sub>由 BrainPlus 社区用 ❤️ 构建</sub>
+  <sub>由 Stardust 社区用 ❤️ 构建</sub>
 </div>

@@ -13,7 +13,7 @@ import {
   setWorkspaceRoot,
   pickWorkspaceRoot,
   resetWorkspaceRoot,
-  isBrainPlusWorkspace,
+  isStardustWorkspace,
 } from '../main/workspace.js'
 
 export function registerWorkspaceIpc(): void {
@@ -26,7 +26,7 @@ export function registerWorkspaceIpc(): void {
     return pickWorkspaceRoot(win)
   })
   ipcMain.handle('workspace:resetRoot', () => { resetWorkspaceRoot(); return getWorkspaceInfo() })
-  ipcMain.handle('workspace:isBrainPlus', async (_event, dirPath: string) => isBrainPlusWorkspace(dirPath))
+  ipcMain.handle('workspace:isStardust', async (_event, dirPath: string) => isStardustWorkspace(dirPath))
   ipcMain.handle('workspace:listOutputs', () => listOutputFiles())
   ipcMain.handle('workspace:openFile', (_event, filePath: string) => openFile(filePath))
   ipcMain.handle('workspace:deleteFile', (_event, filePath: string) => deleteFile(filePath))

@@ -95,7 +95,7 @@ export function CapabilitiesTab() {
   return (
     <div className="w-full space-y-3">
       <p className="text-xs text-muted-foreground rounded-lg bg-blue-50 dark:bg-blue-950/30 p-3 border border-blue-200 dark:border-blue-900">
-        在此管理 BrainPlus 的各项扩展能力。关闭某项后，AI 和插件将无法使用对应功能。
+        在此管理 Stardust 的各项扩展能力。关闭某项后，AI 和插件将无法使用对应功能。
       </p>
 
       {/* 执行环境 */}

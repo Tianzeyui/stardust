@@ -1,4 +1,4 @@
-# BrainPlus 发布流程
+# Stardust 发布流程
 
 ## 1. 更新版本号
 

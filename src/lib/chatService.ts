@@ -331,7 +331,7 @@ export async function chat(
     }
   }
 
-  // 多层规则发现：从项目根向上遍历，读取 brainPlusRules.md + .brainplus/rules/
+  // 多层规则发现：从项目根向上遍历，读取 stardustRules.md + .stardust/rules/
   let projectInstructions: string | undefined
   let conditionalRules: Array<{ glob: string; content: string; path: string }> = []
   try {
@@ -353,7 +353,7 @@ export async function chat(
     }
   } catch {}
 
-  // 条件规则匹配：基于最近操作的文件，注入匹配的 .brainplus/rules/*.md
+  // 条件规则匹配：基于最近操作的文件，注入匹配的 .stardust/rules/*.md
   if (conditionalRules.length > 0) {
     const { getRecentFiles } = await import('./fileTracker')
     const recentFiles = getRecentFiles()

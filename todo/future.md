@@ -11,7 +11,7 @@
 - [x] 外部工作区链接 + 迁移
 - [x] 智能路由：模型层级标签配置（Fast / Balanced / Powerful）
 - [x] 系统提示词独立设置（编码/对话双模式）
-- [x] .brainplus/rules.md 自动注入（对齐 CLAUDE.md）
+- [x] .stardust/rules.md 自动注入（对齐 CLAUDE.md）
 - [x] 上下文压缩：工具原子性 + 摘要堆叠 + 自适应保留
 - [x] 并行工具 UI：batch 展示
 - [x] 用量统计：分模型 Token 分布

@@ -121,7 +121,7 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
   // 更新日志（优先本地，CDN 备用）
   const [changelog, setChangelog] = useState<Array<{ version: string; date: string; items: string[] }>>([])
   useEffect(() => {
-    const CDN_URL = 'https://cdn.jsdelivr.net/gh/Tianzeyui/brainPlus@main/CHANGELOG.md'
+    const CDN_URL = 'https://cdn.jsdelivr.net/gh/Tianzeyui/stardust@main/CHANGELOG.md'
     const parseChangelog = (text: string) => {
       const entries: Array<{ version: string; date: string; items: string[] }> = []
       const sections = text.split(/\n## /).slice(1)

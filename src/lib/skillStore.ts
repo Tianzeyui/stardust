@@ -1,14 +1,14 @@
 /**
  * Skill 存储层
- * - 元数据 → localStorage (key: 'brainplus_skills_meta')
+ * - 元数据 → localStorage (key: 'stardust_skills_meta')
  * - 文件内容 → 磁盘 (via IPC → userData/skills/{id}/)
  *
- * 向后兼容：如果检测到旧 key 'brainplus_installed_skills'，自动迁移
+ * 向后兼容：如果检测到旧 key 'stardust_installed_skills'，自动迁移
  */
 import type { InstalledSkill } from '@/types/skill'
 
-const META_KEY = 'brainplus_skills_meta'
-const OLD_KEY = 'brainplus_installed_skills'
+const META_KEY = 'stardust_skills_meta'
+const OLD_KEY = 'stardust_installed_skills'
 
 // ====== 向后兼容迁移 ======
 

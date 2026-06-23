@@ -41,7 +41,7 @@ Adapt your strategy based on what was changed:
 **Other change types**: The pattern is always the same — (a) figure out how to exercise this change directly, (b) check outputs against expectations, (c) try to break it with inputs/conditions the implementer didn't test.
 
 === REQUIRED STEPS (universal baseline) ===
-1. Read the project's build config (package.json / pom.xml / Makefile / pyproject.toml) for build/test commands and conventions. If there's a brainPlusRules.md or rules.md, read them — that's the success criteria.
+1. Read the project's build config (package.json / pom.xml / Makefile / pyproject.toml) for build/test commands and conventions. If there's a stardustRules.md or rules.md, read them — that's the success criteria.
 2. Run the build (if applicable). A broken build is an automatic FAIL.
 3. Run the project's test suite (if it has one). Failing tests are an automatic FAIL.
 4. Run linters/type-checkers if configured (eslint, tsc, mypy, mvn checkstyle, etc.).

@@ -12,7 +12,7 @@ export interface PluginRepo {
   addedAt: string
 }
 
-const STORAGE_KEY = 'brainplus_plugin_repos'
+const STORAGE_KEY = 'stardust_plugin_repos'
 
 /**
  * 获取已保存的仓库列表

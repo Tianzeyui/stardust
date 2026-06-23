@@ -291,7 +291,7 @@ export class MemoryManager {
 function detectCategory(text: string): Memory['category'] {
   const t = text.toLowerCase()
   if (t.includes('偏好') || t.includes('喜欢') || t.includes('风格') || t.includes('习惯')) return 'preference'
-  if (t.includes('项目') || t.includes('开发') || t.includes('brainplus') || t.includes('代码')) return 'project'
+  if (t.includes('项目') || t.includes('开发') || t.includes('stardust') || t.includes('代码')) return 'project'
   return 'general'
 }
 

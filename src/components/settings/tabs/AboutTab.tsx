@@ -5,7 +5,7 @@ export function AboutTab() {
   const [changelog, setChangelog] = useState<Array<{ version: string; date: string; items: string[] }>>([])
 
   useEffect(() => {
-    const CDN_URL = 'https://cdn.jsdelivr.net/gh/Tianzeyui/brainPlus@main/CHANGELOG.md'
+    const CDN_URL = 'https://cdn.jsdelivr.net/gh/Tianzeyui/stardust@main/CHANGELOG.md'
     const parse = (text: string) => {
       const entries: typeof changelog = []
       const sections = text.split(/\n## /).slice(1)
@@ -32,8 +32,8 @@ export function AboutTab() {
   return (
     <div className="flex flex-col items-center text-center flex-1 overflow-auto">
       <div className="flex flex-col items-center pt-10 pb-8">
-        <img src="/assets/icons/icon2.png" alt="BrainPlus" className="w-16 h-16 rounded-2xl mb-4 shadow-sm" />
-        <h2 className="text-lg font-bold text-foreground">BrainPlus</h2>
+        <img src="/assets/icons/icon2.png" alt="Stardust" className="w-16 h-16 rounded-2xl mb-4 shadow-sm" />
+        <h2 className="text-lg font-bold text-foreground">Stardust</h2>
         <span className="inline-block mt-1.5 px-2 py-0.5 rounded-full bg-primary/10 text-[10px] font-medium text-primary">v{APP_VERSION}</span>
         <p className="text-xs text-muted-foreground/50 mt-3">开源自由的 AI Agent 平台</p>
       </div>

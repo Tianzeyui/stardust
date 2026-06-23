@@ -1,12 +1,12 @@
 /**
  * ProjectStore — 项目管理
- * 持久化到 ~/BrainPlus/projects.json
+ * 持久化到 ~/Stardust/projects.json
  */
 import type { Project, ProjectSettings } from '@/types/project'
 import { DEFAULT_PROJECT_SETTINGS } from '@/types/project'
 import { toast } from '@/hooks/useToast'
 
-const CONFIG_KEY = 'brainplus_projects'
+const CONFIG_KEY = 'stardust_projects'
 
 function loadFromLocal(): Project[] {
   try {
@@ -98,7 +98,7 @@ class ProjectStoreImpl {
         await api.fs.mkdir(projectDir)
       } catch {}
     }
-    await api.fs.mkdir(`${projectDir}/.brainplus/output`).catch(() => {})
+    await api.fs.mkdir(`${projectDir}/.stardust/output`).catch(() => {})
 
     const project: Project = {
       id, name, description,
@@ -146,7 +146,7 @@ class ProjectStoreImpl {
     try {
       // 确保新目录存在
       await api.fs.mkdir(newPath).catch(() => {})
-      await api.fs.mkdir(`${newPath}/.brainplus/output`).catch(() => {})
+      await api.fs.mkdir(`${newPath}/.stardust/output`).catch(() => {})
       // 复制文件
       if (copyFiles && oldPath !== newPath) {
         await api.fs.copyDir(oldPath, newPath)

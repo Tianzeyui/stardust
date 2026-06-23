@@ -21,7 +21,7 @@ async function exec(args: string[]): Promise<string> {
 }
 
 function notifyFileOp(event: any) {
-  window.dispatchEvent(new CustomEvent('brainplus:fileop', { detail: event }))
+  window.dispatchEvent(new CustomEvent('stardust:fileop', { detail: event }))
 }
 
 async function confirmCommit(msg: string): Promise<{ confirmed: boolean; id: string }> {

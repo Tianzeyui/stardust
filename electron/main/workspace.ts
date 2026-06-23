@@ -1,7 +1,7 @@
 /**
  * AI 工作区管理
- * .brainplus/ 目录同时作为工作区标识和内部存储
- * 结构: {root}/.brainplus/output/  AI 生成的文件
+ * .stardust/ 目录同时作为工作区标识和内部存储
+ * 结构: {root}/.stardust/output/  AI 生成的文件
  */
 import { app, shell, dialog, BrowserWindow } from 'electron'
 import fs from 'fs'
@@ -13,7 +13,7 @@ interface WorkspaceConfig {
   root: string
 }
 
-const DEFAULT_ROOT = path.join(app.getPath('home'), 'BrainPlus', 'workspace')
+const DEFAULT_ROOT = path.join(app.getPath('home'), 'Stardust', 'workspace')
 
 function loadConfig(): WorkspaceConfig {
   try {
@@ -40,10 +40,10 @@ function getRoot(): string {
   return _cachedRoot
 }
 
-/** 检测目录是否为 BrainPlus 工作区（有 .brainplus/ 目录） */
-export function isBrainPlusWorkspace(dirPath: string): boolean {
+/** 检测目录是否为 Stardust 工作区（有 .stardust/ 目录） */
+export function isStardustWorkspace(dirPath: string): boolean {
   try {
-    return fs.existsSync(path.join(dirPath, '.brainplus'))
+    return fs.existsSync(path.join(dirPath, '.stardust'))
   } catch { return false }
 }
 
@@ -56,8 +56,8 @@ export function setWorkspaceRoot(newRoot: string): boolean {
     if (!fs.statSync(absRoot).isDirectory) return false
     _cachedRoot = absRoot
     saveConfig({ root: absRoot })
-    // 确保 .brainplus/output 存在
-    fs.mkdirSync(path.join(absRoot, '.brainplus', 'output'), { recursive: true })
+    // 确保 .stardust/output 存在
+    fs.mkdirSync(path.join(absRoot, '.stardust', 'output'), { recursive: true })
     console.log('[Workspace] Root changed:', absRoot)
     return true
   } catch (e: any) {
@@ -78,16 +78,16 @@ export async function pickWorkspaceRoot(win: BrowserWindow): Promise<string | nu
 export function resetWorkspaceRoot(): void {
   try { if (fs.existsSync(CONFIG_FILE)) fs.unlinkSync(CONFIG_FILE) } catch {}
   _cachedRoot = DEFAULT_ROOT
-  fs.mkdirSync(path.join(DEFAULT_ROOT, '.brainplus', 'output'), { recursive: true })
+  fs.mkdirSync(path.join(DEFAULT_ROOT, '.stardust', 'output'), { recursive: true })
 }
 
-export function getWorkspaceInfo(): { root: string; output: string; brainplusDir: string; isCustom: boolean } {
+export function getWorkspaceInfo(): { root: string; output: string; stardustDir: string; isCustom: boolean } {
   const root = getRoot()
-  const brainplusDir = path.join(root, '.brainplus')
-  const output = path.join(brainplusDir, 'output')
+  const stardustDir = path.join(root, '.stardust')
+  const output = path.join(stardustDir, 'output')
   // 懒创建：确保目录存在
   fs.mkdirSync(output, { recursive: true })
-  return { root, brainplusDir, output, isCustom: root !== DEFAULT_ROOT }
+  return { root, stardustDir, output, isCustom: root !== DEFAULT_ROOT }
 }
 
 export function getWorkspacePaths() {
@@ -96,7 +96,7 @@ export function getWorkspacePaths() {
 
 export function initWorkspace() {
   const root = getRoot()
-  fs.mkdirSync(path.join(root, '.brainplus', 'output'), { recursive: true })
+  fs.mkdirSync(path.join(root, '.stardust', 'output'), { recursive: true })
   console.log('[Workspace] Ready:', root)
 }
 

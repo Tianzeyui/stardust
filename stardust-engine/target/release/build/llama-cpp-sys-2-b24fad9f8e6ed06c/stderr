@@ -1,0 +1,28 @@
+running: cd "/Users/tianzeyu/Develop/project/brainPlus/brainplus-engine/target/release/build/llama-cpp-sys-2-b24fad9f8e6ed06c/out/build" && CMAKE_PREFIX_PATH="" LC_ALL="C" "cmake" "/Users/tianzeyu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/llama-cpp-sys-2-0.1.150/llama.cpp" "-B" "/Users/tianzeyu/Develop/project/brainPlus/brainplus-engine/target/release/build/llama-cpp-sys-2-b24fad9f8e6ed06c/out/build" "-DCMAKE_OSX_ARCHITECTURES=arm64" "-DLLAMA_BUILD_TESTS=OFF" "-DLLAMA_BUILD_EXAMPLES=OFF" "-DLLAMA_BUILD_SERVER=OFF" "-DLLAMA_BUILD_TOOLS=OFF" "-DLLAMA_BUILD_APP=OFF" "-DLLAMA_BUILD_COMMON=ON" "-DLLAMA_CURL=OFF" "-DCMAKE_BUILD_PARALLEL_LEVEL=10" "-DGGML_NATIVE=OFF" "-DBUILD_SHARED_LIBS=OFF" "-DGGML_BLAS=OFF" "-DGGML_OPENMP=ON" "-DCMAKE_INSTALL_PREFIX=/Users/tianzeyu/Develop/project/brainPlus/brainplus-engine/target/release/build/llama-cpp-sys-2-b24fad9f8e6ed06c/out" "-DCMAKE_C_FLAGS= -ffunction-sections -fdata-sections -fPIC --target=arm64-apple-macosx -mmacosx-version-min=26.2 -w" "-DCMAKE_C_COMPILER=/usr/bin/cc" "-DCMAKE_CXX_FLAGS= -ffunction-sections -fdata-sections -fPIC --target=arm64-apple-macosx -mmacosx-version-min=26.2 -w" "-DCMAKE_CXX_COMPILER=/usr/bin/c++" "-DCMAKE_ASM_FLAGS= -ffunction-sections -fdata-sections -fPIC --target=arm64-apple-macosx -mmacosx-version-min=26.2 -w" "-DCMAKE_ASM_COMPILER=/usr/bin/cc" "-DCMAKE_BUILD_TYPE=Release"
+CMAKE_BUILD_TYPE=Release
+fatal: not a git repository (or any of the parent directories): .git
+fatal: not a git repository (or any of the parent directories): .git
+CMake Warning at cmake/license.cmake:18 (message):
+  License file
+  '/Users/tianzeyu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/llama-cpp-sys-2-0.1.150/llama.cpp/LICENSE'
+  not found
+Call Stack (most recent call first):
+  CMakeLists.txt:173 (license_add_file)
+
+
+CMake Warning at ggml/src/CMakeLists.txt:231 (message):
+  OpenMP not found
+
+
+CMake Warning at common/CMakeLists.txt:33 (message):
+  Git repository not found; to enable automatic generation of build info,
+  make sure Git is installed and the project is a Git repository.
+
+
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_BUILD_PARALLEL_LEVEL
+
+
+running: cd "/Users/tianzeyu/Develop/project/brainPlus/brainplus-engine/target/release/build/llama-cpp-sys-2-b24fad9f8e6ed06c/out/build" && LC_ALL="C" "cmake" "--build" "/Users/tianzeyu/Develop/project/brainPlus/brainplus-engine/target/release/build/llama-cpp-sys-2-b24fad9f8e6ed06c/out/build" "--target" "install" "--config" "Release" "--parallel" "10"

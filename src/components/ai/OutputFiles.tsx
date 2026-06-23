@@ -73,7 +73,7 @@ export function OutputFiles({ files, onRefresh }: OutputFilesProps) {
               <ChevronDown className="h-3 w-3" />
             </button>
             <FolderOpen className="h-3 w-3 text-muted-foreground" />
-            <span className="text-[10px] text-muted-foreground">~/BrainPlus/workspace/.brainplus/output/</span>
+            <span className="text-[10px] text-muted-foreground">~/Stardust/workspace/.stardust/output/</span>
             <div className="flex-1" />
             <button
               className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"

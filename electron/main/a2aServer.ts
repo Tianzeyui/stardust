@@ -1,5 +1,5 @@
 /**
- * A2A Server — BrainPlus 作为 Agent 服务提供方
+ * A2A Server — Stardust 作为 Agent 服务提供方
  * 端口默认 9090，可通过设置配置
  */
 import http, { type IncomingMessage, type ServerResponse } from 'http'
@@ -101,7 +101,7 @@ async function handleRequest(req: IncomingMessage, res: http.ServerResponse) {
       protocolVersion: '0.2.0',
       preferredTransport: a.type === 'local' ? undefined : 'HTTP+JSON',
       provider: {
-        organization: a.provider_organization || 'BrainPlus',
+        organization: a.provider_organization || 'Stardust',
         url: a.provider_url || '',
       },
       documentationUrl: a.documentation_url || '',

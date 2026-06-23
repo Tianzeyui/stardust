@@ -36,8 +36,8 @@ const hostModules: Record<string, any> = {
   '@/components/ui/switch': { Switch },
 }
 
-const ENABLED_KEY = 'brainplus_plugins_enabled'
-const INSTALLED_KEY = 'brainplus_plugins_installed'
+const ENABLED_KEY = 'stardust_plugins_enabled'
+const INSTALLED_KEY = 'stardust_plugins_installed'
 
 function getEnabledSet(): Set<string> {
   try {
@@ -198,8 +198,8 @@ class PluginSystemImpl {
         },
       },
       storage: {
-        get: (key: string) => localStorage.getItem(`brainplus_plugin_${key}`),
-        set: (key: string, value: string) => { localStorage.setItem(`brainplus_plugin_${key}`, value) },
+        get: (key: string) => localStorage.getItem(`stardust_plugin_${key}`),
+        set: (key: string, value: string) => { localStorage.setItem(`stardust_plugin_${key}`, value) },
       },
       http: {
         fetch: async (url, opts) => {
@@ -233,7 +233,7 @@ class PluginSystemImpl {
       },
       workspace: {
         getPaths: async () => {
-          if (!ea?.workspace) return { root: '~/BrainPlus/workspace', output: '~/BrainPlus/workspace/.brainplus/output' }
+          if (!ea?.workspace) return { root: '~/Stardust/workspace', output: '~/Stardust/workspace/.stardust/output' }
           return ea.workspace.getPaths()
         },
         openFile: async (filePath: string) => {

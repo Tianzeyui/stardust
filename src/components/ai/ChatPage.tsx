@@ -58,7 +58,7 @@ function briefArgs(input: any): string {
   return firstKey
 }
 
-const PROJECT_ID_KEY = 'brainplus_currentProjectId'
+const PROJECT_ID_KEY = 'stardust_currentProjectId'
 
 function loadProjectId(): string | null {
   try { return localStorage.getItem(PROJECT_ID_KEY) } catch { return null }
@@ -481,8 +481,8 @@ export function ChatPage() {
         dispatch({ type: 'UPDATE_FILEOP', fileOp: event.fileOp })
       }
     }
-    window.addEventListener('brainplus:fileop', handler as EventListener)
-    return () => window.removeEventListener('brainplus:fileop', handler as EventListener)
+    window.addEventListener('stardust:fileop', handler as EventListener)
+    return () => window.removeEventListener('stardust:fileop', handler as EventListener)
   }, [])
 
   // 新对话

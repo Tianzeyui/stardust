@@ -65,10 +65,10 @@ export class SidecarManager extends EventEmitter {
       const appPath = app.getAppPath()
       const candidates = [
         // 开发模式优先用 debug（编译快），release 仅用于打包
-        path.join(appPath, 'brainplus-engine', 'target', 'debug', 'brainplus-engine'),
-        path.join(appPath, '..', 'brainplus-engine', 'target', 'debug', 'brainplus-engine'),
-        path.join(appPath, 'brainplus-engine', 'target', 'release', 'brainplus-engine'),
-        path.join(appPath, '..', 'brainplus-engine', 'target', 'release', 'brainplus-engine'),
+        path.join(appPath, 'stardust-engine', 'target', 'debug', 'stardust-engine'),
+        path.join(appPath, '..', 'stardust-engine', 'target', 'debug', 'stardust-engine'),
+        path.join(appPath, 'stardust-engine', 'target', 'release', 'stardust-engine'),
+        path.join(appPath, '..', 'stardust-engine', 'target', 'release', 'stardust-engine'),
       ]
 
       for (const p of candidates) {
@@ -81,12 +81,12 @@ export class SidecarManager extends EventEmitter {
       throw new Error(
         `找不到 Rust Sidecar binary。检查路径:\n` +
         `  ${candidates.slice(0, 2).join('\n  ')}\n` +
-        `请先编译: cd brainplus-engine && cargo build --release`
+        `请先编译: cd stardust-engine && cargo build --release`
       )
     } else {
       // 生产模式：打包在 app.asar.unpacked 或 Resources 目录
       const platform = process.platform
-      const binaryName = platform === 'win32' ? 'brainplus-engine.exe' : 'brainplus-engine'
+      const binaryName = platform === 'win32' ? 'stardust-engine.exe' : 'stardust-engine'
 
       const candidates = [
         path.join(process.resourcesPath, 'sidecar', binaryName),
