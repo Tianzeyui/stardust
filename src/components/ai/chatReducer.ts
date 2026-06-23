@@ -35,7 +35,7 @@ export type MessageAction =
   | { type: 'AGENT_TEXT'; label: string; content: string; agentTimeline: AgentTimelineItem[]; thinking: string }
   | { type: 'AGENT_DONE'; label: string; content: string; agentTimeline: AgentTimelineItem[]; thinking: string }
   // 流结束
-  | { type: 'STREAM_END'; streamed: string }
+  | { type: 'STREAM_END'; streamed: string; thinkingDuration?: number }
   // 终端 / 文件操作
   | { type: 'ADD_TERMINAL'; terminal: TerminalStatus }
   | { type: 'UPDATE_TERMINAL'; terminal: TerminalStatus }
@@ -194,7 +194,7 @@ export function messageReducer(state: UIMessage[], action: MessageAction): UIMes
       const last = state[lastId]
       if (last?.role === 'assistant' && last.streaming) {
         if (action.streamed) {
-          return [...state.slice(0, lastId), { ...last, content: action.streamed, streaming: false }]
+          return [...state.slice(0, lastId), { ...last, content: action.streamed, streaming: false, thinkingDuration: action.thinkingDuration ?? (last as any).thinkingDuration }]
         }
         return state.slice(0, lastId)  // 空内容：移除
       }

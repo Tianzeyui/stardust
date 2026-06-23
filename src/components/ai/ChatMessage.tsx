@@ -131,7 +131,7 @@ function ChatMessageInner({ msg }: ChatMessageProps) {
               <AgentCardButton agentName={msg.modelName?.replace('Agent: ', '') || ''} />
             </div>
             <div className="px-3 py-2">
-              <ThinkingBlock thinking={msg.thinking || ''} loading={msg.thinkingLoading} content={msg.content || ''} />
+              <ThinkingBlock thinking={msg.thinking || ''} loading={msg.thinkingLoading} content={msg.content || ''} duration={msg.thinkingDuration} />
               {msg.streaming && !msg.content && !msg.agentTimeline?.length && !msg.thinking && (
                 <p className="text-sm text-muted-foreground/40 py-2 select-none">
                   <span className="animate-dots"><span>.</span><span>.</span><span>.</span></span>
@@ -184,6 +184,7 @@ function ChatMessageInner({ msg }: ChatMessageProps) {
                       key={i}
                       thinking={item.content}
                       loading={!!(msg.streaming && isLast)}
+                      duration={msg.thinkingDuration}
                     />
                   ) : (
                     <ContentBlock
@@ -197,7 +198,7 @@ function ChatMessageInner({ msg }: ChatMessageProps) {
             ) : (
               /* 兼容旧消息：无时间线时用 thinking + content 字段 */
               <>
-                <ThinkingBlock thinking={msg.thinking || ''} loading={msg.thinkingLoading} content={msg.content || ''} />
+                <ThinkingBlock thinking={msg.thinking || ''} loading={msg.thinkingLoading} content={msg.content || ''} duration={msg.thinkingDuration} />
                 {msg.streaming && !msg.content && !msg.thinking && (
                   <p className="text-sm text-muted-foreground/40 py-2 select-none">
                     <span className="animate-dots"><span>.</span><span>.</span><span>.</span></span>
@@ -383,7 +384,7 @@ function AgentToolCallItem({ tc }: { tc: AgentToolCallEntry }) {
 }
 
 /** 思考区块：默认折叠。如果 thinking 和 content 重复（DeepSeek 回显），不渲染 */
-function ThinkingBlock({ thinking, loading, content }: { thinking: string; loading?: boolean; content?: string }) {
+function ThinkingBlock({ thinking, loading, content, duration }: { thinking: string; loading?: boolean; content?: string; duration?: number }) {
   const [expanded, setExpanded] = useState(false)
   if (!thinking) return null
   // 去重：如果正文和思考内容一致，隐藏思考块
@@ -397,12 +398,14 @@ function ThinkingBlock({ thinking, loading, content }: { thinking: string; loadi
       >
         <Brain className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
         <span className="text-[11px] font-medium text-muted-foreground/60">思考</span>
-        {loading && (
+        {loading ? (
           <>
             <Loader2 className="h-3 w-3 text-muted-foreground/40 animate-spin shrink-0" />
             <span className="text-[10px] text-muted-foreground/40">思考中...</span>
           </>
-        )}
+        ) : duration != null && duration > 0 ? (
+          <span className="text-[10px] text-muted-foreground/40">{duration}s</span>
+        ) : null}
         <div className="flex-1" />
         <ChevronDown className={`h-3 w-3 text-muted-foreground/30 transition-transform ${expanded ? 'rotate-180' : ''}`} />
       </button>

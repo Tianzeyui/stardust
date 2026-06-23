@@ -223,6 +223,7 @@ export function ChatPage() {
   const toolNameProxyRef = useRef<Map<string, string>>(new Map())
   // 思考过程累积
   const thinkingRef = useRef('')
+  const thinkingStartRef = useRef(0)  // 思考开始时间戳
   const mainTimelineRef = useRef<Array<{ type: 'thinking'; content: string } | { type: 'text'; content: string }>>([])
   const agentThinkingRef = useRef('')
   // Agent 流式输出跟踪 + 累计消耗
@@ -742,6 +743,7 @@ export function ChatPage() {
       let streamed = ''
       setConsoleLog([]); setTaskList([]); setActivatedToolNames(new Set())
       thinkingRef.current = ''
+      thinkingStartRef.current = 0
       mainTimelineRef.current = []
       toolBatchRef.current = []
       agentThinkingRef.current = ''
@@ -813,6 +815,7 @@ dispatch({ type: 'AGENT_DONE', label: agentLabel, content: agentStreamedRef.curr
           agentStreamedRef.current = ''
           agentThinkingRef.current = ''
         } else if (event.type === 'reasoning-delta') {
+          if (!thinkingRef.current) thinkingStartRef.current = performance.now()
           thinkingRef.current += event.text || ''
           // 推入时间线：合并连续 thinking
           const tLast = mainTimelineRef.current[mainTimelineRef.current.length - 1]
@@ -954,7 +957,10 @@ dispatch({ type: 'TOOL_BATCH_CREATE', textBeforeTool: '', tools: toolBatchRef.cu
             const info = parts.join(' · ')
             // trace 信息通过 addTrace 保存，不存入消息状态
           }
-          dispatch({ type: 'STREAM_END', streamed })
+          const thinkingDuration = thinkingStartRef.current
+            ? Math.round((performance.now() - thinkingStartRef.current) / 1000)
+            : undefined
+          dispatch({ type: 'STREAM_END', streamed, thinkingDuration })
           // 保存本次用量追踪 + 更新真实 token 显示
           if (event.trace) {
             const t = event.trace

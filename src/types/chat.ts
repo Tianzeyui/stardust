@@ -39,6 +39,7 @@ export interface UIMessage {
   streaming?: boolean
   thinking?: string  // AI 思考过程（reasoning/thinking），流式累积
   thinkingLoading?: boolean  // 思考进行中（reasoning-start 后，reasoning-end 前）
+  thinkingDuration?: number  // 思考持续秒数（思考结束后显示）
   toolCall?: ToolCallStatus
   attachments?: MessageAttachment[]
   modelName?: string
