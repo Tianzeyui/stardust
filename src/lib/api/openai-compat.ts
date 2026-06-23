@@ -350,6 +350,15 @@ export async function* streamOpenAICompat(
     return
   }
 
+  // 流结束但还有未 yield 的 content（短回复 < 20 字符未触发 Mode E）
+  // absorbedLen 记录了已被判定为 echo 前缀的长度，只 yield 剩余部分
+  if (!echoStripped && contentAccum) {
+    const remaining = contentAccum.slice(absorbedLen)
+    if (remaining) {
+      yield { type: 'text-delta', text: remaining }
+    }
+  }
+
   // Flush any pending tool calls
   for (const [, block] of toolCalls) {
     if (block.id && block.name) {
