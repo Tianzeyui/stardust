@@ -865,10 +865,15 @@ tickMessages(() => dispatch({ type: 'TEXT_DELTA', content: streamed, modelName, 
           const textBeforeTool = streamed; streamed = ''
 
           if (isFirstInBatch) {
+            // flush 等待中的 TEXT_DELTA，防止它跑到 TOOL_BATCH_CREATE 之后创建第二个 assistant
+            if (pendingUpdateRef.current) {
+              pendingUpdateRef.current()
+              pendingUpdateRef.current = null
+              if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0 }
+            }
             mainTimelineRef.current = []
-dispatch({ type: 'TOOL_BATCH_CREATE', textBeforeTool, tools: toolBatchRef.current as any })
+dispatch({ type: 'TOOL_BATCH_CREATE', textBeforeTool: '', tools: toolBatchRef.current as any })
           } else {
-            // 追加到已有的工具组——从后往前找，避免全量遍历
             dispatch({ type: 'TOOL_BATCH_APPEND', tools: toolBatchRef.current as any })
           }
         } else if (event.type === 'tool-result') {
@@ -925,6 +930,13 @@ dispatch({ type: 'TOOL_BATCH_CREATE', textBeforeTool, tools: toolBatchRef.curren
             summary: event.summary,
           })
         } else if (event.type === 'done') {
+          // flush 等待中的 TEXT_DELTA，防止它在 STREAM_END 之后执行
+          // 创建第二个 assistant（参考 DOM 中两个"思考"块的根因）
+          if (pendingUpdateRef.current) {
+            pendingUpdateRef.current()
+            pendingUpdateRef.current = null
+            if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0 }
+          }
           pushLog('DONE', `回复 (${streamed.length}字)`, streamed ? 'ok' : 'info')
           mainTimelineRef.current = []
           toolBatchRef.current = []
