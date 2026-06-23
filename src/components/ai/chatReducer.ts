@@ -109,15 +109,15 @@ export function messageReducer(state: UIMessage[], action: MessageAction): UIMes
     }
 
     case 'TOOL_BATCH_CREATE': {
-      // 工具调用来了 → 清空 content/timeline（echo 文本/碎片），
-      // 保留 thinking（有用上下文，解释为什么调工具，不闪）。
-      // 消息保留以维持 API 历史链（DeepSeek 要求 assistant→tool 顺序）。
+      // 工具调用来了 → 清空 content/timeline（echo），保留 thinking（上下文），
+      // 消息保留以维持 API 历史链。thinkingLoading=false 防止残留转圈。
       const lastId = state.length - 1
       const last = state[lastId]
       const base = (last?.role === 'assistant' && last.streaming)
         ? [...state.slice(0, lastId), {
             ...last,
             content: '',
+            thinkingLoading: false,
             mainTimeline: undefined,
             agentTimeline: undefined,
             streaming: false,
