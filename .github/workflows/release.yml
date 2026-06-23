@@ -45,7 +45,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: BrainPlus-${{ matrix.platform }}
+          name: Stardust-${{ matrix.platform }}
           path: release/*
 
   release:
@@ -62,11 +62,11 @@ jobs:
       - name: Create Release
         run: |
           gh release create "${{ github.ref_name }}" \
-            ./release-assets/BrainPlus-mac/*.dmg \
-            ./release-assets/BrainPlus-mac/*.zip \
-            ./release-assets/BrainPlus-win/*.exe \
-            ./release-assets/BrainPlus-win/*.zip \
-            ./release-assets/BrainPlus-linux/*.AppImage \
+            ./release-assets/Stardust-mac/*.dmg \
+            ./release-assets/Stardust-mac/*.zip \
+            ./release-assets/Stardust-win/*.exe \
+            ./release-assets/Stardust-win/*.zip \
+            ./release-assets/Stardust-linux/*.AppImage \
             --draft \
             --generate-notes \
             --title "${{ github.ref_name }}"
