@@ -33,9 +33,15 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Rust sidecar (release)
+        run: cargo build --release --manifest-path stardust-engine/Cargo.toml
+
       - run: npm ci
 
-      - name: Build (${{ matrix.platform }})
+      - name: Build frontend (${{ matrix.platform }})
         run: npx vite build
 
       - name: Package (${{ matrix.platform }})

@@ -68,6 +68,16 @@
     "asarUnpack": [
       "node_modules/node-pty/**"
     ],
+    "extraResources": [
+      {
+        "from": "stardust-engine/target/release/stardust-engine",
+        "to": "sidecar/stardust-engine"
+      },
+      {
+        "from": "stardust-engine/target/release/stardust-engine.exe",
+        "to": "sidecar/stardust-engine.exe"
+      }
+    ],
     "mac": {
       "category": "public.app-category.productivity",
       "icon": "public/assets/icons/icon.png",
