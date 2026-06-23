@@ -180,7 +180,7 @@ async fn fs_unlink(req: crate::protocol::Request, _tx: mpsc::Sender<OutputLine>)
 // ====== 文件搜索（流式 + .gitignore 感知） ======
 
 const SKIP_DIRS: &[&str] = &[
-    "node_modules", ".git", ".brainplus", "dist", "build",
+    "node_modules", ".git", ".stardust", "dist", "build",
     ".next", "__pycache__", ".DS_Store", "target", ".vscode",
     ".idea", "coverage", ".nyc_output",
 ];

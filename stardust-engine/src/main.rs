@@ -1,4 +1,4 @@
-//! BrainPlus Sidecar Engine
+//! Stardust Sidecar Engine
 //!
 //! 独立 Rust 进程，通过 stdin/stdout JSON-RPC 与 Electron 主进程通信。
 //! 承担所有重计算：文件 I/O、搜索、Git、终端、沙箱、AI 引擎等。
@@ -31,7 +31,7 @@ async fn main() {
         .json()
         .init();
 
-    tracing::info!("BrainPlus Sidecar Engine 启动中...");
+    tracing::info!("Stardust Sidecar Engine 启动中...");
 
     let registry = handlers::register_all();
     tracing::info!("已注册 handler");
@@ -153,5 +153,5 @@ async fn main() {
     // 清理
     drop(out_tx);
     let _ = writer_task.await;
-    tracing::info!("BrainPlus Sidecar Engine 已退出");
+    tracing::info!("Stardust Sidecar Engine 已退出");
 }

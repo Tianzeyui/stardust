@@ -1,11 +1,11 @@
 [package]
-name = "brainplus_engine"
+name = "stardust_engine"
 version = "0.1.0"
 edition = "2021"
-description = "BrainPlus Sidecar Engine — Rust backend for AI-powered desktop coding assistant"
+description = "Stardust Sidecar Engine — Rust backend for AI-powered desktop coding assistant"
 
 [[bin]]
-name = "brainplus-engine"
+name = "stardust-engine"
 path = "src/main.rs"
 
 [dependencies]

@@ -8,7 +8,7 @@ use tokio::sync::mpsc;
 
 // ====== 可用模型目录 ======
 
-fn models_dir() -> PathBuf { dirs::home_dir().unwrap_or_default().join(".brainplus/models") }
+fn models_dir() -> PathBuf { dirs::home_dir().unwrap_or_default().join(".stardust/models") }
 fn model_path(id: &str) -> PathBuf { models_dir().join(id) }
 
 fn available_models() -> Vec<serde_json::Value> {

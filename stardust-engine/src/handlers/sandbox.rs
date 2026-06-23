@@ -249,10 +249,10 @@ fn collect_output_files(output_dir: &str) -> Result<Vec<String>, std::io::Error>
 // ====== 预初始化 ======
 
 async fn sandbox_pre_init(_req: crate::protocol::Request, _tx: mpsc::Sender<OutputLine>) -> HandlerResult {
-    let dir = home_dir().join(".brainplus").join("sandbox-npm");
+    let dir = home_dir().join(".stardust").join("sandbox-npm");
     if !dir.exists() {
         let _ = std::fs::create_dir_all(&dir);
-        let pkg = serde_json::json!({"name":"brainplus-sandbox","private":true,"dependencies":{}});
+        let pkg = serde_json::json!({"name":"stardust-sandbox","private":true,"dependencies":{}});
         let _ = std::fs::write(dir.join("package.json"), serde_json::to_string_pretty(&pkg).unwrap_or_default());
     }
     Ok(serde_json::json!({"ok": true}))

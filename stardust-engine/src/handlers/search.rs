@@ -17,7 +17,7 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
-const BRAINPLUS_UA: &str = "Mozilla/5.0 (compatible; BrainPlus/1.0)";
+const STARDUST_UA: &str = "Mozilla/5.0 (compatible; Stardust/1.0)";
 
 fn build_client(timeout_ms: u64) -> reqwest::Client {
     reqwest::Client::builder()
@@ -167,7 +167,7 @@ async fn search_bing(req: crate::protocol::Request, _tx: mpsc::Sender<OutputLine
 
     let client = build_client(15000);
     match client.get(&url)
-        .header("User-Agent", BRAINPLUS_UA)
+        .header("User-Agent", STARDUST_UA)
         .send()
         .await
     {

@@ -249,7 +249,7 @@ async fn connect_server(server_id: &str, config: &Value) -> Result<usize, String
         "params": {
             "protocolVersion": "2024-11-05",
             "capabilities": {},
-            "clientInfo": {"name": "brainplus-engine", "version": "0.1.0"}
+            "clientInfo": {"name": "stardust-engine", "version": "0.1.0"}
         }
     });
     writeln!(stdin, "{}", serde_json::to_string(&init_req).unwrap_or_default()).map_err(|e| format!("写入失败: {e}"))?;
