@@ -109,16 +109,15 @@ export function messageReducer(state: UIMessage[], action: MessageAction): UIMes
     }
 
     case 'TOOL_BATCH_CREATE': {
-      // 工具调用来了 → 清空当前 streaming assistant 的全部展示字段，
-      // 保留消息以维持 API 历史链（DeepSeek 要求 assistant→tool 顺序）。
-      // post-tool 的 TEXT_DELTA 会创建新的 assistant 承载完整回复。
+      // 工具调用来了 → 清空 content/timeline（echo 文本/碎片），
+      // 保留 thinking（有用上下文，解释为什么调工具，不闪）。
+      // 消息保留以维持 API 历史链（DeepSeek 要求 assistant→tool 顺序）。
       const lastId = state.length - 1
       const last = state[lastId]
       const base = (last?.role === 'assistant' && last.streaming)
         ? [...state.slice(0, lastId), {
             ...last,
             content: '',
-            thinking: '',
             mainTimeline: undefined,
             agentTimeline: undefined,
             streaming: false,

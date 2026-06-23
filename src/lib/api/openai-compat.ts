@@ -213,6 +213,7 @@ export async function* streamOpenAICompat(
   let echoStripped = false
   let contentAccum = ''    // 累积 content（在剥离回显前不单独 yield）
   let absorbedLen = 0      // contentAccum 中已被判定为 echo 前缀的字符数
+  let contentYielded = false // 是否已有 content 通过 text-delta 正常 yield
   try {
     while (true) {
       const { done, value } = await reader.read()
@@ -271,7 +272,7 @@ export async function* streamOpenAICompat(
               const newContent = contentAccum.slice(reasoningAccum.length)
               console.log('[echo] B content-outran rLen:', reasoningAccum.length, 'cLen:', contentAccum.length, 'yield:', newContent.length)
               if (newContent) {
-                yield { type: 'text-delta', text: newContent }
+                contentYielded = true; yield { type: 'text-delta', text: newContent }
               }
               continue
             }
@@ -281,7 +282,7 @@ export async function* streamOpenAICompat(
               const newContent = contentAccum.slice(absorbedLen)
               console.log('[echo] C partial absorbed:', absorbedLen, 'cLen:', contentAccum.length, 'yield:', newContent.length)
               if (newContent) {
-                yield { type: 'text-delta', text: newContent }
+                contentYielded = true; yield { type: 'text-delta', text: newContent }
               }
               continue
             }
@@ -311,10 +312,10 @@ export async function* streamOpenAICompat(
             console.log('[echo] E yield-all rLen:', reasoningAccum.length, 'cLen:', contentAccum.length,
               'r[:30]:', JSON.stringify(reasoningAccum.slice(0, 30)),
               'c[:30]:', JSON.stringify(contentAccum.slice(0, 30)))
-            yield { type: 'text-delta', text: contentAccum }
+            contentYielded = true; yield { type: 'text-delta', text: contentAccum }
           } else {
             // 已剥离或无 reasoning：正常 yield delta
-            yield { type: 'text-delta', text: delta.content }
+            contentYielded = true; yield { type: 'text-delta', text: delta.content }
           }
         }
 
@@ -350,9 +351,9 @@ export async function* streamOpenAICompat(
     return
   }
 
-  // 流结束但还有未 yield 的 content（短回复 < 20 字符未触发 Mode E）
-  // absorbedLen 记录了已被判定为 echo 前缀的长度，只 yield 剩余部分
-  if (!echoStripped && contentAccum) {
+  // 流结束但还有未 yield 的 content（短回复/ModeD1误判）
+  // 用 contentYielded 而非 echoStripped 判断——ModeD1 会设 echoStripped 但不 yield
+  if (!contentYielded && contentAccum.length > absorbedLen) {
     const remaining = contentAccum.slice(absorbedLen)
     if (remaining) {
       yield { type: 'text-delta', text: remaining }
