@@ -27,7 +27,7 @@ export type MessageAction =
   // reasoning delta（仅更新 thinking，不更新 content）
   | { type: 'REASONING_DELTA'; thinking: string; modelName?: string; mainTimeline?: MainTimelineItem[] }
   // 工具批
-  | { type: 'TOOL_BATCH_CREATE'; textBeforeTool: string; tools: ToolCallStatus[] }
+  | { type: 'TOOL_BATCH_CREATE'; textBeforeTool: string; tools: ToolCallStatus[]; thinkingDuration?: number }
   | { type: 'TOOL_BATCH_APPEND'; tools: ToolCallStatus[] }
   | { type: 'TOOL_BATCH_RESULT'; toolName: string; output: string; ok: boolean }
   // Agent 容器
@@ -118,6 +118,7 @@ export function messageReducer(state: UIMessage[], action: MessageAction): UIMes
             ...last,
             content: '',
             thinkingLoading: false,
+            thinkingDuration: action.thinkingDuration ?? (last as any).thinkingDuration,
             mainTimeline: undefined,
             agentTimeline: undefined,
             streaming: false,

@@ -875,7 +875,10 @@ tickMessages(() => dispatch({ type: 'TEXT_DELTA', content: streamed, modelName, 
               if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0 }
             }
             mainTimelineRef.current = []
-dispatch({ type: 'TOOL_BATCH_CREATE', textBeforeTool: '', tools: toolBatchRef.current as any })
+            const thinkingDuration = thinkingStartRef.current
+              ? Math.round((performance.now() - thinkingStartRef.current) / 1000)
+              : undefined
+dispatch({ type: 'TOOL_BATCH_CREATE', textBeforeTool: '', tools: toolBatchRef.current as any, thinkingDuration })
           } else {
             dispatch({ type: 'TOOL_BATCH_APPEND', tools: toolBatchRef.current as any })
           }
