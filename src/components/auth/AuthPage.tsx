@@ -23,6 +23,8 @@ export function AuthPage() {
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center gap-6 bg-gradient-to-br from-slate-50 to-slate-100 px-4 dark:from-slate-950 dark:to-slate-900">
+      {/* 拖拽条（macOS hidden titleBar 需要） */}
+      <div className="absolute top-0 left-0 right-0 h-9" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties} />
       {/* 头部 */}
       <div className="flex items-center gap-3">
         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary">
@@ -32,7 +34,7 @@ export function AuthPage() {
       </div>
 
       {/* 右上角按钮 */}
-      <div className="absolute right-4 top-4 flex items-center gap-1">
+      <div className="absolute right-4 top-4 flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
         <a
           href="https://github.com/Tianzeyui/stardust"
           target="_blank"
