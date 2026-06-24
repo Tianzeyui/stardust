@@ -910,6 +910,7 @@ dispatch({ type: 'TOOL_BATCH_CREATE', textBeforeTool: '', tools: toolBatchRef.cu
           ? await memoryManager?.getInjectionText(input.trim()) ?? undefined
           : undefined,
         userId: user?.id,
+        projectSkillIds: projectSettings?.skills,
       })
       forceCompressRef.current = false
     } catch (e: any) {

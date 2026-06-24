@@ -233,7 +233,7 @@ export { trackFileOp } from './fileTracker'
 export async function chat(
   messages: ChatMessage[],
   onEvent?: (event: ChatStreamEvent) => void,
-  opts?: { abortSignal?: AbortSignal; autoMode?: boolean; localModelId?: string; forceCompression?: boolean; memoryInjection?: string; userId?: string; modelOverride?: { provider: string; modelId: string } },
+  opts?: { abortSignal?: AbortSignal; autoMode?: boolean; localModelId?: string; forceCompression?: boolean; memoryInjection?: string; userId?: string; modelOverride?: { provider: string; modelId: string }; projectSkillIds?: string[] },
 ) {
   // 本地模型路径
   if (opts?.localModelId) {
@@ -313,19 +313,19 @@ export async function chat(
   // Level 1: 元数据（name + description），~100 tokens/skill，注入系统提示
   // Level 2: 完整 SKILL.md，通过 read_skill 按需加载
   // Level 3: 附属文件（references/scripts），通过 read_skill(name, file) 按需读取
-  const enabledSkills = getInstalledSkills().filter(s => s.enabled)
+  const projectSkillIds = opts?.projectSkillIds || []
+  const enabledSkills = projectSkillIds.length > 0
+    ? getInstalledSkills().filter(s => projectSkillIds.includes(s.id))
+    : getInstalledSkills().filter(s => s.enabled)
   let skillInjection: string | undefined
   if (enabledSkills.length > 0) {
     if (enabledSkills.length <= 10) {
-      // Tier 1: 完整格式 name + description
       skillInjection = '已启用技能（使用 read_skill 工具按需读取详细内容）:\n' +
         enabledSkills.map(s => `- ${s.name}: ${s.description}`).join('\n')
     } else if (enabledSkills.length <= 30) {
-      // Tier 2: 紧凑格式 name only
       skillInjection = `已启用 ${enabledSkills.length} 个技能（紧凑模式，使用 read_skill 查看详情）:\n` +
         enabledSkills.map(s => `- ${s.name}`).join('\n')
     } else {
-      // Tier 3: 极简格式，仅提示数量
       skillInjection = `已启用 ${enabledSkills.length} 个技能。使用 read_skill("技能名") 查看具体技能详情。`
     }
   }
