@@ -263,7 +263,7 @@ export async function* streamChatWithTools(
       }
 
       try {
-        const result = await tool.execute(tc.input as Record<string, unknown>)
+        const result = await tool.execute({ ...tc.input as any, _toolName: tc.name })
         tc.output = result
         tc.ok = !String(result).startsWith('Error')
         yield { type: 'tool-result', toolName: tc.name, toolOutput: result }

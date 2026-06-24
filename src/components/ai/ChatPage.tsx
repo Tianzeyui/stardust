@@ -725,6 +725,16 @@ export function ChatPage() {
       toolBatchRef.current = []
       pushLog('--', '开始处理', 'info')
 
+      // 注册子 Agent 流式回调（delegate_task 实时输出）
+      const { setToolStreamHandler } = await import('@/lib/tools/agent')
+      setToolStreamHandler((e) => {
+        if (e.type === 'delta') {
+          dispatch({ type: 'TOOL_STREAM', toolName: e.toolName, delta: e.text })
+        } else if (e.type === 'done') {
+          dispatch({ type: 'TOOL_STREAM', toolName: e.toolName, delta: '', done: true })
+        }
+      })
+
       // 记录发起时的 convId，防止旧 chat() 残留事件污染新会话 UI
       const originConvId = convIdRef.current || '@new'
       await chat(history, (event: ChatStreamEvent) => {

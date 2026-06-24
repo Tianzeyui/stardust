@@ -30,6 +30,7 @@ export type MessageAction =
   | { type: 'TOOL_BATCH_CREATE'; textBeforeTool: string; tools: ToolCallStatus[]; thinkingDuration?: number }
   | { type: 'TOOL_BATCH_APPEND'; tools: ToolCallStatus[] }
   | { type: 'TOOL_BATCH_RESULT'; toolName: string; output: string; ok: boolean }
+  | { type: 'TOOL_STREAM'; toolName: string; delta: string; done?: boolean }
   // Agent 容器
   | { type: 'AGENT_THINKING'; label: string; thinking: string; thinkingLoading: boolean; agentTimeline: AgentTimelineItem[] }
   | { type: 'AGENT_TEXT'; label: string; content: string; agentTimeline: AgentTimelineItem[]; thinking: string }
@@ -152,6 +153,25 @@ export function messageReducer(state: UIMessage[], action: MessageAction): UIMes
             }),
           }
         },
+        state,
+      )
+
+    case 'TOOL_STREAM':
+      return replaceLast(
+        m => m.role === 'tool' && !!(m as any).toolBatch,
+        m => ({
+          ...m,
+          toolBatch: ((m as any).toolBatch || []).map((t: any) => {
+            if (t.name === action.toolName) {
+              return {
+                ...t,
+                result: (t.result || '') + action.delta,
+                status: action.done ? 'done' as const : 'running' as const,
+              }
+            }
+            return t
+          }),
+        }),
         state,
       )
 

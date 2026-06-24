@@ -22,6 +22,15 @@ export function getAgentStreamHandler() {
   return onAgentStreamEvent
 }
 
+// 工具级流式回调（用于 delegate_task/batch 实时输出）
+type ToolStreamEvent = { type: 'delta'; toolName: string; text: string }
+                     | { type: 'tool'; toolName: string; subTool: string }
+                     | { type: 'done'; toolName: string }
+
+let toolStreamHandler: ((e: ToolStreamEvent) => void) | null = null
+export function setToolStreamHandler(h: typeof toolStreamHandler) { toolStreamHandler = h }
+function emitToolStream(e: ToolStreamEvent) { toolStreamHandler?.(e) }
+
 export function registerAgentTools(tools: ToolMap, autoMode?: boolean) {
   tools['ask_user'] = {
     description:
@@ -159,7 +168,8 @@ export function registerAgentTools(tools: ToolMap, autoMode?: boolean) {
         },
         required: ['task'],
       }),
-      execute: async (args: { tier?: string; task: string }) => {
+      execute: async (args: { tier?: string; task: string; _toolName?: string }) => {
+        const toolName = args._toolName || 'delegate_task'
         try {
           const isVerification = /(验证|verify|verification|test.*pass|check.*correct|review.*code)/i.test(args.task)
           const systemContext = isVerification
@@ -171,6 +181,11 @@ export function registerAgentTools(tools: ToolMap, autoMode?: boolean) {
             (args.tier as 'fast' | 'balanced' | 'powerful') || 'balanced',
             args.task,
             systemContext || undefined,
+            {
+              text: (d: string) => emitToolStream({ type: 'delta', toolName, text: d }),
+              toolCall: (n: string) => emitToolStream({ type: 'tool', toolName, subTool: n }),
+              done: () => emitToolStream({ type: 'done', toolName }),
+            },
           )
         } catch (e: any) {
           return `委托失败: ${e.message}`
@@ -199,17 +214,26 @@ export function registerAgentTools(tools: ToolMap, autoMode?: boolean) {
         },
         required: ['tasks'],
       }),
-      execute: async (args: { tasks: Array<{ tier?: string; task: string }> }) => {
+      execute: async (args: { tasks: Array<{ tier?: string; task: string }>; _toolName?: string }) => {
+        const toolName = args._toolName || 'delegate_batch'
         try {
           const { delegateByTier } = await import('../orchestrator')
+          emitToolStream({ type: 'delta', toolName, text: `并行执行 ${args.tasks.length} 个子任务...\n\n` })
           const results = await Promise.all(
             args.tasks.map((t, i) =>
               delegateByTier(
                 (t.tier as 'fast' | 'balanced' | 'powerful') || 'balanced',
                 t.task,
+                undefined,
+                {
+                  text: (d: string) => emitToolStream({ type: 'delta', toolName, text: d }),
+                  toolCall: (n: string) => emitToolStream({ type: 'tool', toolName, subTool: n }),
+                  done: () => {},
+                },
               ).catch(e => `[${i + 1}] 失败: ${e.message}`)
             )
           )
+          emitToolStream({ type: 'done', toolName })
           return results.map((r, i) => `### 子任务 ${i + 1}\n${r}`).join('\n\n')
         } catch (e: any) {
           return `并行委托失败: ${e.message}`

@@ -665,52 +665,93 @@ function FetchBubble({ tc }: { tc: ToolCallStatus }) {
   )
 }
 
-/** 子任务委托气泡 */
+/** 子任务委托气泡 — 支持流式实时输出 */
 function DelegateBubble({ tc }: { tc: ToolCallStatus }) {
   const tier = typeof tc.input === 'object' && tc.input ? (tc.input as any).tier || 'balanced' : 'balanced'
   const task = typeof tc.input === 'object' && tc.input ? (tc.input as any).task || '' : ''
   const [expanded, setExpanded] = useState(tc.status === 'running')
-  // 解析 tier 显示名
+  const outputRef = useRef<HTMLDivElement>(null)
   const tierLabel: Record<string, string> = { fast: 'Fast', balanced: 'Std', powerful: 'Pro' }
-  // 提取模型名（result 格式: [modelName]\ntext）
-  const modelMatch = tc.result?.match(/^\[(.+?)\]\n/)
-  const modelName = modelMatch ? modelMatch[1] : null
-  const resultText = modelMatch ? tc.result!.slice(modelMatch[0].length) : (tc.result || '')
+
+  // 去掉模型名头部 [model (tier)]\n
+  const displayText = (tc.result || '').replace(/^\[.+?\]\n?/, '')
+
+  // 提取工具调用行 `_调用工具: xxx_` → 染成特殊样式
+  const parts = displayText.split(/(_.*调用工具:.*_)/g)
+
+  // 流式时自动滚动
+  useEffect(() => {
+    if (tc.status === 'running' && outputRef.current) {
+      outputRef.current.scrollTop = outputRef.current.scrollHeight
+    }
+  }, [tc.result, tc.status])
+
+  // 完成后收起
+  useEffect(() => {
+    if (tc.status === 'done') setExpanded(false)
+  }, [tc.status])
 
   return (
     <div className="flex gap-3 max-w-full">
-      <div className="min-w-0 flex-1">
-        <div className={`rounded-lg border px-3 py-2 text-xs overflow-hidden ${tc.status === 'error' ? 'border-destructive/30 bg-destructive/5' : 'border-border bg-card'}`}>
+      <div className={tc.status === 'running' ? 'min-w-0 flex-1' : 'min-w-0'}>
+        <div className={`rounded-lg border px-3 py-2 text-xs overflow-hidden ${
+          tc.status === 'running' ? 'border-amber-500/30 bg-amber-500/[0.02] w-full' :
+          tc.status === 'error' ? 'border-destructive/30 bg-destructive/5' :
+          'border-border bg-card inline-block'
+        }`}>
+          {/* 头部 */}
           <div className="flex items-center gap-2">
-            <Zap className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+            {tc.status === 'running' ? (
+              <Loader2 className="h-3.5 w-3.5 text-amber-500 animate-spin shrink-0" />
+            ) : (
+              <Zap className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+            )}
             <span className="font-medium truncate">
-              子任务
-              {task ? `: ${task.slice(0, 40)}${task.length > 40 ? '...' : ''}` : ''}
+              {task ? task.slice(0, 50) + (task.length > 50 ? '...' : '') : '子任务'}
             </span>
-            <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+            <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground shrink-0">
               {tierLabel[tier] || tier}
             </span>
-            {modelName && (
-              <span className="text-[10px] text-muted-foreground/50 truncate">{modelName}</span>
-            )}
-            <span className="text-[10px] text-muted-foreground/50 shrink-0">
-              {tc.status === 'running' ? '执行中' : tc.status === 'error' ? '失败' : '完成'}
+            <span className={`text-[10px] shrink-0 ${
+              tc.status === 'running' ? 'text-amber-500' :
+              tc.status === 'error' ? 'text-destructive' : 'text-muted-foreground'
+            }`}>
+              {tc.status === 'running' ? '执行中...' : tc.status === 'error' ? '失败' : '完成'}
             </span>
           </div>
-          {resultText && (
-            <>
-              <button className="flex items-center gap-1 mt-1.5 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
-                onClick={() => setExpanded(!expanded)}>
-                <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-                {expanded ? '收起' : `展开结果 (${(resultText.length / 1000).toFixed(1)}k)`}
-              </button>
-              {expanded && (
-                <div className="mt-1 max-h-48 overflow-auto rounded border border-border/50 p-2 text-[11px] whitespace-pre-wrap leading-relaxed text-muted-foreground">
-                  {resultText}
-                </div>
-              )}
-            </>
-          )}
+
+          {/* 流式输出 / 折叠结果 */}
+          {displayText ? (
+            tc.status === 'running' ? (
+              <div ref={outputRef}
+                className="mt-1.5 max-h-64 overflow-auto custom-scrollbar rounded border border-border/50 p-2 text-[11px] leading-relaxed whitespace-pre-wrap break-all text-muted-foreground">
+                {parts.map((p, i) =>
+                  p.startsWith('_') && p.endsWith('_')
+                    ? <span key={i} className="inline-flex items-center gap-1 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 px-1 py-0.5 text-[10px] font-medium">{p.replace(/_/g, '')}</span>
+                    : <span key={i}>{p}</span>
+                )}
+              </div>
+            ) : (
+              <>
+                <button className="flex items-center gap-1 mt-1.5 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                  onClick={() => setExpanded(!expanded)}>
+                  <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                  {expanded ? '收起' : `展开结果 (${(displayText.length / 1000).toFixed(1)}k)`}
+                </button>
+                {expanded && (
+                  <div className="mt-1 max-h-48 overflow-auto custom-scrollbar rounded border border-border/50 p-2 text-[11px] leading-relaxed whitespace-pre-wrap break-all text-muted-foreground">
+                    {parts.map((p, i) =>
+                      p.startsWith('_') && p.endsWith('_')
+                        ? <span key={i} className="inline-flex items-center gap-1 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 px-1 py-0.5 text-[10px] font-medium">{p.replace(/_/g, '')}</span>
+                        : <span key={i}>{p}</span>
+                    )}
+                  </div>
+                )}
+              </>
+            )
+          ) : tc.status === 'running' ? (
+            <p className="mt-1.5 text-[10px] text-muted-foreground/40">等待输出...</p>
+          ) : null}
         </div>
       </div>
     </div>
