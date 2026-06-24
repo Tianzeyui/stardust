@@ -222,12 +222,7 @@ export function ChatPage() {
   const thinkingRef = useRef('')
   const thinkingStartRef = useRef(0)  // 思考开始时间戳
   const mainTimelineRef = useRef<Array<{ type: 'thinking'; content: string } | { type: 'text'; content: string }>>([])
-  const agentThinkingRef = useRef('')
   // Agent 流式输出跟踪 + 累计消耗
-  const agentActiveRef = useRef<string | null>(null)
-  const agentStreamedRef = useRef('')
-  const agentTimelineRef = useRef<Array<{ type: 'text'; content: string } | { type: 'tool'; name: string; brief: string; status: 'running' | 'ok' | 'error'; output?: string }>>([])
-  const agentTotalTokensRef = useRef(0)  // 本轮所有子 Agent 累计 token
   const toolBatchRef = useRef<ToolCallStatus[]>([])  // 并行工具 batch
   // 记忆管理器（根据项目+对话隔离）
   const [memoryManager, setMemoryManager] = useState<MemoryManager | null>(null)
@@ -728,10 +723,6 @@ export function ChatPage() {
       thinkingStartRef.current = 0
       mainTimelineRef.current = []
       toolBatchRef.current = []
-      agentThinkingRef.current = ''
-      agentStreamedRef.current = ''
-      agentTimelineRef.current = []
-      agentTotalTokensRef.current = 0
       pushLog('--', '开始处理', 'info')
 
       // 记录发起时的 convId，防止旧 chat() 残留事件污染新会话 UI
@@ -739,64 +730,11 @@ export function ChatPage() {
       await chat(history, (event: ChatStreamEvent) => {
         // 用 ref 读当前 convId，避免闭包捕获旧值
         if ((convIdRef.current || '@new') !== originConvId) return
-        // ===== Agent 事件处理 =====
-        // 主 AI 调用 delegate_task 时记录
         if (event.type === 'tool-call' && event.toolName === 'delegate_task') {
-          const agent = (event.toolInput as any)?.agentName || 'unknown'
-          console.log(`[chat] 🤖 主AI → delegate_task("${agent}")`)
-          pushLog('🤖', `委托 Agent: ${agent}`, 'info')
+          console.log(`[chat] 🤖 主AI → delegate_task`)
+          pushLog('🤖', `委托 tier: ${(event.toolInput as any)?.tier || 'balanced'}`, 'info')
         }
-        // AgentRunner 流式事件：写入 Agent 容器文本流，首条事件时立即创建容器
-        const ensureAgentContainer = (label: string) => {
-          if (agentTimelineRef.current.length === 0) return
-          const timeline = [...agentTimelineRef.current]
-          const content = agentStreamedRef.current
-          const thinking = agentThinkingRef.current
-          dispatch({ type: 'AGENT_TEXT', label, content, agentTimeline: timeline, thinking })
-        }
-        if (event.type === 'agent-tool-call') {
-          const brief = briefArgs(event.toolInput)
-          agentTimelineRef.current.push({ type: 'tool', name: event.toolName || '', brief, status: 'running' })
-          ensureAgentContainer(event.agentName ? `Agent: ${event.agentName}` : 'Agent')
-        } else if (event.type === 'agent-tool-result') {
-          const output = String(event.toolOutput ?? '').slice(0, 2000)
-          const ok = !output.startsWith('Error')
-          const brief = briefArgs(event.toolInput)
-          // 找到最后一个同名+同参+running 的工具项并更新
-          for (let i = agentTimelineRef.current.length - 1; i >= 0; i--) {
-            const item = agentTimelineRef.current[i]
-            if (item.type === 'tool' && item.name === event.toolName && item.brief === brief && item.status === 'running') {
-              item.status = ok ? 'ok' : 'error'
-              item.output = output || undefined
-              break
-            }
-          }
-          ensureAgentContainer(event.agentName ? `Agent: ${event.agentName}` : 'Agent')
-        } else if (event.type === 'agent-reasoning-delta') {
-          agentThinkingRef.current += event.text || ''
-          const agentLabel = event.agentName ? `Agent: ${event.agentName}` : 'Agent'
-          // 确保 Agent 容器存在并更新 thinking 字段
-dispatch({ type: 'AGENT_THINKING', label: agentLabel, thinking: agentThinkingRef.current, thinkingLoading: true, agentTimeline: [...agentTimelineRef.current] })
-        } else if (event.type === 'agent-text-delta') {
-          const agentLabel = event.agentName ? `Agent: ${event.agentName}` : 'Agent'
-          agentStreamedRef.current += event.text || ''
-          // 追加到时间线：合并到最后一个 text 项，或新建
-          const last = agentTimelineRef.current[agentTimelineRef.current.length - 1]
-          if (last?.type === 'text') {
-            last.content += event.text || ''
-          } else {
-            agentTimelineRef.current.push({ type: 'text', content: event.text || '' })
-          }
-          const timeline = [...agentTimelineRef.current]
-dispatch({ type: 'AGENT_TEXT', label: agentLabel, content: agentStreamedRef.current, agentTimeline: timeline, thinking: agentThinkingRef.current })
-        } else if (event.type === 'agent-done') {
-          // Agent 结束，确保有容器（纯工具调用无文本时兜底），关闭流式
-          const agentLabel = event.agentName ? `Agent: ${event.agentName}` : 'Agent'
-          const timeline = [...agentTimelineRef.current]
-dispatch({ type: 'AGENT_DONE', label: agentLabel, content: agentStreamedRef.current, agentTimeline: timeline, thinking: agentThinkingRef.current })
-          agentStreamedRef.current = ''
-          agentThinkingRef.current = ''
-        } else if (event.type === 'reasoning-delta') {
+        if (event.type === 'reasoning-delta') {
           if (!thinkingRef.current) thinkingStartRef.current = performance.now()
           thinkingRef.current += event.text || ''
           // 推入时间线：合并连续 thinking
@@ -865,7 +803,6 @@ dispatch({ type: 'TOOL_BATCH_CREATE', textBeforeTool: '', tools: toolBatchRef.cu
           const matchName = proxyName || sdkName
           if (sdkName === 'delegate_task' || matchName === 'delegate_task') {
             const tokMatch = String(event.toolOutput ?? '').match(/(\d+)\s*tok/)
-            if (tokMatch) agentTotalTokensRef.current += parseInt(tokMatch[1])
           }
           // 更新 batch 中对应工具的状态（原地修改，保持引用稳定）
           const MAX_RESULT = 30000
@@ -926,8 +863,7 @@ dispatch({ type: 'TOOL_BATCH_CREATE', textBeforeTool: '', tools: toolBatchRef.cu
           setTaskList(prev => prev.map(t => t.status === 'running' ? { ...t, status: 'done' } : t))
           if (event.trace) {
             const t = event.trace
-            const agentTok = agentTotalTokensRef.current
-            const totalTok = t.inputTokens + t.outputTokens + agentTok
+            const totalTok = t.inputTokens + t.outputTokens
             const parts = [
               `${totalTok} tok`,
               formatDuration(t.totalDuration),
@@ -951,7 +887,6 @@ dispatch({ type: 'TOOL_BATCH_CREATE', textBeforeTool: '', tools: toolBatchRef.cu
               inputTokens: t.inputTokens,
               outputTokens: t.outputTokens,
               cachedTokens: t.cachedInputTokens,
-              agentTokens: agentTotalTokensRef.current,
               toolCalls: t.toolCalls.length,
               duration: t.totalDuration,
             })
