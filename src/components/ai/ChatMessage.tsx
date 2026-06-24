@@ -77,7 +77,7 @@ function ChatMessageInner({ msg }: ChatMessageProps) {
           if (tc.name === 'run_terminal' ) return null
           if (tc.name === 'web_search') return <SearchBubble key={tc.id} tc={tc} />
           if (tc.name === 'web_fetch') return <FetchBubble key={tc.id} tc={tc} />
-          if (tc.name === 'delegate_task') return <DelegateBubble key={tc.id} tc={tc} />
+          if (tc.name === 'delegate_task' || tc.name === 'delegate_batch') return <DelegateBubble key={tc.id} tc={tc} />
           return <ToolBubble key={tc.id} tc={tc} />
         })}
       </div>
