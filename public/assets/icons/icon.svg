@@ -2,8 +2,8 @@
   <defs>
     <!-- 大光点发光 -->
     <radialGradient id="glow1" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.35"/>
-      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="0%" stop-color="#7EC8E3" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#7EC8E3" stop-opacity="0"/>
     </radialGradient>
     
     <!-- 中光点发光 -->
@@ -21,9 +21,9 @@
 
   <!-- ===== 大光点（冰蓝，偏左上） ===== -->
   <circle cx="22" cy="24" r="18" fill="url(#glow1)"/>
-  <circle cx="22" cy="24" r="9" fill="#ffffff" opacity="0.15"/>
-  <circle cx="22" cy="24" r="6" fill="#ffffff" opacity="0.3"/>
-  <circle cx="22" cy="24" r="4.5" fill="#ffffff" opacity="0.95"/>
+  <circle cx="22" cy="24" r="9" fill="#7EC8E3" opacity="0.15"/>
+  <circle cx="22" cy="24" r="6" fill="#7EC8E3" opacity="0.3"/>
+  <circle cx="22" cy="24" r="4.5" fill="#7EC8E3" opacity="0.95"/>
   <circle cx="20" cy="22" r="1.2" fill="#FFFFFF" opacity="0.6"/>
 
   <!-- ===== 中光点（白色，偏右上） ===== -->
