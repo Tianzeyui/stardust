@@ -84,7 +84,6 @@ app.whenReady().then(async () => {
   registerConfigIpc()
   registerConversationIpc()
   registerAiWindowIpc(appIcon)
-  registerA2aIpc()
   registerPluginIpc()
   registerSkillIpc()
   registerPermissionIpc()
