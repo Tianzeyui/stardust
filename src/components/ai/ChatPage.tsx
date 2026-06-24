@@ -16,7 +16,6 @@ import { AskUserBar } from './AskUserBar'
 import { ChatConsole } from './ChatConsole'
 import { ModelPicker } from './ModelPicker'
 import { ConversationBar, type ConvInfo } from './ConversationBar'
-import { SkillPicker } from './SkillPicker'
 import { MCPToolPicker } from './MCPToolPicker'
 import type { DisclosureResult } from '@/lib/toolDisclosure'
 import { getCtxWindow, getModelTier } from '@/lib/config'
@@ -1143,7 +1142,6 @@ dispatch({ type: 'TOOL_BATCH_CREATE', textBeforeTool: '', tools: toolBatchRef.cu
             onToggle={() => setSessionMemoryEnabled(v => !v)}
             shortCount={shortMemoryCount}
           />
-          <SkillPicker projectSkillIds={projectSettings?.skills} />
           <MCPToolPicker
             disclosureResult={disclosureResult}
             onThresholdChange={(n) => { setDisclosureThreshold(n); saveDisclosureThreshold(n) }}

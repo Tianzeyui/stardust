@@ -159,7 +159,8 @@ export async function getMCPSdkTools(autoMode?: boolean, userId?: string): Promi
     // 注入插件 AI 工具
     const { pluginSystem } = await import('./pluginSystem')
     Object.assign(tools, pluginSystem.getPluginTools())
-  } catch {
+  } catch (e: any) {
+    console.error('[getMCPSdkTools] 工具注册失败:', e.message, e.stack?.slice(0, 200))
     return {}
   }
   return tools

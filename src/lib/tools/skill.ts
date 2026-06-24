@@ -8,6 +8,7 @@ import type { ToolMap } from './registry'
 
 export function registerSkillTools(tools: ToolMap) {
   const enabledSkills = getInstalledSkills().filter(s => s.enabled)
+  console.log('[registerSkillTools] enabled skills:', enabledSkills.length, enabledSkills.map(s => s.name))
   if (enabledSkills.length === 0) return
 
   // 轻量索引
