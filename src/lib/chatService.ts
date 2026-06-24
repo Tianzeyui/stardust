@@ -156,7 +156,6 @@ export async function getMCPSdkTools(autoMode?: boolean, userId?: string): Promi
     registerGitTools(tools)
     registerWebFetchTool(tools)
     registerWebSearchTool(tools)
-    if (userId) await registerAgentDefs(tools, userId)
     // 注入插件 AI 工具
     const { pluginSystem } = await import('./pluginSystem')
     Object.assign(tools, pluginSystem.getPluginTools())
