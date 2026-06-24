@@ -77,6 +77,7 @@ function ChatMessageInner({ msg }: ChatMessageProps) {
           if (tc.name === 'run_terminal' ) return null
           if (tc.name === 'web_search') return <SearchBubble key={tc.id} tc={tc} />
           if (tc.name === 'web_fetch') return <FetchBubble key={tc.id} tc={tc} />
+          if (tc.name === 'delegate_task') return <DelegateBubble key={tc.id} tc={tc} />
           return <ToolBubble key={tc.id} tc={tc} />
         })}
       </div>
@@ -88,6 +89,7 @@ function ChatMessageInner({ msg }: ChatMessageProps) {
     // 搜索/抓取用自定义样式
     if (msg.toolCall.name === 'web_search') return <SearchBubble tc={msg.toolCall} />
     if (msg.toolCall.name === 'web_fetch') return <FetchBubble tc={msg.toolCall} />
+    if (msg.toolCall.name === 'delegate_task') return <DelegateBubble tc={msg.toolCall} />
     return msg.parentAgent ? (
       <div className="ml-4 border-l-2 border-primary/20 pl-3 my-1">
         <ToolBubble tc={msg.toolCall} />
@@ -654,6 +656,58 @@ function FetchBubble({ tc }: { tc: ToolCallStatus }) {
               </button>
               {expanded && (
                 <div className="mt-1 max-h-48 overflow-auto rounded border border-border/50 p-2 text-[11px] whitespace-pre-wrap leading-relaxed text-muted-foreground">{tc.result}</div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** 子任务委托气泡 */
+function DelegateBubble({ tc }: { tc: ToolCallStatus }) {
+  const tier = typeof tc.input === 'object' && tc.input ? (tc.input as any).tier || 'balanced' : 'balanced'
+  const task = typeof tc.input === 'object' && tc.input ? (tc.input as any).task || '' : ''
+  const [expanded, setExpanded] = useState(tc.status === 'running')
+  // 解析 tier 显示名
+  const tierLabel: Record<string, string> = { fast: 'Fast', balanced: 'Std', powerful: 'Pro' }
+  // 提取模型名（result 格式: [modelName]\ntext）
+  const modelMatch = tc.result?.match(/^\[(.+?)\]\n/)
+  const modelName = modelMatch ? modelMatch[1] : null
+  const resultText = modelMatch ? tc.result!.slice(modelMatch[0].length) : (tc.result || '')
+
+  return (
+    <div className="flex gap-3 max-w-full">
+      <div className="min-w-0 flex-1">
+        <div className={`rounded-lg border px-3 py-2 text-xs overflow-hidden ${tc.status === 'error' ? 'border-destructive/30 bg-destructive/5' : 'border-border bg-card'}`}>
+          <div className="flex items-center gap-2">
+            <Zap className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+            <span className="font-medium truncate">
+              子任务
+              {task ? `: ${task.slice(0, 40)}${task.length > 40 ? '...' : ''}` : ''}
+            </span>
+            <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+              {tierLabel[tier] || tier}
+            </span>
+            {modelName && (
+              <span className="text-[10px] text-muted-foreground/50 truncate">{modelName}</span>
+            )}
+            <span className="text-[10px] text-muted-foreground/50 shrink-0">
+              {tc.status === 'running' ? '执行中' : tc.status === 'error' ? '失败' : '完成'}
+            </span>
+          </div>
+          {resultText && (
+            <>
+              <button className="flex items-center gap-1 mt-1.5 text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                onClick={() => setExpanded(!expanded)}>
+                <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                {expanded ? '收起' : `展开结果 (${(resultText.length / 1000).toFixed(1)}k)`}
+              </button>
+              {expanded && (
+                <div className="mt-1 max-h-48 overflow-auto rounded border border-border/50 p-2 text-[11px] whitespace-pre-wrap leading-relaxed text-muted-foreground">
+                  {resultText}
+                </div>
               )}
             </>
           )}

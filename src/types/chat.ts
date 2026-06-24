@@ -1,4 +1,4 @@
-export type ToolType = 'sandbox' | 'skill' | 'agent' | 'mcp' | 'gateway' | 'workspace'
+export type ToolType = 'sandbox' | 'skill' | 'agent' | 'mcp' | 'gateway' | 'workspace' | 'delegate'
 
 export interface ToolCallStatus {
   id: string
@@ -89,7 +89,8 @@ import type { FileOpRequest } from '@/lib/fileOpManager'
 export function detectToolType(name: string): ToolType {
   if (name.startsWith('sandbox_')) return 'sandbox'
   if (name === 'read_skill') return 'skill'
-  if (['ask_user', 'show_progress', 'notify_complete', 'update_task_list', 'delegate_task'].includes(name))
+  if (name === 'delegate_task') return 'delegate'
+  if (['ask_user', 'show_progress', 'notify_complete', 'update_task_list'].includes(name))
     return 'agent'
   // MCP 网关工具（目录发现、资源/提示读取）
   if (['mcp_list_resources', 'mcp_read_resource', 'mcp_list_prompts', 'mcp_get_prompt'].includes(name))
