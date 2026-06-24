@@ -143,7 +143,6 @@ export async function getMCPSdkTools(autoMode?: boolean, userId?: string): Promi
     const { registerGitTools } = await import('./tools/git')
     const { registerWebFetchTool } = await import('./tools/webFetch')
     const { registerWebSearchTool } = await import('./tools/webSearch')
-    const { registerAgentTools: registerAgentDefs } = await import('./tools/agentRegistry')
     const { registerVerifyTools } = await import('./tools/verify')
 
     await registerMCPBusinessTools(tools)
@@ -381,7 +380,7 @@ export async function chat(
     'mcp_list', 'mcp_read', 'mcp_get',                          // MCP 网关
     'ask_user', 'show_progress', 'notify_complete', 'update_task_list', // Agent UI
     'delegate_task', 'delegate_batch', 'delegate_chain',       // Agent 路由
-    'agent__', 'plugin__',                                     // A2A Agent + 插件
+     'plugin__',                                     // A2A Agent + 插件
     'read_skill', 'search_tools', 'use_tool',                  // 技能 + 按需激活
   ]
   const isCoreTool = (name: string) => CORE_TOOL_PREFIXES.some(p => name.startsWith(p))

@@ -170,7 +170,6 @@ export interface ElectronAPI {
     fetch: (url: string, opts?: { method?: string; headers?: Record<string, string>; body?: string; timeout?: number }) =>
       Promise<{ success: boolean; error?: string; data?: string; status?: number }>
   }
-  a2a: {
     completeTask: (taskId: string, output: string, error?: string) => Promise<boolean>
     getTask: (taskId: string) => Promise<any>
     syncAgents: (agents: any[]) => Promise<boolean>

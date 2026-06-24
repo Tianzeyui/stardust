@@ -3,7 +3,6 @@
  */
 import { jsonSchema } from '../api'
 import type { ToolMap } from './registry'
-import { delegateToModel } from '../chatService'
 import type { AskQuestion } from '../chatService'
 
 let onAgentUIEvent: ((event: any) => void) | null = null
@@ -147,115 +146,36 @@ export function registerAgentTools(tools: ToolMap, autoMode?: boolean) {
   if (autoMode) {
     tools['delegate_task'] = {
       description:
-        '将复杂子任务委托给更合适的模型或 Agent 处理。' +
-        'tier: "fast" 简单任务, "balanced" 日常, "powerful" 复杂推理。' +
-        'agentName: 指定 Agent 名称。传 agentName 时 tier 可选。' +
-        '用于独立验证时：传入 task 包含"验证"/"verify"关键词，系统会自动注入对抗性验证提示词——验证 Agent 会尝试破坏你的实现而非确认它，每步检查必须有命令运行记录，以 VERDICT: PASS/FAIL/PARTIAL 结尾。' +
+        '将子任务委托给不同层级的模型处理。模型自主决定委托目标和层级，无需用户预配置 Agent。\n' +
+        'tier: "fast" 简单任务, "balanced" 日常, "powerful" 复杂推理。\n' +
+        '用于独立验证时：传入 task 包含"验证"/"verify"关键词，系统会自动注入对抗性验证提示词。\n' +
         'task 描述要具体，包含原始需求、改动文件列表、采用的方法。',
       inputSchema: jsonSchema({
         type: 'object',
         properties: {
-          tier: { type: 'string', enum: ['fast', 'balanced', 'powerful'], description: '目标模型层级（使用通用模型时必填）' },
-          agentName: { type: 'string', description: 'Agent 名称（如"代码助手"），优先使用 Agent 执行' },
+          tier: { type: 'string', enum: ['fast', 'balanced', 'powerful'], description: '目标模型层级' },
           task: { type: 'string', description: '子任务描述（含必要上下文）' },
           reason: { type: 'string', description: '委托原因（可选）' },
         },
         required: ['task'],
       }),
-      execute: async (args: { tier?: string; agentName?: string; task: string }) => {
+      execute: async (args: { tier?: string; task: string }) => {
         try {
-          // 检测是否为验证任务 → 注入验证 Agent 专用系统提示词
           const isVerification = /(验证|verify|verification|test.*pass|check.*correct|review.*code)/i.test(args.task)
           const systemContext = isVerification
             ? (await import('./verify')).VERIFICATION_SYSTEM_PROMPT
             : undefined
 
-          if (args.agentName) {
-            const { findAgent, delegateToAgent } = await import('../orchestrator')
-            const { agent, available } = await findAgent(args.agentName)
-            if (agent) {
-              const res = await delegateToAgent(agent, args.task, systemContext)
-              return res.html
-            }
-            return `Agent "${args.agentName}" 未找到。可用: ${available.join(', ') || '(无)'}`
-          }
-          const result = await delegateToModel(
-            args.tier as 'fast' | 'balanced' | 'powerful',
+          const { delegateByTier } = await import('../orchestrator')
+          return await delegateByTier(
+            (args.tier as 'fast' | 'balanced' | 'powerful') || 'balanced',
             args.task,
             systemContext || undefined,
           )
-          return `[${result.modelName}]\n${result.result}`
         } catch (e: any) {
           return `委托失败: ${e.message}`
         }
       },
     }
   }
-// delegate_batch: 并行执行多个 Agent
-    tools['delegate_batch'] = {
-      description:
-        '并行委托多个 Agent 执行独立任务，结果合并返回。agents: [{ agentName, task }, ...]。适合无依赖关系的子任务。',
-      inputSchema: jsonSchema({
-        type: 'object',
-        properties: {
-          agents: {
-            type: 'array', items: {
-              type: 'object',
-              properties: {
-                agentName: { type: 'string', description: 'Agent 名称' },
-                task: { type: 'string', description: '任务描述' },
-              },
-              required: ['agentName', 'task'],
-            },
-          },
-        },
-        required: ['agents'],
-      }),
-      execute: async (args: { agents: Array<{ agentName: string; task: string }> }) => {
-        try {
-          const { findAgent, delegateBatch } = await import('../orchestrator')
-          const items: Array<{ agent: any; task: string }> = []
-          for (const a of args.agents) {
-            const { agent, available } = await findAgent(a.agentName)
-            if (!agent) return `Agent "${a.agentName}" 未找到。可用: ${available.join(', ') || '(无)'}`
-            items.push({ agent, task: a.task })
-          }
-          return await delegateBatch(items)
-        } catch (e: any) { return `并行执行失败: ${e.message}` }
-      },
-    }
-
-    // delegate_chain: 串行执行 Agent 链
-    tools['delegate_chain'] = {
-      description:
-        '串行执行多个 Agent，前一个的输出作为下一个的输入。steps: [{ agentName, task }, ...]。按顺序执行。',
-      inputSchema: jsonSchema({
-        type: 'object',
-        properties: {
-          steps: {
-            type: 'array', items: {
-              type: 'object',
-              properties: {
-                agentName: { type: 'string' },
-                task: { type: 'string' },
-              },
-              required: ['agentName', 'task'],
-            },
-          },
-        },
-        required: ['steps'],
-      }),
-      execute: async (args: { steps: Array<{ agentName: string; task: string }> }) => {
-        try {
-          const { findAgent, delegateChain } = await import('../orchestrator')
-          const steps: Array<{ agent: any; task: string }> = []
-          for (const s of args.steps) {
-            const { agent, available } = await findAgent(s.agentName)
-            if (!agent) return `Agent "${s.agentName}" 未找到。可用: ${available.join(', ') || '(无)'}`
-            steps.push({ agent, task: s.task })
-          }
-          return await delegateChain(steps)
-        } catch (e: any) { return `链式执行失败: ${e.message}` }
-      },
-    }
 }

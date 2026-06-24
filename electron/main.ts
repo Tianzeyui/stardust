@@ -12,7 +12,6 @@ import path from 'path'
 import fs from 'fs'
 import { fileURLToPath } from 'url'
 import { initSidecar, getSidecar } from './main/sidecarManager.js'
-import { startA2AServer } from './main/a2aServer.js'
 import { initWorkspace } from './main/workspace.js'
 
 // ====== IPC 模块导入 ======
@@ -23,7 +22,6 @@ import { registerShellIpc } from './ipc/shellIpc.js'
 import { registerConfigIpc } from './ipc/configIpc.js'
 import { registerConversationIpc } from './ipc/conversationIpc.js'
 import { registerAiWindowIpc } from './ipc/aiWindowIpc.js'
-import { registerA2aIpc } from './ipc/a2aIpc.js'
 import { registerPluginIpc } from './ipc/pluginIpc.js'
 import { registerSkillIpc } from './ipc/skillIpc.js'
 import { registerPermissionIpc } from './ipc/permissionIpc.js'
@@ -93,7 +91,6 @@ app.whenReady().then(async () => {
 
   // ---- 预初始化 ----
   getSidecar().call('sandbox.preInit').catch(() => {})
-  startA2AServer(9090)
   initWorkspace()
 
   // ---- Rust Sidecar 启动 ----

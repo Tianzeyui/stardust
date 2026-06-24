@@ -412,7 +412,6 @@ const PROMPT_SECTION_TOOLS = `# Using your tools
  - workspace_read_file: use lines="1-end" to read the entire file, or lines="1-100" for first 100 lines. Always returns total lines/chars — no probe read needed.
  - workspace_edit_file: prefer start_line/end_line (line-based, no uniqueness requirement) over old_string (string-based, requires unique match). Use workspace_write_file for creating new files or major rewrites.
  - workspace_grep: use context_before/context_after (default 2) for searching file contents — this shows surrounding code so you rarely need a follow-up read_file.
- - delegate_task: spawn background agents for parallel work, independent verification, or complex multi-step sub-tasks. Keeps output out of main context.
  - search_tools / use_tool: discover and call MCP tools on demand. Describe what you need — don't memorize tool names.
  - read_skill: load skill documentation when the user invokes a skill (/<skill-name>) or when you need domain-specific guidance.`
 

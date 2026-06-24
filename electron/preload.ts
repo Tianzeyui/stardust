@@ -187,18 +187,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('mcp:getPrompt', serverId, promptName, args),
   },
 
-  a2a: {
-    completeTask: (taskId: string, output: string, error?: string) =>
-      ipcRenderer.invoke('a2a:completeTask', taskId, output, error),
-    getTask: (taskId: string) => ipcRenderer.invoke('a2a:getTask', taskId),
-    getPort: () => ipcRenderer.invoke('a2a:getPort'),
-    syncAgents: (agents: any[]) => ipcRenderer.invoke('a2a:syncAgents', agents),
-    start: (port: number) => ipcRenderer.invoke('a2a:start', port),
-    stop: () => ipcRenderer.invoke('a2a:stop'),
-    status: () => ipcRenderer.invoke('a2a:status'),
-    setToken: (token: string) => ipcRenderer.invoke('a2a:setToken', token),
-  },
-
   plugin: {
     load: (dirPath: string) => ipcRenderer.invoke('plugin:load', dirPath),
     install: (dirPath: string) => ipcRenderer.invoke('plugin:install', dirPath),

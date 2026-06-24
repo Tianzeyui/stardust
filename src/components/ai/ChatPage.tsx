@@ -34,9 +34,6 @@ import { setTermWorkspaceRoot } from '@/lib/tools/terminal'
 import { killAll as killAllTerminals } from '@/lib/terminalManager'
 import { MemoryPopup } from './MemoryPopup'
 import { messageReducer, nextMsgId, type MessageAction } from './chatReducer'
-import { AgentPicker } from './AgentPicker'
-import { agentDisplayNames } from '@/lib/tools/agentRegistry'
-import { setTaskEventHandler } from '@/lib/taskManager'
 import {
   type ToolCallStatus, type UIMessage, type ConsoleLine,
   type CompressionEventData,
@@ -355,21 +352,6 @@ export function ChatPage() {
     setConvList(list)
   }, [currentProjectId])
   useEffect(() => { projectStore.init() }, [])
-  // A2A Server 初始同步
-  useEffect(() => {
-    if (!user?.id) return
-    import('@/lib/agentStore').then(m => m.listAgents(user.id)).then(list => {
-      ;(window as any).electronAPI?.a2a?.syncAgents?.(list).catch(() => {})
-    }).catch(() => {})
-  }, [user?.id])
-  // TaskManager 注入 userId
-  useEffect(() => {
-    (async () => {
-      const { setTaskUserId } = await import('@/lib/taskManager')
-      setTaskUserId(() => user?.id ?? null)
-    })()
-    return () => { import('@/lib/taskManager').then(m => m.setTaskUserId(() => null)) }
-  }, [user?.id])
   // 切换对话时重置
   useEffect(() => {
     setDisclosureResult(null); setShortMemoryCount(0)
@@ -852,12 +834,6 @@ tickMessages(() => dispatch({ type: 'TEXT_DELTA', content: streamed, modelName, 
               toolType = detectToolType(proxied)  // 根据实际工具名判定类型
             }
           }
-          // Agent 工具显示友好名称
-          if (toolName.startsWith('agent__')) {
-            const rawName = toolName
-            toolName = agentDisplayNames.get(rawName) || rawName.replace(/^agent__/, '').replace(/_+/g, ' ').trim() || 'Agent'
-            toolNameProxyRef.current.set(rawName, toolName)
-          }
           const tc: ToolCallStatus = { id: Math.random().toString(36).slice(2, 8), name: toolName, type: toolType, status: 'running', input: event.toolInput }
           setActivatedToolNames(prev => { const next = new Set(prev); next.add(toolName); return next })
           pushLog('>', `[${tc.type}] ${tc.name}`, 'running')
@@ -1222,7 +1198,6 @@ dispatch({ type: 'TOOL_BATCH_CREATE', textBeforeTool: '', tools: toolBatchRef.cu
             onToggle={() => setSessionMemoryEnabled(v => !v)}
             shortCount={shortMemoryCount}
           />
-          <AgentPicker projectAgentIds={projectSettings?.agents} />
           <SkillPicker projectSkillIds={projectSettings?.skills} />
           <MCPToolPicker
             disclosureResult={disclosureResult}

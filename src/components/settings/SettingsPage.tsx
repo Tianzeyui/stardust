@@ -8,7 +8,6 @@ import { GeneralTab } from './tabs/GeneralTab'
 import { CapabilitiesTab } from './tabs/CapabilitiesTab'
 import { AgentTab } from './tabs/AgentTab'
 
-import { A2ATab } from './tabs/A2ATab'
 import { AboutTab } from './tabs/AboutTab'
 import {
   getSupabaseConfig, saveSupabaseConfig, clearSupabaseConfig,
@@ -468,7 +467,6 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
         {tab === 'agent' && <AgentTab />}
 
         {/* ===== A2A 设置 ===== */}
-        {tab === 'a2a' && <A2ATab />}
 
         {/* ===== AI 模型设置 ===== */}
         {tab === 'ai' && (
