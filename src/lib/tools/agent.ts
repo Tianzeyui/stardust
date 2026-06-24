@@ -177,5 +177,44 @@ export function registerAgentTools(tools: ToolMap, autoMode?: boolean) {
         }
       },
     }
+
+    tools['delegate_batch'] = {
+      description:
+        '并行委托多个子任务给不同层级的模型并行执行。tasks: [{ tier, task }, ...]。' +
+        '适合无依赖关系的独立子任务。',
+      inputSchema: jsonSchema({
+        type: 'object',
+        properties: {
+          tasks: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                tier: { type: 'string', enum: ['fast', 'balanced', 'powerful'], description: '目标模型层级' },
+                task: { type: 'string', description: '子任务描述' },
+              },
+              required: ['task'],
+            },
+          },
+        },
+        required: ['tasks'],
+      }),
+      execute: async (args: { tasks: Array<{ tier?: string; task: string }> }) => {
+        try {
+          const { delegateByTier } = await import('../orchestrator')
+          const results = await Promise.all(
+            args.tasks.map((t, i) =>
+              delegateByTier(
+                (t.tier as 'fast' | 'balanced' | 'powerful') || 'balanced',
+                t.task,
+              ).catch(e => `[${i + 1}] 失败: ${e.message}`)
+            )
+          )
+          return results.map((r, i) => `### 子任务 ${i + 1}\n${r}`).join('\n\n')
+        } catch (e: any) {
+          return `并行委托失败: ${e.message}`
+        }
+      },
+    }
   }
 }
