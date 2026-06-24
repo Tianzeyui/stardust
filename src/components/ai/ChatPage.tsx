@@ -396,6 +396,9 @@ export function ChatPage() {
   // 同步当前工作区到沙箱
   useEffect(() => { setSandboxOutputDir(workspace.output || undefined) }, [workspace.output])
   useEffect(() => { setWorkspaceRoots(workspace.root, workspace.output); setGitWorkspaceRoot(workspace.root); setTermWorkspaceRoot(workspace.root) }, [workspace.root, workspace.output])
+  useEffect(() => {
+    import('@/lib/tools/skill').then(m => m.setProjectSkillIds(projectSettings?.skills))
+  }, [JSON.stringify(projectSettings?.skills)])
 
   // 展开选择器时刷新 + 外部点击关闭
   useEffect(() => {
