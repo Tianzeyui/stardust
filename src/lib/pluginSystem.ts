@@ -445,16 +445,21 @@ class PluginSystemImpl {
   }
 
   getPluginTools(): Record<string, any> {
-    const tools: Record<string, any> = {}
+    const raw: Record<string, any> = {}
     for (const registration of this.toolRegistrations) {
-      try { registration(tools) } catch (e: any) { console.error('[PluginSystem] 工具注册回调失败:', e.message) }
+      try { registration(raw) } catch (e: any) { console.error('[PluginSystem] 工具注册回调失败:', e.message) }
     }
-    // 自动包装 inputSchema（插件使用普通 JSON schema，需转换为 AI SDK 格式）
-    for (const key of Object.keys(tools)) {
-      if (tools[key].inputSchema && tools[key].inputSchema.type === 'object') {
-        tools[key].inputSchema = jsonSchema(tools[key].inputSchema)
+    // 统一加 plugin__ 前缀，使其匹配 CORE_TOOL_PREFIXES 中的 plugin__ 白名单
+    const tools: Record<string, any> = {}
+    for (const key of Object.keys(raw)) {
+      const prefixedKey = key.startsWith('plugin__') ? key : `plugin__${key}`
+      tools[prefixedKey] = raw[key]
+      // 自动包装 inputSchema（插件使用普通 JSON schema，需转换为 AI SDK 格式）
+      if (tools[prefixedKey].inputSchema && tools[prefixedKey].inputSchema.type === 'object') {
+        tools[prefixedKey].inputSchema = jsonSchema(tools[prefixedKey].inputSchema)
       }
     }
+    console.log('[PluginSystem] 注册的 AI 工具:', Object.keys(tools))
     return tools
   }
 

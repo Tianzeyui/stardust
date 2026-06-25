@@ -100,19 +100,31 @@ export async function* streamAnthropic(
   systemPrompt?: string,
   signal?: AbortSignal,
   maxOutputTokens?: number,
+  thinkingBudgetTokens?: number,
 ): AsyncGenerator<StreamEvent> {
   const client = createClient(config)
   const { system, messages: apiMessages } = convertMessages(messages, systemPrompt)
   const apiTools = convertTools(tools)
 
-  const stream = client.beta.messages.stream({
+  const maxTokens = maxOutputTokens ?? 8192
+  const streamOptions: Record<string, unknown> = {
     model: config.modelId,
-    max_tokens: maxOutputTokens ?? 8192,
+    max_tokens: maxTokens,
     temperature: 0.3,
     system: system || undefined,
     messages: apiMessages,
     tools: apiTools.length > 0 ? apiTools : undefined,
-  })
+  }
+
+  // 思考预算：需要 max_tokens > budget_tokens
+  if (thinkingBudgetTokens && thinkingBudgetTokens > 0) {
+    streamOptions.thinking = {
+      type: 'enabled',
+      budget_tokens: Math.min(thinkingBudgetTokens, maxTokens - 1024),
+    }
+  }
+
+  const stream = client.beta.messages.stream(streamOptions as any)
 
   let toolUseId = ''
   let toolUseName = ''

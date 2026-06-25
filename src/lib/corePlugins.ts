@@ -28,18 +28,10 @@ const coreSkills: Plugin = {
   },
 }
 
-const coreFiles: Plugin = {
-  manifest: { id: 'files', name: '文件', version: '1.0.0', description: '', icon: 'FolderOpen', navOrder: 40, enabled: true },
-  register(ctx) {
-    ctx.registerNav({ id: 'files', label: '文件', icon: 'FolderOpen', order: 40 })
-    ctx.registerRoute('files', () => import('@/components/files/FileManagerPage'))
-  },
-}
-
 const coreNotifications: Plugin = {
   manifest: { id: 'notifications', name: '通知', version: '1.0.0', description: '', icon: 'Bell', navOrder: 90, enabled: true },
   register(ctx) {
-    ctx.registerNav({ id: 'notifications', label: '通知', icon: 'Bell', order: 90 })
+    // 通知不在左侧菜单显示，通过用户菜单的"查看全部"进入
     ctx.registerRoute('notifications', () => import('@/components/notifications/NotificationsPage'))
   },
 }
@@ -56,7 +48,6 @@ export function initCorePlugins() {
   pluginSystem.registerCore(coreChat)
   pluginSystem.registerCore(coreProjects)
   pluginSystem.registerCore(coreSkills)
-  pluginSystem.registerCore(coreFiles)
   pluginSystem.registerCore(corePluginsPage)
   pluginSystem.registerCore(coreNotifications)
 }

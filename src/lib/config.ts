@@ -176,20 +176,32 @@ export function saveAgentMaxSteps(steps: number): void {
   localStorage.setItem(AGENT_MAX_STEPS_KEY, String(n))
 }
 
-// ========== 记忆功能开关 ==========
+// ========== 思考等级 ==========
 
-const MEMORY_ENABLED_KEY = 'stardust_memory_enabled'
+export type ThinkingLevel = 'off' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
-export function getMemoryEnabled(): boolean {
-  try {
-    const v = localStorage.getItem(MEMORY_ENABLED_KEY)
-    if (v !== null) return v === 'true'
-  } catch {}
-  return false  // 默认关闭
+const THINKING_LEVEL_KEY = 'stardust_thinking_level'
+
+export function getThinkingLevel(): ThinkingLevel {
+  const v = localStorage.getItem(THINKING_LEVEL_KEY)
+  if (v === 'off' || v === 'low' || v === 'medium' || v === 'high' || v === 'xhigh' || v === 'max') return v
+  return 'medium'  // 默认中等
 }
 
-export function saveMemoryEnabled(enabled: boolean): void {
-  localStorage.setItem(MEMORY_ENABLED_KEY, String(enabled))
+export function saveThinkingLevel(level: ThinkingLevel): void {
+  localStorage.setItem(THINKING_LEVEL_KEY, level)
+}
+
+/** thinking level → Anthropic budget_tokens */
+export function thinkingBudget(level: ThinkingLevel): number | undefined {
+  switch (level) {
+    case 'off': return undefined  // 不设置 thinking param，模型默认行为
+    case 'low': return 1024
+    case 'medium': return 4096
+    case 'high': return 8192
+    case 'xhigh': return 16384
+    case 'max': return 32768
+  }
 }
 
 // ========== A2A Server ==========
@@ -413,7 +425,8 @@ const PROMPT_SECTION_TOOLS = `# Using your tools
  - workspace_edit_file: prefer start_line/end_line (line-based, no uniqueness requirement) over old_string (string-based, requires unique match). Use workspace_write_file for creating new files or major rewrites.
  - workspace_grep: use context_before/context_after (default 2) for searching file contents — this shows surrounding code so you rarely need a follow-up read_file.
  - search_tools / use_tool: discover and call MCP tools on demand. Describe what you need — don't memorize tool names.
- - read_skill: load skill documentation when the user invokes a skill (/<skill-name>) or when you need domain-specific guidance.`
+ - read_skill: load skill documentation when the user invokes a skill (/<skill-name>) or when you need domain-specific guidance.
+ - memory_write / memory_read / memory_list / memory_delete: manage persistent file-based memory in .stardust/memory/. Use memory_write when the user explicitly asks to remember something, or when you detect important facts worth persisting (role, preferences, project context). Each memory is one markdown file with frontmatter. Link related memories with [[slug]]. Before writing, check memory_list to avoid duplicates — if a memory already covers the fact, update it instead of creating a new one.`
 
 const PROMPT_SECTION_TONE_STYLE = `# Tone and style
  - Only use emojis if the user explicitly requests it. Avoid using emojis in all communication unless asked.

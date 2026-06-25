@@ -6,9 +6,6 @@ import { getInstalledSkills } from '../skillService'
 import type { SectionIndex } from '@/types/skill'
 import type { ToolMap } from './registry'
 
-let _projectSkillIds: string[] | undefined
-export function setProjectSkillIds(ids: string[] | undefined) { _projectSkillIds = ids }
-
 export function registerSkillTools(tools: ToolMap) {
   const allSkills = getInstalledSkills()
   console.log('[registerSkillTools] installed skills:', allSkills.length, allSkills.map(s => s.name))
@@ -56,13 +53,6 @@ export function registerSkillTools(tools: ToolMap) {
     execute: async ({ name, file, section, lines }: {
       name: string; file?: string; section?: string; lines?: string
     }) => {
-      // 项目权限检查
-      if (_projectSkillIds && _projectSkillIds.length > 0) {
-        const skillMeta = getInstalledSkills().find(s => s.name === name)
-        if (skillMeta && !_projectSkillIds.includes(skillMeta.id)) {
-          return `技能 "${name}" 未在当前项目中启用。`
-        }
-      }
       const skill = skillIndex[name]
       if (!skill) return `未找到技能 "${name}"。可用: ${Object.keys(skillIndex).join(', ')}`
 

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useReducer } from 'react'
 import {
   ArrowRight, Loader2, Bot, X, ListTodo, Circle, CheckCircle2, File,
-  Paperclip, FileText, Image, FolderOpen, ExternalLink, ArrowLeft, ArrowDown,
+  FileText, Image, FolderOpen, ExternalLink, ArrowLeft, ArrowDown, Plus, Upload,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -18,10 +18,8 @@ import { ModelPicker } from './ModelPicker'
 import { ConversationBar, type ConvInfo } from './ConversationBar'
 import { MCPToolPicker } from './MCPToolPicker'
 import type { DisclosureResult } from '@/lib/toolDisclosure'
-import { getCtxWindow, getModelTier } from '@/lib/config'
-import { MemoryManager } from '@/lib/memory/manager'
-import { createLocalMemoryStore } from '@/lib/memory/store-local'
-import { createSupabaseMemoryStore } from '@/lib/memory/store-supabase'
+import { getCtxWindow, getModelTier, getThinkingLevel, saveThinkingLevel, thinkingBudget, type ThinkingLevel } from '@/lib/config'
+import { initMemoryStore, getInjectionText } from '@/lib/memory/service'
 import { useAuth } from '@/contexts/AuthContext'
 import { useWorkspace } from '@/hooks/useWorkspace'
 import { projectStore } from '@/lib/projectStore'
@@ -31,7 +29,6 @@ import { setWorkspaceRoots } from '@/lib/tools/workspace'
 import { setGitWorkspaceRoot } from '@/lib/tools/git'
 import { setTermWorkspaceRoot } from '@/lib/tools/terminal'
 import { killAll as killAllTerminals } from '@/lib/terminalManager'
-import { MemoryPopup } from './MemoryPopup'
 import { messageReducer, nextMsgId, type MessageAction } from './chatReducer'
 import {
   type ToolCallStatus, type UIMessage, type ConsoleLine,
@@ -197,9 +194,10 @@ export function ChatPage() {
   const [lastRealInputTokens, setLastRealInputTokens] = useState(0)  // 上一轮 API 返回的真实 inputTokens
   // 本轮实际激活的工具名（用于披露面板展示）
   const [activatedToolNames, setActivatedToolNames] = useState<Set<string>>(new Set())
-  // 记忆开关（本次会话）
-  const [sessionMemoryEnabled, setSessionMemoryEnabled] = useState(false)
-  const [shortMemoryCount, setShortMemoryCount] = useState(0)
+  // 思考等级
+  const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>(getThinkingLevel)
+  // + 子菜单
+  const [showPlusMenu, setShowPlusMenu] = useState(false)
   // @ 文件选择
   const [atFiles, setAtFiles] = useState<Array<{ name: string; path: string; isDir: boolean }>>([])
   const [showAtPicker, setShowAtPicker] = useState(false)
@@ -223,15 +221,10 @@ export function ChatPage() {
   const mainTimelineRef = useRef<Array<{ type: 'thinking'; content: string } | { type: 'text'; content: string }>>([])
   // Agent 流式输出跟踪 + 累计消耗
   const toolBatchRef = useRef<ToolCallStatus[]>([])  // 并行工具 batch
-  // 记忆管理器（根据项目+对话隔离）
-  const [memoryManager, setMemoryManager] = useState<MemoryManager | null>(null)
+  // 初始化记忆存储（项目切换时自动更新）
   useEffect(() => {
-    const storeKey = currentProjectId ? `project_${currentProjectId}` : (convId || 'global')
-    setMemoryManager(new MemoryManager(
-      createLocalMemoryStore(storeKey),
-      createSupabaseMemoryStore(() => user?.id ?? null, () => currentProjectId),
-    ))
-  }, [convId, user?.id, currentProjectId])
+    initMemoryStore(() => workspace.root || null)
+  }, [workspace.root])
   const logId = useRef(0)
   const endRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -348,7 +341,7 @@ export function ChatPage() {
   useEffect(() => { projectStore.init() }, [])
   // 切换对话时重置
   useEffect(() => {
-    setDisclosureResult(null); setShortMemoryCount(0)
+    setDisclosureResult(null)
   }, [convId, currentProjectId])
   useEffect(() => { loadConvList() }, [loadConvList])
 
@@ -396,9 +389,6 @@ export function ChatPage() {
   // 同步当前工作区到沙箱
   useEffect(() => { setSandboxOutputDir(workspace.output || undefined) }, [workspace.output])
   useEffect(() => { setWorkspaceRoots(workspace.root, workspace.output); setGitWorkspaceRoot(workspace.root); setTermWorkspaceRoot(workspace.root) }, [workspace.root, workspace.output])
-  useEffect(() => {
-    import('@/lib/tools/skill').then(m => m.setProjectSkillIds(projectSettings?.skills))
-  }, [JSON.stringify(projectSettings?.skills)])
 
   // 展开选择器时刷新 + 外部点击关闭
   useEffect(() => {
@@ -474,7 +464,7 @@ export function ChatPage() {
     const project = currentProjectId ? projectStore.getById(currentProjectId) : null
     const c = await api.create('新对话', undefined, currentProjectId, project?.name)
     setConvId(c.id); setConvTitle('新对话'); dispatch({ type: 'RESET' }); setCompressionInfo(null); convIdRef.current = c.id
-    setDisclosureResult(null); setActivatedToolNames(new Set()); setShortMemoryCount(0)
+    setDisclosureResult(null); setActivatedToolNames(new Set())
     setConvList(prev => [{ id: c.id, title: '新对话', messageCount: 0, updatedAt: c.updatedAt, projectId: currentProjectId }, ...prev])
   }, [currentProjectId])
 
@@ -488,7 +478,7 @@ export function ChatPage() {
     const c = await api.get(id)
     if (c) {
       setConvId(c.id); setConvTitle(c.title); dispatch({ type: 'LOAD', messages: c.messages || [] }); convIdRef.current = c.id
-      setDisclosureResult(null); setActivatedToolNames(new Set()); setShortMemoryCount(0)
+      setDisclosureResult(null); setActivatedToolNames(new Set())
       // 恢复压缩状态（若消息数未变化则有效，否则视为过期）
       const snap = (c as any).compression
       if (snap && snap.messageCount === (c.messages || []).length) {
@@ -658,11 +648,6 @@ export function ChatPage() {
       const c = await window.electronAPI.conv.create('新对话', undefined, currentProjectId)
       cid = c.id; setConvId(c.id); convIdRef.current = c.id  // 立即同步 ref，不等 useEffect
       setConvList(prev => [{ id: c.id, title: '新对话', messageCount: 0, updatedAt: c.updatedAt, projectId: currentProjectId }, ...prev])
-      // 立即创建 MemoryManager（不等 useEffect），确保首条消息也能注入记忆
-      setMemoryManager(new MemoryManager(
-        createLocalMemoryStore(cid),
-        createSupabaseMemoryStore(() => user?.id ?? null, () => currentProjectId),
-      ))
     }
     const isFirstMsg = messages.length === 0
 
@@ -909,11 +894,9 @@ dispatch({ type: 'TOOL_BATCH_CREATE', textBeforeTool: '', tools: toolBatchRef.cu
         autoMode,
         modelOverride: usedModel !== activeModel ? { provider: usedModel.name, modelId: usedModel.selectedModel } : undefined,
         forceCompression: forceCompressRef.current ? true : undefined,
-        memoryInjection: sessionMemoryEnabled
-          ? await memoryManager?.getInjectionText(input.trim()) ?? undefined
-          : undefined,
+        memoryInjection: await getInjectionText() ?? undefined,
+        thinkingBudgetTokens: thinkingBudget(thinkingLevel),
         userId: user?.id,
-        projectSkillIds: projectSettings?.skills,
       })
       forceCompressRef.current = false
     } catch (e: any) {
@@ -932,24 +915,6 @@ dispatch({ type: 'TOOL_BATCH_CREATE', textBeforeTool: '', tools: toolBatchRef.cu
         setStatusText(`连接失败：${msg.slice(0, 40)}`)
       }
     } finally { sendingRef.current = false; abortRef.current = null; setLoading(false); setTimeout(() => setStatusText(''), 8000) }
-
-    // 后台异步提取记忆（fire-and-forget，不阻塞用户）
-    const memMgr = memoryManager
-    if (sessionMemoryEnabled && memMgr && messagesRef.current.length >= 2) {
-      const toExtract: ChatMessageType[] = messagesRef.current
-        .filter(m => m.role === 'user' || m.role === 'assistant')
-        .slice(-10)
-        .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
-      memMgr.extract(toExtract).then(async facts => {
-        console.log(`[memory] 提取完成: ${facts.length} 条`, facts.map(f => f.content))
-        if (facts.length > 0) {
-          // 标注项目 ID
-          if (currentProjectId) facts.forEach(f => f.projectId = currentProjectId)
-          await memMgr.saveToShortTerm(facts)
-          setShortMemoryCount((await memMgr.getShortTermList()).length)
-        }
-      }).catch(e => { console.warn('[memory] 提取失败:', e.message) })
-    }
 
     // 首条消息后自动生成标题（用 ref 避免闭包过期）
     if (isFirstMsg && cid) {
@@ -1089,6 +1054,31 @@ dispatch({ type: 'TOOL_BATCH_CREATE', textBeforeTool: '', tools: toolBatchRef.cu
           disabled={!activeModel || !!askUser}
         />
         <div className="flex items-center gap-1 px-2 pb-1.5">
+          {/* + 子菜单 */}
+          <div className="relative shrink-0">
+            <button
+              className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] transition-colors ${showPlusMenu ? 'bg-muted text-foreground' : 'text-muted-foreground/60 hover:bg-muted hover:text-muted-foreground'}`}
+              onClick={() => setShowPlusMenu(!showPlusMenu)}
+              title="添加"
+            >
+              <Plus className="h-3 w-3" />
+              {attachments.length > 0 && <span>{attachments.length}</span>}
+            </button>
+            {showPlusMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowPlusMenu(false)} />
+                <div className="absolute left-0 bottom-full z-50 mb-1 w-36 rounded-lg border border-border bg-card shadow-lg py-1">
+                  <button
+                    className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors"
+                    onClick={() => { handleUpload(); setShowPlusMenu(false) }}
+                  >
+                    <Upload className="h-3 w-3 text-muted-foreground" />
+                    <span>上传文件</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           <div className="relative shrink-0">
             <button
               className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground/60 hover:bg-muted hover:text-muted-foreground transition-colors"
@@ -1102,6 +1092,8 @@ dispatch({ type: 'TOOL_BATCH_CREATE', textBeforeTool: '', tools: toolBatchRef.cu
               show={showModelPicker} autoMode={autoMode}
               activeModel={activeModel}
               configuredModels={configuredModels}
+              thinkingLevel={thinkingLevel}
+              onThinkingChange={(level) => { setThinkingLevel(level); saveThinkingLevel(level) }}
               onToggleAuto={() => setAutoMode(!autoMode)}
               onSelectCloud={(m) => { setActiveModel(m); setShowModelPicker(false) }}
               onClose={() => setShowModelPicker(false)} pickerRef={pickerRef}
@@ -1140,12 +1132,6 @@ dispatch({ type: 'TOOL_BATCH_CREATE', textBeforeTool: '', tools: toolBatchRef.cu
               })()}
             />
           </div>
-          <MemoryPopup
-            manager={memoryManager}
-            enabled={sessionMemoryEnabled}
-            onToggle={() => setSessionMemoryEnabled(v => !v)}
-            shortCount={shortMemoryCount}
-          />
           <MCPToolPicker
             disclosureResult={disclosureResult}
             onThresholdChange={(n) => { setDisclosureThreshold(n); saveDisclosureThreshold(n) }}
@@ -1155,10 +1141,6 @@ dispatch({ type: 'TOOL_BATCH_CREATE', textBeforeTool: '', tools: toolBatchRef.cu
             projectPluginTools={projectSettings?.pluginTools}
             pluginTools={pluginToolEntries}
           />
-          <button className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground/60 hover:bg-muted hover:text-muted-foreground transition-colors" onClick={handleUpload} title="上传文件（支持拖拽）">
-            <Paperclip className="h-3 w-3" />
-            <span>文件{attachments.length > 0 ? ` ${attachments.length}` : ''}</span>
-          </button>
           <div className="relative shrink-0">
             <button
               ref={workspaceBtnRef}
@@ -1172,7 +1154,7 @@ dispatch({ type: 'TOOL_BATCH_CREATE', textBeforeTool: '', tools: toolBatchRef.cu
             {showWorkspace && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowWorkspace(false)} />
-                <div className="absolute bottom-full right-0 mb-2 z-50 w-80 rounded-lg border border-border bg-card shadow-lg">
+                <div className="absolute left-0 bottom-full z-50 mb-1 w-80 rounded-lg border border-border bg-card shadow-lg">
                   {/* 工作区根目录 + 操作 */}
                   <div className="px-3 py-2 border-b border-border space-y-1.5">
                     <div className="flex items-center gap-1.5">

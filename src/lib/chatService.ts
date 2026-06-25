@@ -144,6 +144,7 @@ export async function getMCPSdkTools(autoMode?: boolean, userId?: string): Promi
     const { registerWebFetchTool } = await import('./tools/webFetch')
     const { registerWebSearchTool } = await import('./tools/webSearch')
     const { registerVerifyTools } = await import('./tools/verify')
+    const { registerMemoryTools } = await import('./tools/memory')
 
     await registerMCPBusinessTools(tools)
     registerSkillTools(tools)
@@ -156,6 +157,7 @@ export async function getMCPSdkTools(autoMode?: boolean, userId?: string): Promi
     registerGitTools(tools)
     registerWebFetchTool(tools)
     registerWebSearchTool(tools)
+    registerMemoryTools(tools)
     // 注入插件 AI 工具
     const { pluginSystem } = await import('./pluginSystem')
     Object.assign(tools, pluginSystem.getPluginTools())
@@ -233,7 +235,7 @@ export { trackFileOp } from './fileTracker'
 export async function chat(
   messages: ChatMessage[],
   onEvent?: (event: ChatStreamEvent) => void,
-  opts?: { abortSignal?: AbortSignal; autoMode?: boolean; localModelId?: string; forceCompression?: boolean; memoryInjection?: string; userId?: string; modelOverride?: { provider: string; modelId: string }; projectSkillIds?: string[] },
+  opts?: { abortSignal?: AbortSignal; autoMode?: boolean; localModelId?: string; forceCompression?: boolean; memoryInjection?: string; userId?: string; modelOverride?: { provider: string; modelId: string }; thinkingBudgetTokens?: number },
 ) {
   // 本地模型路径
   if (opts?.localModelId) {
@@ -309,24 +311,22 @@ export async function chat(
 
   const toolsForDisclosure = mcpTools
 
-  // Skills 渐进式披露（参考 OpenClaw 三层架构）
+  // Skills 渐进式披露（参考 Claude Code / OpenClaw 三层架构）
   // Level 1: 元数据（name + description），~100 tokens/skill，注入系统提示
   // Level 2: 完整 SKILL.md，通过 read_skill 按需加载
   // Level 3: 附属文件（references/scripts），通过 read_skill(name, file) 按需读取
-  const projectSkillIds = opts?.projectSkillIds || []
-  const enabledSkills = projectSkillIds.length > 0
-    ? getInstalledSkills().filter(s => projectSkillIds.includes(s.id))
-    : getInstalledSkills().filter(s => s.enabled)
+  // 安装即生效，无需项目级开关
+  const enabledSkills = getInstalledSkills()
   let skillInjection: string | undefined
   if (enabledSkills.length > 0) {
     if (enabledSkills.length <= 10) {
-      skillInjection = '已启用技能（使用 read_skill 工具按需读取详细内容）:\n' +
+      skillInjection = '已安装技能（使用 read_skill 工具按需读取详细内容）:\n' +
         enabledSkills.map(s => `- ${s.name}: ${s.description}`).join('\n')
     } else if (enabledSkills.length <= 30) {
-      skillInjection = `已启用 ${enabledSkills.length} 个技能（紧凑模式，使用 read_skill 查看详情）:\n` +
+      skillInjection = `已安装 ${enabledSkills.length} 个技能（紧凑模式，使用 read_skill 查看详情）:\n` +
         enabledSkills.map(s => `- ${s.name}`).join('\n')
     } else {
-      skillInjection = `已启用 ${enabledSkills.length} 个技能。使用 read_skill("技能名") 查看具体技能详情。`
+      skillInjection = `已安装 ${enabledSkills.length} 个技能。使用 read_skill("技能名") 查看具体技能详情。`
     }
   }
 
@@ -575,7 +575,8 @@ export async function chat(
     `Use update_task_list for complex tasks: create steps → mark running → mark done immediately.`,
     `Read code before changing it. Verify before reporting complete.`,
     `MCP tools (if any) are discoverable via search_tools.`,
-    enabledSkills.length > 0 ? `Enabled skills: ${enabledSkills.map(s => s.name).join(', ')}` : '',
+    `Memory: use memory_write/memory_read/memory_list/memory_delete to manage persistent memories about the user and project.`,
+    enabledSkills.length > 0 ? `Installed skills: ${enabledSkills.map(s => s.name).join(', ')}` : '',
   ].filter(Boolean).join(' ')
 
   contextMessages.push({
@@ -640,6 +641,7 @@ export async function chat(
         systemPrompt: finalSystem || undefined,
         abortSignal: opts?.abortSignal,
         maxOutputTokens,
+        thinkingBudgetTokens: opts?.thinkingBudgetTokens,
         maxSteps: getAgentMaxSteps(),
       })
 

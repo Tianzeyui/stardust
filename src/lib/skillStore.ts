@@ -30,7 +30,6 @@ function migrateIfNeeded(): void {
         name: s.name,
         description: s.description || '',
         path: s.path || '',
-        enabled: s.enabled ?? false,
         installedAt: s.installedAt || new Date().toISOString(),
         fileTree: s.fileTree || '',
         fileCount: s.fileCount ?? Object.keys(s.files || {}).length,

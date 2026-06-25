@@ -19,7 +19,6 @@ import {
   getDisclosureThreshold, saveDisclosureThreshold,
   getModelTier, setModelTier,
   getAgentMaxSteps, saveAgentMaxSteps,
-  getMemoryEnabled, saveMemoryEnabled,
   getCompressThreshold, saveCompressThreshold, getTokenLimit, saveTokenLimit,
   getA2AEnabled, saveA2AEnabled, getA2APort, saveA2APort, getA2AToken, saveA2AToken,
   getJSSandboxEnabled, saveJSSandboxEnabled,
@@ -33,10 +32,6 @@ import {
 } from '@/lib/config'
 import { listTools, listResources, listPrompts, callTool, readResource, getPrompt, connect, disconnect, addServer as addMcpServer, updateServer as updateMcpServer, removeServer as removeMcpServer } from '@/lib/mcpClient'
 import type { MCPTool, MCPResource, MCPPrompt } from '@/types/electron'
-import { MemoryPanel } from './MemoryPanel'
-import { MemoryManager } from '@/lib/memory/manager'
-import { createSupabaseMemoryStore } from '@/lib/memory/store-supabase'
-import { createLocalMemoryStore } from '@/lib/memory/store-local'
 import { useAuth } from '@/contexts/AuthContext'
 
 function NumberField({ label, value, setValue, min, max, unit }: {
@@ -93,7 +88,6 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
   const [callLoading, setCallLoading] = useState(false)
   const [disclosureThreshold, setDisclosureThreshold] = useState(getDisclosureThreshold)
   const [maxSteps, setMaxSteps] = useState(getAgentMaxSteps)
-  const [memoryEnabled, setMemoryEnabled] = useState(getMemoryEnabled)
   const [compressThreshold, setCompressThreshold] = useState(getCompressThreshold)
   const [tokenLimit, setTokenLimit] = useState(getTokenLimit)
   const [a2aEnabled, setA2AEnabled] = useState(getA2AEnabled)
@@ -154,12 +148,6 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
     }
     fetchChangelog()
   }, [])
-
-  const memoryManagerRef = useRef(new MemoryManager(
-    // 短期记忆只读 —— 设置页无法确定当前 convId，仅展示长期记忆
-    createLocalMemoryStore('settings'),
-    createSupabaseMemoryStore(() => user?.id ?? null),
-  ))
 
   useEffect(() => {
     // 通用

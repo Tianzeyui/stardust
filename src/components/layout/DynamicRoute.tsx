@@ -9,7 +9,7 @@ import { pluginSystem } from '@/lib/pluginSystem'
 import { ErrorBoundary } from '@/components/plugins/ErrorBoundary'
 import type { ComponentType } from 'react'
 
-const CORE_IDS = new Set(['chat', 'ai', 'skills', 'agents', 'files', 'usage', 'plugins', 'notifications'])
+const CORE_IDS = new Set(['chat', 'ai', 'skills', 'agents', 'usage', 'plugins', 'notifications'])
 
 interface Props {
   nav: string

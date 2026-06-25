@@ -58,6 +58,7 @@ export interface StreamChatOptions {
   systemPrompt?: string
   abortSignal?: AbortSignal
   maxOutputTokens?: number
+  thinkingBudgetTokens?: number
 }
 
 /**
@@ -66,13 +67,13 @@ export interface StreamChatOptions {
 export async function* streamChat(
   options: StreamChatOptions,
 ): AsyncGenerator<StreamEvent> {
-  const { config, messages, tools, systemPrompt, abortSignal, maxOutputTokens } = options
+  const { config, messages, tools, systemPrompt, abortSignal, maxOutputTokens, thinkingBudgetTokens } = options
   const provider = detectProvider(config)
 
   if (provider === 'anthropic') {
-    yield* streamAnthropic(config, messages, tools, systemPrompt, abortSignal, maxOutputTokens)
+    yield* streamAnthropic(config, messages, tools, systemPrompt, abortSignal, maxOutputTokens, thinkingBudgetTokens)
   } else {
-    yield* streamOpenAICompat(config, messages, tools, systemPrompt, abortSignal, maxOutputTokens)
+    yield* streamOpenAICompat(config, messages, tools, systemPrompt, abortSignal, maxOutputTokens, thinkingBudgetTokens)
   }
 }
 
@@ -81,6 +82,7 @@ export interface GenerateTextOptions {
   prompt: string
   systemPrompt?: string
   maxOutputTokens?: number
+  thinkingBudgetTokens?: number
 }
 
 /**
@@ -91,7 +93,7 @@ export async function generateText(options: GenerateTextOptions): Promise<{
   text: string
   usage: Usage
 }> {
-  const { config, prompt, systemPrompt, maxOutputTokens } = options
+  const { config, prompt, systemPrompt, maxOutputTokens, thinkingBudgetTokens } = options
   const provider = detectProvider(config)
 
   if (provider === 'anthropic') {

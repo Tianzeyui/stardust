@@ -122,7 +122,6 @@ export async function installSkill(dirPath: string): Promise<InstalledSkill> {
     name,
     description,
     path: dirPath,
-    enabled: false,
     installedAt: new Date().toISOString(),
     fileTree: `${name}/\n${tree}`,
     fileCount: Object.keys(files).length,
@@ -138,11 +137,6 @@ export async function installSkill(dirPath: string): Promise<InstalledSkill> {
 
 export async function uninstallSkill(skillId: string): Promise<void> {
   await removeSkillCompletely(skillId)
-}
-
-export async function toggleSkill(skillId: string, enabled: boolean): Promise<InstalledSkill | null> {
-  updateSkillMeta(skillId, { enabled })
-  return getSkillsMeta().find(s => s.id === skillId) || null
 }
 
 export async function reloadSkillFiles(skillId: string): Promise<Record<string, string> | null> {

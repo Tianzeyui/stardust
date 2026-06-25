@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import {
   Bot, MessageSquare, Package, FolderOpen, FolderKanban, BookOpen, Lightbulb, BarChart3,
-  Settings, LogOut, PanelLeftClose, PanelLeftOpen, User, ChevronDown, Bell, CheckCircle, XCircle, Info, AlertTriangle, AlertCircle, ArrowRight,
+  Settings, LogOut, PanelLeftClose, PanelLeftOpen, User, ChevronDown, Bell, XCircle, Info, AlertTriangle, AlertCircle, ArrowRight,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -45,7 +45,7 @@ export function Sidebar({ activeNav, onNavChange, collapsed, onToggleCollapse, o
   const { user, signOut } = useAuth()
   const { notifications, unreadCount, dismiss, resolveConfirm, markAllRead } = useNotifications()
   const [showUserMenu, setShowUserMenu] = useState(false)
-  const [showNotifPopover, setShowNotifPopover] = useState(false)
+  const [showNotifInMenu, setShowNotifInMenu] = useState(false)
 
   return (
     <aside
@@ -96,96 +96,6 @@ export function Sidebar({ activeNav, onNavChange, collapsed, onToggleCollapse, o
         })}
       </nav>
 
-      {/* 通知铃铛 */}
-      <div className="relative mb-1">
-        <button
-          className={cn(
-            'flex items-center gap-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors',
-            collapsed ? 'p-1.5' : 'w-full px-2 py-1.5',
-          )}
-          onClick={() => setShowNotifPopover(!showNotifPopover)}
-        >
-          <div className="relative">
-            <Bell className="h-4 w-4" />
-            {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-destructive text-[8px] font-bold text-destructive-foreground">
-                {unreadCount > 9 ? '9+' : unreadCount}
-              </span>
-            )}
-          </div>
-          {!collapsed && <span className="text-xs">通知</span>}
-        </button>
-
-        {/* 通知气泡 */}
-        {showNotifPopover && (
-          <div className={cn(
-            'absolute z-50 rounded-xl border border-border bg-card shadow-xl',
-            collapsed ? 'left-full bottom-0 ml-2 w-80' : 'bottom-full left-0 mb-2 w-80',
-          )}>
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
-              <span className="text-xs font-semibold">通知</span>
-              <div className="flex items-center gap-2">
-                {notifications.length > 0 && (
-                  <button className="text-[10px] text-muted-foreground/50 hover:text-muted-foreground" onClick={markAllRead}>
-                    全部已读
-                  </button>
-                )}
-                <button className="text-[10px] text-primary/60 hover:text-primary flex items-center gap-0.5"
-                  onClick={() => { setShowNotifPopover(false); onNavChange('notifications') }}>
-                  查看全部 <ArrowRight className="h-3 w-3" />
-                </button>
-              </div>
-            </div>
-            <div className="max-h-80 overflow-auto">
-              {notifications.length === 0 ? (
-                <p className="px-4 py-8 text-xs text-muted-foreground text-center">暂无通知</p>
-              ) : (
-                notifications.slice(0, 20).map(n => {
-                  const iconMap: Record<string, any> = { info: Info, warning: AlertTriangle, error: AlertCircle, confirm: AlertTriangle }
-                  const colorMap: Record<string, string> = { info: 'text-blue-500', warning: 'text-yellow-500', error: 'text-destructive', confirm: 'text-yellow-500' }
-                  const IconComp = iconMap[n.type] || Info
-                  return (
-                    <div key={n.id} className={`border-b border-border/50 last:border-0 px-4 py-3 ${n.read ? '' : 'bg-accent/30'}`}>
-                      <div className="flex items-start gap-2.5">
-                        <IconComp className={`h-4 w-4 shrink-0 mt-0.5 ${colorMap[n.type]}`} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium">{n.title}</p>
-                          <p className="text-[11px] text-muted-foreground/60 mt-0.5">{n.message}</p>
-                          {n.source && <p className="text-[9px] text-muted-foreground/40 mt-0.5">{n.source}</p>}
-                          {/* 确认按钮 */}
-                          {n.type === 'confirm' && n.actions && !n.resolved && (
-                            <div className="flex gap-2 mt-2.5">
-                              {n.actions.map(a => (
-                                <button key={a.key}
-                                  className={`px-3 py-1 rounded-md text-[11px] font-medium transition-colors ${
-                                    a.variant === 'destructive'
-                                      ? 'bg-destructive/10 text-destructive hover:bg-destructive/20'
-                                      : 'bg-primary/10 text-primary hover:bg-primary/20'
-                                  }`}
-                                  onClick={() => resolveConfirm(n.id, a.key)}
-                                >{a.label}</button>
-                              ))}
-                            </div>
-                          )}
-                          {n.type === 'confirm' && n.resolved && (
-                            <p className="text-[10px] text-muted-foreground/50 mt-1">已处理</p>
-                          )}
-                        </div>
-                        {n.type !== 'confirm' && (
-                          <button className="shrink-0 p-0.5 text-muted-foreground/20 hover:text-muted-foreground"
-                            onClick={() => dismiss(n.id)}>
-                            <XCircle className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })
-              )}
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* 底部：用户信息 + 菜单 */}
       <div className={cn('relative', collapsed ? 'flex flex-col items-center' : '')}>
@@ -196,8 +106,13 @@ export function Sidebar({ activeNav, onNavChange, collapsed, onToggleCollapse, o
           )}
           onClick={() => setShowUserMenu(!showUserMenu)}
         >
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted">
+          <div className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted">
             <User className="h-4 w-4" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-destructive text-[8px] font-bold text-destructive-foreground">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
           </div>
           {!collapsed && (
             <>
@@ -209,27 +124,96 @@ export function Sidebar({ activeNav, onNavChange, collapsed, onToggleCollapse, o
 
         {showUserMenu && (
           <div className={cn(
-            'absolute z-50 rounded-lg border border-border bg-card shadow-lg py-1',
-            collapsed ? 'left-full bottom-0 ml-1 w-40' : 'bottom-full left-0 mb-1 w-full',
+            'absolute z-50 rounded-lg border border-border bg-card shadow-lg',
+            collapsed ? 'left-full bottom-0 ml-1 w-72' : 'bottom-full left-0 mb-1 w-72',
           )}>
-            <button className="flex w-full items-center gap-2 px-3 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-              onClick={() => { setShowUserMenu(false); onNavChange('usage') }}>
-              <BarChart3 className="h-3.5 w-3.5" /> 用量统计
-            </button>
-            <button className="flex w-full items-center gap-2 px-3 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-              onClick={() => { setShowUserMenu(false); onOpenSettings() }}>
-              <Settings className="h-3.5 w-3.5" /> 设置
-            </button>
-            <button className="flex w-full items-center gap-2 px-3 py-2 text-xs text-destructive/70 hover:bg-destructive/10 hover:text-destructive transition-colors"
-              onClick={() => { setShowUserMenu(false); signOut() }}>
-              <LogOut className="h-3.5 w-3.5" /> 退出登录
-            </button>
+            {/* 通知预览 */}
+            <div className="border-b border-border">
+              <div className="flex items-center justify-between px-3 py-2">
+                <button
+                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  onClick={() => setShowNotifInMenu(!showNotifInMenu)}
+                >
+                  <Bell className="h-3.5 w-3.5" />
+                  <span>通知</span>
+                  {unreadCount > 0 && (
+                    <span className="rounded-full bg-destructive px-1.5 py-0.5 text-[9px] font-bold text-destructive-foreground">{unreadCount}</span>
+                  )}
+                </button>
+                <div className="flex items-center gap-1">
+                  {notifications.length > 0 && (
+                    <button className="text-[10px] text-muted-foreground/50 hover:text-muted-foreground" onClick={markAllRead}>全部已读</button>
+                  )}
+                  <button className="text-[10px] text-primary/60 hover:text-primary flex items-center gap-0.5"
+                    onClick={() => { setShowUserMenu(false); onNavChange('notifications') }}>
+                    查看全部 <ArrowRight className="h-3 w-3" />
+                  </button>
+                </div>
+              </div>
+              {showNotifInMenu && (
+                <div className="max-h-48 overflow-auto border-t border-border/50">
+                  {notifications.length === 0 ? (
+                    <p className="px-4 py-6 text-xs text-muted-foreground text-center">暂无通知</p>
+                  ) : (
+                    notifications.slice(0, 10).map(n => {
+                      const iconMap: Record<string, any> = { info: Info, warning: AlertTriangle, error: AlertCircle, confirm: AlertTriangle }
+                      const colorMap: Record<string, string> = { info: 'text-blue-500', warning: 'text-yellow-500', error: 'text-destructive', confirm: 'text-yellow-500' }
+                      const IconComp = iconMap[n.type] || Info
+                      return (
+                        <div key={n.id} className={`border-b border-border/30 last:border-0 px-3 py-2 ${n.read ? '' : 'bg-accent/30'}`}>
+                          <div className="flex items-start gap-2">
+                            <IconComp className={`h-3.5 w-3.5 shrink-0 mt-0.5 ${colorMap[n.type]}`} />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[11px] font-medium">{n.title}</p>
+                              <p className="text-[10px] text-muted-foreground/60 mt-0.5 line-clamp-2">{n.message}</p>
+                              {n.type === 'confirm' && n.actions && !n.resolved && (
+                                <div className="flex gap-1.5 mt-1.5">
+                                  {n.actions.map(a => (
+                                    <button key={a.key}
+                                      className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                                        a.variant === 'destructive'
+                                          ? 'bg-destructive/10 text-destructive hover:bg-destructive/20'
+                                          : 'bg-primary/10 text-primary hover:bg-primary/20'
+                                      }`}
+                                      onClick={() => resolveConfirm(n.id, a.key)}
+                                    >{a.label}</button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            {n.type !== 'confirm' && (
+                              <button className="shrink-0 text-muted-foreground/20 hover:text-muted-foreground"
+                                onClick={() => dismiss(n.id)}>
+                                <XCircle className="h-3 w-3" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="py-1">
+              <button className="flex w-full items-center gap-2 px-3 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                onClick={() => { setShowUserMenu(false); onNavChange('usage') }}>
+                <BarChart3 className="h-3.5 w-3.5" /> 用量统计
+              </button>
+              <button className="flex w-full items-center gap-2 px-3 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                onClick={() => { setShowUserMenu(false); onOpenSettings() }}>
+                <Settings className="h-3.5 w-3.5" /> 设置
+              </button>
+              <button className="flex w-full items-center gap-2 px-3 py-2 text-xs text-destructive/70 hover:bg-destructive/10 hover:text-destructive transition-colors"
+                onClick={() => { setShowUserMenu(false); signOut() }}>
+                <LogOut className="h-3.5 w-3.5" /> 退出登录
+              </button>
+            </div>
           </div>
         )}
       </div>
 
       {showUserMenu && <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />}
-      {showNotifPopover && <div className="fixed inset-0 z-40" onClick={() => setShowNotifPopover(false)} />}
     </aside>
   )
 }

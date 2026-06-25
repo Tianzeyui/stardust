@@ -1,10 +1,23 @@
+import { Brain } from 'lucide-react'
 import type { AIModelConfig } from '@/lib/config'
+import type { ThinkingLevel } from '@/lib/config'
+
+const THINKING_LEVELS: { level: ThinkingLevel; label: string; desc: string }[] = [
+  { level: 'off', label: '关闭', desc: '不思考，最快' },
+  { level: 'low', label: '低', desc: '简单问答' },
+  { level: 'medium', label: '中', desc: '常规编程' },
+  { level: 'high', label: '高', desc: '复杂重构' },
+  { level: 'xhigh', label: '超高', desc: '架构设计' },
+  { level: 'max', label: '极限', desc: '深度分析' },
+]
 
 interface ModelPickerProps {
   show: boolean
   autoMode: boolean
   activeModel: AIModelConfig | null
   configuredModels: AIModelConfig[]
+  thinkingLevel: ThinkingLevel
+  onThinkingChange: (level: ThinkingLevel) => void
   onToggleAuto: () => void
   onSelectCloud: (model: AIModelConfig) => void
   onClose: () => void
@@ -15,11 +28,14 @@ interface ModelPickerProps {
 
 export function ModelPicker({
   show, autoMode, activeModel,
-  configuredModels,
+  configuredModels, thinkingLevel, onThinkingChange,
   onToggleAuto, onSelectCloud, onClose,
   pickerRef, routeLabel, autoModelId,
 }: ModelPickerProps) {
   if (!show) return null
+
+  const currentIdx = THINKING_LEVELS.findIndex(l => l.level === thinkingLevel)
+  const idx = currentIdx === -1 ? 2 : currentIdx  // default to medium
 
   return (
     <div ref={pickerRef} className="absolute left-0 bottom-full z-50 mb-1 w-72 rounded-lg border border-border bg-card shadow-lg">
@@ -77,6 +93,26 @@ export function ModelPicker({
             </div>
           ))
         )}
+      </div>
+
+      {/* 思考等级滑块 */}
+      <div className="border-t border-border px-3 py-2.5">
+        <div className="flex items-center gap-2 mb-1.5">
+          <Brain className="h-3 w-3 text-muted-foreground" />
+          <span className="text-[10px] text-muted-foreground">思考等级</span>
+          <span className="text-[10px] font-medium ml-auto">{THINKING_LEVELS[idx].label}</span>
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={THINKING_LEVELS.length - 1}
+          value={idx}
+          onChange={e => onThinkingChange(THINKING_LEVELS[parseInt(e.target.value)].level)}
+          className="w-full h-1.5 appearance-none bg-muted rounded-full outline-none cursor-pointer
+            [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5
+            [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:cursor-pointer"
+        />
+        <p className="text-[9px] text-muted-foreground/50 mt-0.5">{THINKING_LEVELS[idx].desc}</p>
       </div>
     </div>
   )

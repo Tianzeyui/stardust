@@ -2,33 +2,16 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { getMemoryEnabled, saveMemoryEnabled, getAgentMaxSteps, saveAgentMaxSteps, getCompressThreshold, saveCompressThreshold, getCtxWindow, saveCtxWindow, DEFAULT_CTX_WINDOW } from '@/lib/config'
+import { getAgentMaxSteps, saveAgentMaxSteps, getCompressThreshold, saveCompressThreshold, getCtxWindow, saveCtxWindow, DEFAULT_CTX_WINDOW } from '@/lib/config'
 import { MemoryPanel } from '../MemoryPanel'
-import { MemoryManager } from '@/lib/memory/manager'
-import { createLocalMemoryStore } from '@/lib/memory/store-local'
-import { createSupabaseMemoryStore } from '@/lib/memory/store-supabase'
-import { useAuth } from '@/contexts/AuthContext'
 
 export function AgentTab() {
-  const { user } = useAuth()
-  const [memoryEnabled, setMemoryEnabled] = useState(getMemoryEnabled)
   const [maxSteps, setMaxSteps] = useState(getAgentMaxSteps)
   const [compressThreshold, setCompressThreshold] = useState(getCompressThreshold)
   const [ctxWindow, setCtxWindow] = useState(getCtxWindow)
-  const manager = new MemoryManager(createLocalMemoryStore('settings'), createSupabaseMemoryStore(() => user?.id ?? null))
 
   return (
     <div className="w-full space-y-6">
-      <fieldset className="rounded-lg border border-border p-4">
-        <legend className="px-2 text-sm font-semibold">记忆功能</legend>
-        <p className="text-xs text-muted-foreground leading-relaxed mb-3">开启后 AI 自动从对话中提取关键信息，下次对话时记住。</p>
-        <div className="flex items-center gap-2">
-          <button className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${memoryEnabled ? 'bg-primary' : 'bg-muted'}`} onClick={() => { const v = !memoryEnabled; setMemoryEnabled(v); saveMemoryEnabled(v) }}>
-            <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${memoryEnabled ? 'translate-x-4' : 'translate-x-1'}`} />
-          </button>
-          <span className="text-xs text-muted-foreground">{memoryEnabled ? '已开启' : '已关闭'}</span>
-        </div>
-      </fieldset>
       <fieldset className="rounded-lg border border-border p-4">
         <legend className="px-2 text-sm font-semibold">最大任务步数</legend>
         <p className="text-xs text-muted-foreground leading-relaxed mb-3">AI 在一次对话中最多执行多少步工具调用。建议值 10-50。</p>
@@ -46,7 +29,7 @@ export function AgentTab() {
           <div><Label className="text-xs">压缩阈值</Label><p className="text-[10px] text-muted-foreground/50 mb-1">达到上限的%时触发</p><div className="flex items-center gap-1"><Input type="number" min={30} max={95} value={compressThreshold} onChange={e => { const v = parseInt(e.target.value); if (v >= 30 && v <= 95) { setCompressThreshold(v); saveCompressThreshold(v) } }} className="h-8 w-20 text-center text-sm" /><span className="text-xs text-muted-foreground">%</span></div></div>
         </div>
       </fieldset>
-      <MemoryPanel manager={manager} />
+      <MemoryPanel />
     </div>
   )
 }

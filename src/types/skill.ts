@@ -36,7 +36,6 @@ export interface InstalledSkill {
   name: string
   description: string
   path: string
-  enabled: boolean
   installedAt: string
   /** 文件树 */
   fileTree: string

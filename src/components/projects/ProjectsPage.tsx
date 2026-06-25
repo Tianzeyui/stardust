@@ -10,8 +10,6 @@ import { ConfirmDialog } from '@/components/ui/confirmDialog'
 import { MdEditor } from '@/components/editor/MdEditor'
 import { projectStore } from '@/lib/projectStore'
 import type { Project } from '@/types/project'
-import { getInstalledSkills, toggleSkill } from '@/lib/skillService'
-import type { InstalledSkill } from '@/types/skill'
 import type { Agent } from '@/lib/agentStore'
 import { getServers, getAllTools } from '@/lib/mcpClient'
 import type { MCPServerConfig } from '@/types/electron'
@@ -36,7 +34,6 @@ export function ProjectsPage() {
   const [editingName, setEditingName] = useState('')
 
   // Settings
-  const [skills, setSkills] = useState<InstalledSkill[]>([])
   const [mcpServers, setMcpServers] = useState<MCPServerConfig[]>([])
   const [mcpServerTools, setMcpServerTools] = useState<Record<string, Array<{ name: string; description: string }>>>({})
   const [pluginToolList, setPluginToolList] = useState<Array<{ name: string; description: string }>>([])
@@ -44,7 +41,6 @@ export function ProjectsPage() {
 
   const refresh = useCallback(() => {
     setProjects(projectStore.getAll())
-    setSkills(getInstalledSkills())
     getServers().then(setMcpServers)
     // 加载 MCP 工具列表
     getAllTools().then(result => {
@@ -318,36 +314,6 @@ export function ProjectsPage() {
                 <div className="flex items-center gap-1.5 mb-3">
                   <Settings2 className="h-4 w-4 text-muted-foreground" />
                   <h4 className="text-sm font-semibold">项目设置</h4>
-                </div>
-
-                {/* Skills */}
-                <div className="mb-4">
-                  <Label className="text-xs mb-1.5 block">Skills</Label>
-                  <div className="space-y-1">
-                    {skills.length === 0 ? (
-                      <p className="text-[10px] text-muted-foreground/50">暂无已安装 Skill</p>
-                    ) : (
-                      skills.map(s => {
-                        const enabled = selected.settings.skills.includes(s.id)
-                        return (
-                          <div key={s.id}
-                            className="flex items-center justify-between py-1 px-2 rounded hover:bg-muted/50 cursor-pointer text-xs"
-                            onClick={() => {
-                              const next = enabled
-                                ? selected.settings.skills.filter(id => id !== s.id)
-                                : [...selected.settings.skills, s.id]
-                              projectStore.updateSettings(selected.id, { skills: next })
-                            }}
-                          >
-                            <span className="truncate">{s.name}</span>
-                            <span className={`relative inline-flex h-4 w-7 items-center rounded-full shrink-0 ml-2 transition-colors ${enabled ? 'bg-primary' : 'bg-muted'}`}>
-                              <span className={`inline-block h-3 w-3 rounded-full bg-white transition-transform ${enabled ? 'translate-x-3' : 'translate-x-0.5'}`} />
-                            </span>
-                          </div>
-                        )
-                      })
-                    )}
-                  </div>
                 </div>
 
                 {/* MCP 服务器 + 工具 */}

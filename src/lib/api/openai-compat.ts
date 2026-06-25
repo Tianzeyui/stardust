@@ -148,6 +148,7 @@ export async function* streamOpenAICompat(
   systemPrompt?: string,
   signal?: AbortSignal,
   maxOutputTokens?: number,
+  thinkingBudgetTokens?: number,
 ): AsyncGenerator<StreamEvent> {
   const baseUrl = (config.baseUrl || 'https://api.deepseek.com').replace(/\/+$/, '')
   const url = `${baseUrl}/v1/chat/completions`
@@ -170,6 +171,15 @@ export async function* streamOpenAICompat(
   }
   if (hasTools) {
     body.tools = openaiTools
+  }
+
+  // OpenAI o 系列模型支持 reasoning_effort
+  if (thinkingBudgetTokens && thinkingBudgetTokens > 0) {
+    const isOpenAI = config.provider === 'OpenAI' || config.baseUrl?.includes('openai.com')
+    if (isOpenAI) {
+      const budget = thinkingBudgetTokens
+      body.reasoning_effort = budget <= 1024 ? 'low' : budget <= 4096 ? 'medium' : 'high'
+    }
   }
 
   const response = await fetch(url, {
