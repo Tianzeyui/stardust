@@ -84,16 +84,10 @@ export function DiaryPage() {
             year: 'numeric', month: 'long', day: 'numeric', weekday: 'long',
           })}
         </p>
-        {!editing && selectedEntry && (
+        {selectedEntry && (
           <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setEditing(true)}>
             <PenLine className="mr-1 h-3.5 w-3.5" />
             编辑
-          </Button>
-        )}
-        {!editing && !selectedEntry && (
-          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setEditing(true)}>
-            <PenLine className="mr-1 h-3.5 w-3.5" />
-            写日记
           </Button>
         )}
         {selectedEntry && (
@@ -102,9 +96,9 @@ export function DiaryPage() {
             删除
           </Button>
         )}
-        <Button size="sm" className="h-7 text-xs" onClick={handleNew}>
+        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={handleNew}>
           <Plus className="mr-1 h-3.5 w-3.5" />
-          新建
+          写日记
         </Button>
       </div>
 
