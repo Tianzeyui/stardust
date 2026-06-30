@@ -189,7 +189,7 @@ export function createMemoryStore(getProjectPath: () => string | null): MemorySt
       const filePath = `${dir}/${name}.md`
       const exists = await fs().exists(filePath)
       if (exists) {
-        await fs().deleteFile(filePath)
+        await fs().unlink(filePath)
       }
 
       // 更新 MEMORY.md 索引

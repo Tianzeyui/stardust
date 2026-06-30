@@ -884,6 +884,7 @@ dispatch({ type: 'TOOL_BATCH_CREATE', textBeforeTool: '', tools: toolBatchRef.cu
               inputTokens: t.inputTokens,
               outputTokens: t.outputTokens,
               cachedTokens: t.cachedInputTokens,
+              agentTokens: 0,
               toolCalls: t.toolCalls.length,
               duration: t.totalDuration,
             })

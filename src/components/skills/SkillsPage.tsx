@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, FolderSearch, Loader2, Package, Globe } from 'lucide-react'
+import { Plus, FolderSearch, Loader2, BookOpen, Globe } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -125,23 +125,25 @@ export function SkillsPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-11 items-center gap-2 border-b border-border px-4">
-        <Package className="h-4 w-4 text-muted-foreground shrink-0" />
-        <h2 className="text-sm font-semibold">Skills</h2>
-        <div className="flex-1" />
-        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleBrowse}>
-          <FolderSearch className="mr-1 h-3.5 w-3.5" />浏览
-        </Button>
-        <Button size="sm" className="h-7 text-xs" onClick={handleInstall} disabled={installing || !installPath.trim()}>
-          {installing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Plus className="mr-1 h-3.5 w-3.5" />}
-          安装
-        </Button>
-      </div>
-
       <div className="flex-1 overflow-auto p-4">
+        {/* 页面标题 + 操作 */}
+        <div className="flex items-center gap-2 mb-4">
+          <BookOpen className="h-4 w-4 text-muted-foreground shrink-0" />
+          <h2 className="text-sm font-semibold">Skills</h2>
+        </div>
+
         {/* 本地安装 */}
         <div className="mb-3 rounded-lg border border-border p-3">
-          <h3 className="mb-2 text-xs font-medium text-muted-foreground">本地目录安装</h3>
+          <div className="flex items-center gap-2 mb-2">
+            <h3 className="text-xs font-medium text-muted-foreground flex-1">本地目录安装</h3>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleBrowse}>
+              <FolderSearch className="mr-1 h-3.5 w-3.5" />浏览
+            </Button>
+            <Button size="sm" className="h-7 text-xs" onClick={handleInstall} disabled={installing || !installPath.trim()}>
+              {installing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Plus className="mr-1 h-3.5 w-3.5" />}
+              安装
+            </Button>
+          </div>
           <div className="flex gap-2">
             <Input
               className="flex-1 h-7 font-mono text-xs"
@@ -183,7 +185,7 @@ export function SkillsPage() {
 
         {skills.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
-            <Package className="h-12 w-12 opacity-20" />
+            <BookOpen className="h-12 w-12 opacity-20" />
             <p className="text-sm">暂无已安装的 Skill</p>
             <p className="text-xs">点击上方「浏览」选择 Skill 目录进行安装</p>
           </div>

@@ -72,7 +72,7 @@ function ChatMessageInner({ msg }: ChatMessageProps) {
   if (msg.role === 'tool' && (msg as any).toolBatch) {
     const batch = (msg as any).toolBatch as ToolCallStatus[]
     return (
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-2">
         {batch.map(tc => {
           if (tc.name === 'run_terminal' ) return null
           if (tc.name === 'web_search') return <SearchBubble key={tc.id} tc={tc} />
@@ -102,7 +102,7 @@ function ChatMessageInner({ msg }: ChatMessageProps) {
       <div className={`min-w-0 ${msg.role === 'user' ? 'max-w-[85%]' : 'max-w-full flex-1'}`}>
         {msg.role === 'user' ? (
           <div>
-            <div className="rounded-lg bg-primary px-4 py-2.5 text-sm text-primary-foreground">
+            <div className="rounded-lg bg-gray-100 px-4 py-2.5 text-sm text-black">
               <p className="whitespace-pre-wrap">{msg.content}</p>
             </div>
             {msg.attachments && msg.attachments.length > 0 && (
@@ -236,14 +236,14 @@ function ToolBubble({ tc }: { tc: ToolCallStatus }) {
   }, [tc.status])
 
   return (
-    <div className="flex gap-3 max-w-full">
-      <div className={`min-w-0 ${expanded || tc.status === 'running' ? 'flex-1' : ''}`}>
+    <div className="flex gap-3 w-full">
+      <div className="min-w-0 flex-1">
         <div
-          className={`rounded-lg border px-3 py-2 text-xs overflow-hidden ${
+          className={`pt-0.5 pb-1.5 text-xs overflow-hidden w-full ${
             isError
-              ? 'border-destructive/30 bg-destructive/5'
-              : 'border-border bg-card'
-          } ${expanded || tc.status === 'running' ? 'w-full' : 'inline-block'}`}
+              ? 'border-l-2 border-destructive/40 pl-2 text-destructive'
+              : ''
+          }`}
         >
           {/* 头部：icon + 标签/名称/状态 */}
           <div className="flex items-start gap-2">
@@ -391,13 +391,13 @@ function ThinkingBlock({ thinking, loading, content, duration }: { thinking: str
   if (content && (content.startsWith(thinking) || thinking.startsWith(content))) return null
 
   return (
-    <div className="mb-2 rounded-md border border-border/50 bg-muted/30 overflow-hidden">
+    <div className="mb-2">
       <button
-        className="flex items-center gap-1.5 w-full px-2.5 py-1.5 text-left hover:bg-muted/50 transition-colors"
+        className="flex items-center gap-1.5 w-full py-1 text-left hover:opacity-70 transition-opacity"
         onClick={() => setExpanded(!expanded)}
       >
         <Brain className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
-        <span className="text-[11px] font-medium text-muted-foreground/60">思考</span>
+        <span className="text-[11px] text-muted-foreground/50">思考</span>
         {loading ? (
           <>
             <Loader2 className="h-3 w-3 text-muted-foreground/40 animate-spin shrink-0" />
@@ -410,7 +410,7 @@ function ThinkingBlock({ thinking, loading, content, duration }: { thinking: str
         <ChevronDown className={`h-3 w-3 text-muted-foreground/30 transition-transform ${expanded ? 'rotate-180' : ''}`} />
       </button>
       {expanded && (
-        <div className="border-t border-border/30 px-3 py-2 max-h-64 overflow-auto custom-scrollbar">
+        <div className="py-1 max-h-64 overflow-auto custom-scrollbar">
           <MarkdownPreview
             source={thinking}
             style={{ fontSize: 12, backgroundColor: 'transparent', color: 'var(--muted-foreground)', opacity: loading ? 0.7 : 0.5 }}

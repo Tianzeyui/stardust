@@ -123,61 +123,60 @@ export function ProjectsPage() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* 顶栏 */}
-      <div className="flex h-11 items-center gap-2 px-4 border-b border-border">
-        <FolderKanban className="h-4 w-4 text-muted-foreground shrink-0" />
-        <h2 className="text-sm font-semibold shrink-0">项目</h2>
-        <div className="flex-1" />
-        <Button size="sm" variant="outline" className="h-7 gap-1" onClick={() => setShowCreate(!showCreate)}>
-          <Plus className="h-3.5 w-3.5" />
-          <span className="text-[11px]">新建项目</span>
-        </Button>
+      {/* 顶栏 — 全宽，对齐插件/Skills 页位置 */}
+      <div className="px-4 pt-4 pb-2 shrink-0">
+        <div className="flex items-center gap-2">
+          <FolderKanban className="h-4 w-4 text-muted-foreground shrink-0" />
+          <h2 className="text-sm font-semibold">项目</h2>
+          <Button size="sm" variant="ghost" className="h-6 w-6 p-0 ml-auto" onClick={() => setShowCreate(!showCreate)}>
+            <Plus className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
 
-      {/* 主内容 */}
       <div className="flex-1 flex min-h-0">
         {/* 左侧列表 */}
-        <div className="w-60 shrink-0 border-r border-border overflow-auto">
+        <div className="w-52 shrink-0 overflow-auto flex flex-col">
+          <div className="flex-1 overflow-auto pt-0.5">
           {projects.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
-              <FolderKanban className="h-10 w-10 opacity-20" />
-              <p className="text-xs">暂无项目</p>
+            <div className="flex flex-col items-center gap-1.5 py-12 text-muted-foreground">
+              <FolderKanban className="h-6 w-6 opacity-20" />
+              <p className="text-[11px]">暂无项目</p>
             </div>
           ) : (
             projects.map(p => (
               <button
                 key={p.id}
-                className={`flex items-center gap-2 w-full px-3 py-2 text-left text-xs transition-colors ${
-                  selectedId === p.id ? 'bg-accent' : 'hover:bg-muted/50'
+                className={`flex items-center gap-2 w-full px-3 py-1.5 text-left text-xs transition-colors ${
+                  selectedId === p.id ? 'bg-muted' : 'hover:bg-muted/30'
                 }`}
                 onClick={() => { setSelectedId(p.id); setShowCreate(false) }}
               >
                 <FolderKanban className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <span className="truncate block">{p.name}</span>
-                </div>
+                <span className="truncate block">{p.name}</span>
               </button>
             ))
           )}
         </div>
+        </div>
 
         {/* 右侧详情 / 新建 */}
-        <div className="flex-1 overflow-auto p-6">
+        <div className="flex-1 overflow-auto p-4">
           {showCreate ? (
-            <div className="max-w-md space-y-4">
-              <h3 className="text-sm font-semibold">新建项目</h3>
+            <div className="max-w-md space-y-3">
+              <h3 className="text-xs font-semibold">新建项目</h3>
               <div>
-                <Label className="text-xs">名称</Label>
+                <Label className="text-[11px]">名称</Label>
                 <Input className="h-8 text-sm" value={newName} onChange={e => setNewName(e.target.value)}
                   placeholder="我的项目" onKeyDown={e => e.key === 'Enter' && handleCreate()} />
               </div>
               <div>
-                <Label className="text-xs">描述（可选）</Label>
+                <Label className="text-[11px]">描述（可选）</Label>
                 <Input className="h-8 text-sm" value={newDesc} onChange={e => setNewDesc(e.target.value)}
                   placeholder="项目用途说明" onKeyDown={e => e.key === 'Enter' && handleCreate()} />
               </div>
               <div>
-                <Label className="text-xs">工作区目录（可选，留空自动生成）</Label>
+                <Label className="text-[11px]">工作区目录（可选，留空自动生成）</Label>
                 <div className="flex gap-2">
                   <Input className="h-8 text-xs font-mono flex-1" value={newPath} onChange={e => setNewPath(e.target.value)}
                     placeholder="留空自动创建到 ~/Stardust/projects/ 下" onKeyDown={e => e.key === 'Enter' && handleCreate()} />
@@ -201,11 +200,11 @@ export function ProjectsPage() {
               </div>
             </div>
           ) : selected ? (
-            <div className="space-y-6">
+            <div className="space-y-4">
               {/* 基本信息 */}
               <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <FolderKanban className="h-5 w-5 text-muted-foreground" />
+                <div className="flex items-center gap-2 mb-2">
+                  <FolderKanban className="h-4 w-4 text-muted-foreground" />
                   {editingName ? (
                     <Input
                       className="h-7 w-48 text-sm font-semibold"
@@ -224,7 +223,7 @@ export function ProjectsPage() {
                     />
                   ) : (
                     <h3
-                      className="text-base font-semibold cursor-pointer hover:text-primary transition-colors"
+                      className="text-sm font-semibold cursor-pointer hover:text-primary transition-colors"
                       onClick={() => setEditingName(selected.name)}
                       title="点击修改名称"
                     >
@@ -233,10 +232,10 @@ export function ProjectsPage() {
                   )}
                 </div>
                 {selected.description && (
-                  <p className="text-sm text-muted-foreground mb-2">{selected.description}</p>
+                  <p className="text-xs text-muted-foreground mb-1.5">{selected.description}</p>
                 )}
                 <div className="flex items-center gap-2">
-                  <p className="text-xs text-muted-foreground/50 font-mono truncate flex-1">{selected.path}</p>
+                  <p className="text-[11px] text-muted-foreground/50 font-mono truncate flex-1">{selected.path}</p>
                   <button
                     className="shrink-0 text-[10px] text-muted-foreground/50 hover:text-primary transition-colors"
                     onClick={() => { setMigrateTarget(selected); setMigratePath(''); setMigrateCopy(true) }}
@@ -250,7 +249,7 @@ export function ProjectsPage() {
 
                 {/* 迁移面板 */}
                 {migrateTarget && migrateTarget.id === selected.id && (
-                  <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+                  <div className="rounded-lg border border-border/50 p-3 mt-2 space-y-2">
                     <div className="flex items-center gap-1.5 text-xs font-medium">
                       <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
                       更换工作区目录
@@ -307,18 +306,18 @@ export function ProjectsPage() {
                 </Button>
               </div>
 
-              <hr className="border-border" />
+              <hr className="border-border/50" />
 
               {/* 项目设置 */}
               <div>
-                <div className="flex items-center gap-1.5 mb-3">
-                  <Settings2 className="h-4 w-4 text-muted-foreground" />
-                  <h4 className="text-sm font-semibold">项目设置</h4>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Settings2 className="h-3.5 w-3.5 text-muted-foreground" />
+                  <h4 className="text-xs font-semibold">项目设置</h4>
                 </div>
 
                 {/* MCP 服务器 + 工具 */}
-                <div className="mb-4">
-                  <Label className="text-xs mb-1.5 block">MCP 服务器</Label>
+                <div className="mb-3">
+                  <Label className="text-[11px] mb-1 block">MCP 服务器</Label>
                   <div className="space-y-0.5">
                     {mcpServers.length === 0 ? (
                       <p className="text-[10px] text-muted-foreground/50">暂无已配置 MCP 服务器</p>
@@ -369,7 +368,7 @@ export function ProjectsPage() {
                             </div>
                             {/* 展开的工具列表 */}
                             {expanded && srv.enabled && serverEnabled && (
-                              <div className="ml-6 border-l border-border pl-3 space-y-0.5">
+                              <div className="ml-6 border-l border-border/50 pl-3 space-y-0.5">
                                 {tools.length === 0 ? (
                                   <p className="text-[10px] text-muted-foreground/50 py-1">暂无工具</p>
                                 ) : (
@@ -424,8 +423,8 @@ export function ProjectsPage() {
                 </div>
 
                 {/* 插件工具 */}
-                <div className="mb-4">
-                  <Label className="text-xs mb-1.5 block">插件工具</Label>
+                <div className="mb-3">
+                  <Label className="text-[11px] mb-1 block">插件工具</Label>
                   <div className="space-y-0.5">
                     {pluginToolList.length === 0 ? (
                       <p className="text-[10px] text-muted-foreground/50">暂无注册工具的插件</p>
@@ -490,9 +489,12 @@ export function ProjectsPage() {
               </div>
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground">
-              <FolderKanban className="h-12 w-12 opacity-20" />
-              <p className="text-sm">选择项目或新建一个</p>
+            <div className="flex flex-col items-center justify-center h-full gap-2 text-muted-foreground">
+              <FolderKanban className="h-8 w-8 opacity-20" />
+              <p className="text-xs">选择项目或新建一个</p>
+              <Button size="sm" variant="outline" className="h-7 text-xs mt-1" onClick={() => setShowCreate(true)}>
+                <Plus className="h-3 w-3 mr-1" />新建项目
+              </Button>
             </div>
           )}
         </div>

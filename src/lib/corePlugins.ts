@@ -21,9 +21,9 @@ const coreProjects: Plugin = {
 }
 
 const coreSkills: Plugin = {
-  manifest: { id: 'skills', name: 'Skills', version: '1.0.0', description: '', icon: 'Package', navOrder: 20, enabled: true },
+  manifest: { id: 'skills', name: 'Skills', version: '1.0.0', description: '', icon: 'BookOpen', navOrder: 20, enabled: true },
   register(ctx) {
-    ctx.registerNav({ id: 'skills', label: 'Skills', icon: 'Package', order: 20 })
+    ctx.registerNav({ id: 'skills', label: 'Skills', icon: 'BookOpen', order: 20 })
     ctx.registerRoute('skills', () => import('@/components/skills/SkillsPage'))
   },
 }
@@ -37,10 +37,17 @@ const coreNotifications: Plugin = {
 }
 
 const corePluginsPage: Plugin = {
-  manifest: { id: 'plugins', name: '插件', version: '1.0.0', description: '', icon: 'Package', navOrder: 50, enabled: true },
+  manifest: { id: 'plugins', name: '插件', version: '1.0.0', description: '', icon: 'Blocks', navOrder: 50, enabled: true },
   register(ctx) {
-    ctx.registerNav({ id: 'plugins', label: '插件', icon: 'Package', order: 50 })
+    ctx.registerNav({ id: 'plugins', label: '插件', icon: 'Blocks', order: 50 })
     ctx.registerRoute('plugins', () => import('@/components/plugins/PluginsPage'))
+  },
+}
+
+const coreUsagePage: Plugin = {
+  manifest: { id: 'usage', name: '用量统计', version: '1.0.0', description: '', icon: 'BarChart3', navOrder: 0, enabled: true },
+  register(ctx) {
+    ctx.registerRoute('usage', () => import('@/components/usage/UsageStatsPage'))
   },
 }
 
@@ -50,4 +57,5 @@ export function initCorePlugins() {
   pluginSystem.registerCore(coreSkills)
   pluginSystem.registerCore(corePluginsPage)
   pluginSystem.registerCore(coreNotifications)
+  pluginSystem.registerCore(coreUsagePage)
 }

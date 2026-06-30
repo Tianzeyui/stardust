@@ -48,6 +48,7 @@ export function registerSidecarIpc(): void {
       const lines = r._events
         ?.filter((e: any) => e.event === 'event.fs.grepResult')
         ?.map((e: any) => `${e.file}:${e.line}:${e.text}`) ?? []
+      console.log('[sidecarIpc] grep result:', { results: lines.length, count: r.count })
       return { success: true, output: lines.slice(0, 200).join('\n') || '(无匹配)', count: r.count }
     },
   )

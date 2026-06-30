@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/button'
 import { getTraces, getTotalStats, type TraceRecord } from '@/lib/traceStore'
 
 function fmt(n: number): string {
+  if (!Number.isFinite(n)) return '0'
   if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`
   if (n >= 1000) return `${(n / 1000).toFixed(1)}K`
-  return String(n)
+  return String(Math.round(n))
 }
 
 function fmtDuration(ms: number): string {
@@ -28,7 +29,7 @@ export function UsageStatsPage({ onClose }: { onClose?: () => void }) {
     const key = t.modelName || '未知'
     const s = modelStats.get(key) || { tokens: 0, calls: 0, agentTokens: 0 }
     s.tokens += t.inputTokens + t.outputTokens
-    s.agentTokens += t.agentTokens || 0
+    s.agentTokens += (t.agentTokens || 0)
     s.calls++
     modelStats.set(key, s)
   }
@@ -45,7 +46,7 @@ export function UsageStatsPage({ onClose }: { onClose?: () => void }) {
   for (const t of traces) {
     const key = toDateKey(t.timestamp)
     const d = dailyMap.get(key) || { tokens: 0, count: 0, tools: 0 }
-    d.tokens += t.inputTokens + t.outputTokens + t.agentTokens
+    d.tokens += t.inputTokens + t.outputTokens + (t.agentTokens || 0)
     d.count++
     d.tools += t.toolCalls
     dailyMap.set(key, d)
@@ -107,8 +108,8 @@ export function UsageStatsPage({ onClose }: { onClose?: () => void }) {
               <p className="text-xs font-medium mb-3">Token 趋势（最近 10 次）</p>
               <div className="space-y-1.5">
                 {traces.slice(0, 10).reverse().map(t => {
-                  const total = t.inputTokens + t.outputTokens + t.agentTokens
-                  const max = Math.max(...traces.slice(0, 10).map(x => x.inputTokens + x.outputTokens + x.agentTokens), 1)
+                  const total = t.inputTokens + t.outputTokens + (t.agentTokens || 0)
+                  const max = Math.max(...traces.slice(0, 10).map(x => x.inputTokens + x.outputTokens + (x.agentTokens || 0)), 1)
                   return (
                     <div key={t.id} className="flex items-center gap-2">
                       <span className="text-[10px] text-muted-foreground w-24 shrink-0 truncate">{toDateKey(t.timestamp)}</span>
@@ -117,7 +118,7 @@ export function UsageStatsPage({ onClose }: { onClose?: () => void }) {
                           <span className="text-[9px] text-primary-foreground font-medium">{fmt(total)}</span>
                         </div>
                       </div>
-                      {t.agentTokens > 0 && <span className="text-[9px] text-muted-foreground/50 w-10 shrink-0">+{fmt(t.agentTokens)}</span>}
+                      {(t.agentTokens || 0) > 0 && <span className="text-[9px] text-muted-foreground/50 w-10 shrink-0">+{fmt(t.agentTokens || 0)}</span>}
                     </div>
                   )
                 })}
@@ -170,7 +171,7 @@ export function UsageStatsPage({ onClose }: { onClose?: () => void }) {
                           </div>
                         </div>
                         <span className="text-[9px] text-muted-foreground/50 w-14 shrink-0 text-right">{s.calls}次</span>
-                        {s.agentTokens > 0 && <span className="text-[9px] text-muted-foreground/30 w-10 shrink-0">+{fmt(s.agentTokens)}</span>}
+                        {(s.agentTokens || 0) > 0 && <span className="text-[9px] text-muted-foreground/30 w-10 shrink-0">+{fmt(s.agentTokens || 0)}</span>}
                       </div>
                     )
                   })
@@ -194,8 +195,8 @@ export function UsageStatsPage({ onClose }: { onClose?: () => void }) {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-muted-foreground">{toDateKey(t.timestamp)} {new Date(t.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</p>
                     <p className="text-[10px] text-muted-foreground/50">
-                      {fmt(t.inputTokens + t.outputTokens + t.agentTokens)} tok
-                      {t.agentTokens > 0 ? ` (含子Agent ${fmt(t.agentTokens)})` : ''}
+                      {fmt(t.inputTokens + t.outputTokens + (t.agentTokens || 0))} tok
+                      {(t.agentTokens || 0) > 0 ? ` (含子Agent ${fmt(t.agentTokens || 0)})` : ''}
                       {' · '}{t.toolCalls} 工具 · {fmtDuration(t.duration)}
                     </p>
                   </div>

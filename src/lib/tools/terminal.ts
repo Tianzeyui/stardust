@@ -30,7 +30,8 @@ export function registerTerminalTool(tools: ToolMap) {
     }),
     execute: async ({ command, cwd }: { command: string; cwd?: string }) => {
       const id = 'term_' + Math.random().toString(36).slice(2, 8)
-      const term = createTerminal(id, command, cwd || undefined, false)
+      const workDir = cwd || _termWorkspaceRoot || '.'
+      const term = createTerminal(id, command, workDir, false)
       const permApi = (window as any).electronAPI?.perm
       const cmdPattern = command.split(/\s+/)[0] || command
 
@@ -67,7 +68,7 @@ export function registerTerminalTool(tools: ToolMap) {
       }
 
       try {
-        const result = await api.execute(id, command, cwd || '')
+        const result = await api.execute(id, command, workDir)
         const wasCancelled = getTerminal(id)?.status === 'cancelled'
         updateTerminal(id, {
           status: wasCancelled ? 'cancelled' : result.success ? 'done' : 'error',

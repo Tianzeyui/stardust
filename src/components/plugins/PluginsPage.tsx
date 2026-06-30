@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Trash2, FolderOpen, Package, Globe, RefreshCw, AlertCircle, GitBranch, Download } from 'lucide-react'
+import { Plus, Trash2, FolderOpen, Blocks, Globe, RefreshCw, AlertCircle, GitBranch, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { pluginSystem } from '@/lib/pluginSystem'
@@ -182,40 +182,38 @@ export function PluginsPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-11 items-center gap-2 border-b border-border px-4">
-        <Package className="h-4 w-4 text-muted-foreground shrink-0" />
-        <h2 className="text-sm font-semibold">插件</h2>
-
-        {/* Tab 切换 */}
-        <div className="flex items-center gap-0.5 ml-4 bg-muted rounded-md p-0.5">
-          <button
-            className={`px-2.5 py-1 rounded text-xs transition-colors ${tab === 'local' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-            onClick={() => setTab('local')}
-          >
-            本地安装
-          </button>
-          <button
-            className={`px-2.5 py-1 rounded text-xs transition-colors ${tab === 'community' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-            onClick={() => setTab('community')}
-          >
-            社区
-          </button>
-          <button
-            className={`px-2.5 py-1 rounded text-xs transition-colors ${tab === 'repos' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-            onClick={() => setTab('repos')}
-          >
-            仓库
-          </button>
-        </div>
-      </div>
-
-      {msg && (
-        <div className={`mx-4 mt-2 px-3 py-1.5 rounded text-xs ${msg.includes('失败') ? 'bg-destructive/10 text-destructive' : 'bg-green-500/10 text-green-600'}`}>
-          {msg}
-        </div>
-      )}
-
       <div className="flex-1 overflow-auto p-4 space-y-4">
+        {/* 页面标题 + Tab 切换 */}
+        <div className="flex items-center gap-2 mb-1">
+          <Blocks className="h-4 w-4 text-muted-foreground shrink-0" />
+          <h2 className="text-sm font-semibold">插件</h2>
+          <div className="flex items-center gap-0.5 ml-4 bg-muted rounded-md p-0.5">
+            <button
+              className={`px-2.5 py-1 rounded text-xs transition-colors ${tab === 'local' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              onClick={() => setTab('local')}
+            >
+              本地安装
+            </button>
+            <button
+              className={`px-2.5 py-1 rounded text-xs transition-colors ${tab === 'community' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              onClick={() => setTab('community')}
+            >
+              社区
+            </button>
+            <button
+              className={`px-2.5 py-1 rounded text-xs transition-colors ${tab === 'repos' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              onClick={() => setTab('repos')}
+            >
+              仓库
+            </button>
+          </div>
+        </div>
+
+        {msg && (
+          <div className={`px-3 py-1.5 rounded text-xs ${msg.includes('失败') ? 'bg-destructive/10 text-destructive' : 'bg-green-500/10 text-green-600'}`}>
+            {msg}
+          </div>
+        )}
         {/* === 本地安装 Tab === */}
         {tab === 'local' && (
           <>

@@ -44,7 +44,7 @@ async fn terminal_exec(req: crate::protocol::Request, _tx: mpsc::Sender<OutputLi
             data: None,
         }
     })?;
-    let cwd = req.param_str("cwd").unwrap_or(".");
+    let cwd = req.param_str("cwd").filter(|s| !s.is_empty()).unwrap_or(".");
 
     let (shell, shell_arg) = if cfg!(target_os = "windows") {
         ("cmd.exe", "/c")
@@ -96,7 +96,7 @@ async fn terminal_spawn(req: crate::protocol::Request, tx: mpsc::Sender<OutputLi
             data: None,
         }
     })?;
-    let cwd = req.param_str("cwd").unwrap_or(".");
+    let cwd = req.param_str("cwd").filter(|s| !s.is_empty()).unwrap_or(".");
 
     let (shell, shell_arg) = if cfg!(target_os = "windows") {
         ("cmd.exe", "/c")
@@ -272,7 +272,7 @@ async fn terminal_pty_spawn(req: crate::protocol::Request, tx: mpsc::Sender<Outp
             data: None,
         }
     })?;
-    let cwd = req.param_str("cwd").unwrap_or(".");
+    let cwd = req.param_str("cwd").filter(|s| !s.is_empty()).unwrap_or(".");
 
     use portable_pty::{CommandBuilder, PtySize};
 

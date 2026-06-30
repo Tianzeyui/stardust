@@ -10,7 +10,7 @@ export interface TraceRecord {
   inputTokens: number
   outputTokens: number
   cachedTokens?: number  // 缓存命中
-  agentTokens: number
+  agentTokens?: number   // 子Agent token（历史数据可能缺失）
   toolCalls: number
   duration: number
 }
@@ -38,7 +38,7 @@ export function getTotalStats(): {
   avgTokensPerConv: number
 } {
   const traces = getTraces()
-  const totalTokens = traces.reduce((sum, t) => sum + t.inputTokens + t.outputTokens + t.agentTokens, 0)
+  const totalTokens = traces.reduce((sum, t) => sum + t.inputTokens + t.outputTokens + (t.agentTokens || 0), 0)
   const totalToolCalls = traces.reduce((sum, t) => sum + t.toolCalls, 0)
   const totalDuration = traces.reduce((sum, t) => sum + t.duration, 0)
   return {

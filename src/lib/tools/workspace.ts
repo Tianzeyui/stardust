@@ -341,7 +341,9 @@ export async function registerWorkspaceTools(tools: ToolMap) {
       const ctxAfter = args.context_after ?? 2
       const outputMode = args.output || 'files_with_matches'
 
+      console.log('[workspace_grep]', { basePath, pattern: args.pattern, fileGlob: args.file })
       const result = await api.grep(basePath, args.pattern, args.file)
+      console.log('[workspace_grep] result:', { success: result.success, outputLen: result.output?.length, count: (result as any).count, error: result.error, outputPreview: result.output?.slice(0, 300) })
       if (!result.success) return `grep 失败: ${result.error}`
       if (!result.output?.trim()) return '(无匹配)'
 

@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import {
-  Bot, MessageSquare, Package, FolderOpen, FolderKanban, BookOpen, Lightbulb, BarChart3,
+  Bot, MessageSquare, Package, FolderOpen, FolderKanban, BookOpen, Lightbulb, BarChart3, Puzzle, Blocks,
   Settings, LogOut, PanelLeftClose, PanelLeftOpen, User, ChevronDown, Bell, XCircle, Info, AlertTriangle, AlertCircle, ArrowRight,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -24,7 +24,7 @@ interface SidebarProps {
 }
 
 const iconMap: Record<string, any> = {
-  Bot, MessageSquare, Package, FolderOpen, FolderKanban, BookOpen, Lightbulb, BarChart3,
+  Bot, MessageSquare, Package, FolderOpen, FolderKanban, BookOpen, Lightbulb, BarChart3, Puzzle, Blocks,
 }
 
 export function Sidebar({ activeNav, onNavChange, collapsed, onToggleCollapse, onOpenSettings, onCloseSettings }: SidebarProps) {

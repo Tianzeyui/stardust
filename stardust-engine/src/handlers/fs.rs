@@ -182,7 +182,8 @@ async fn fs_unlink(req: crate::protocol::Request, _tx: mpsc::Sender<OutputLine>)
 const SKIP_DIRS: &[&str] = &[
     "node_modules", ".git", ".stardust", "dist", "build",
     ".next", "__pycache__", ".DS_Store", "target", ".vscode",
-    ".idea", "coverage", ".nyc_output",
+    ".idea", "coverage", ".nyc_output", "release", "out",
+    ".turbo", ".cache", ".codex", ".wrangler",
 ];
 
 async fn fs_find(req: crate::protocol::Request, tx: mpsc::Sender<OutputLine>) -> HandlerResult {
@@ -304,9 +305,22 @@ async fn fs_grep(req: crate::protocol::Request, tx: mpsc::Sender<OutputLine>) ->
         return Ok(serde_json::json!({"success": false, "error": "不是目录"}));
     }
 
+    // 构建文件 glob 过滤器（对齐前端 globToRegex 逻辑）
     let glob_pattern: Option<regex::Regex> = file_glob.map(|g| {
-        let escaped = regex::escape(g).replace("\\*", ".*");
-        regex::Regex::new(&format!("{escaped}$")).unwrap()
+        // 去掉 ./ 前缀
+        let g = g.strip_prefix("./").unwrap_or(g);
+        // 1. 转义正则特殊字符
+        let escaped = regex::escape(g);
+        // 2. 按序替换 glob 通配符（**/ 必须在 * 之前处理，防止冲突）
+        let re_str = escaped
+            .replace("\\*\\*/", "\x00")       // **/ → 占位符
+            .replace("\\*", "[^/]*")           // * → 路径段内通配
+            .replace("\\?", "[^/]")            // ? → 单字符
+            .replace('\x00', "(?:.+/)*");      // 占位符 → 任意目录深度
+        regex::RegexBuilder::new(&format!("^{re_str}$"))
+            .case_insensitive(true)
+            .build()
+            .unwrap()
     });
 
     let walker = ignore::WalkBuilder::new(path)
@@ -337,10 +351,10 @@ async fn fs_grep(req: crate::protocol::Request, tx: mpsc::Sender<OutputLine>) ->
                 let file_path = entry.path();
 
                 if let Some(ref glob) = glob_pattern {
-                    if let Some(ext) = file_path.extension() {
-                        if !glob.is_match(&ext.to_string_lossy()) {
-                            continue;
-                        }
+                    // 用相对路径匹配 glob（如 *.ts、src/**/*.vue）
+                    let rel_path = file_path.strip_prefix(&path).unwrap_or(file_path);
+                    if !glob.is_match(&rel_path.to_string_lossy()) {
+                        continue;
                     }
                 }
 
