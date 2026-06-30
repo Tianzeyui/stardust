@@ -1,7 +1,8 @@
 import { useState, useCallback, useEffect } from 'react'
-import { Plus, PenLine, BookOpen, Trash2 } from 'lucide-react'
+import { Plus, PenLine, BookOpen, Trash2, List, CalendarDays } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DiaryTimeline } from './DiaryTimeline'
+import { DiaryCalendar } from './DiaryCalendar'
 import { DiaryContent } from './DiaryContent'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { fetchDiaryEntries, upsertDiaryEntry, deleteDiaryEntry } from '@/lib/diaryService'
@@ -11,11 +12,14 @@ function todayStr(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
+type SidebarView = 'timeline' | 'calendar'
+
 export function DiaryPage() {
   const [entries, setEntries] = useState<DiaryEntry[]>([])
   const [selectedDate, setSelectedDate] = useState<string>(todayStr())
   const [editing, setEditing] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [sidebarView, setSidebarView] = useState<SidebarView>('timeline')
 
   const loadEntries = useCallback(async () => {
     if (!isSupabaseConfigured()) return
@@ -102,16 +106,46 @@ export function DiaryPage() {
         </Button>
       </div>
 
-      {/* 内容区：时间轴 + 正文 */}
+      {/* 内容区：侧栏 + 正文 */}
       <div className="flex flex-1 overflow-hidden">
         <div className="flex w-72 shrink-0 flex-col border-r border-border">
-          <DiaryTimeline
-            entries={entries}
-            selectedDate={selectedDate}
-            onSelect={handleSelectDate}
-            loading={loading}
-          />
+          {/* 视图切换 */}
+          <div className="flex items-center gap-0.5 px-3 py-2 border-b border-border/50">
+            <button
+              className={`flex items-center gap-1 rounded px-2 py-1 text-[11px] transition-colors ${sidebarView === 'timeline' ? 'bg-muted font-medium' : 'text-muted-foreground hover:text-foreground'}`}
+              onClick={() => setSidebarView('timeline')}
+            >
+              <List className="h-3 w-3" />时间线
+            </button>
+            <button
+              className={`flex items-center gap-1 rounded px-2 py-1 text-[11px] transition-colors ${sidebarView === 'calendar' ? 'bg-muted font-medium' : 'text-muted-foreground hover:text-foreground'}`}
+              onClick={() => setSidebarView('calendar')}
+            >
+              <CalendarDays className="h-3 w-3" />日历
+            </button>
+          </div>
+
+          {/* 视图内容 */}
+          <div className="flex-1 overflow-auto">
+            {sidebarView === 'timeline' ? (
+              <DiaryTimeline
+                entries={entries}
+                selectedDate={selectedDate}
+                onSelect={handleSelectDate}
+                loading={loading}
+              />
+            ) : (
+              <div className="p-3">
+                <DiaryCalendar
+                  entries={entries}
+                  selectedDate={selectedDate}
+                  onSelect={handleSelectDate}
+                />
+              </div>
+            )}
+          </div>
         </div>
+
         <div className="flex flex-1 flex-col overflow-auto p-4">
           <DiaryContent
             entry={selectedEntry}
