@@ -1,10 +1,10 @@
 import { useState, useCallback, useEffect } from 'react'
-import { Plus, PenLine, BookOpen } from 'lucide-react'
+import { Plus, PenLine, BookOpen, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DiaryTimeline } from './DiaryTimeline'
 import { DiaryContent } from './DiaryContent'
 import { isSupabaseConfigured } from '@/lib/supabase'
-import { fetchDiaryEntries, upsertDiaryEntry } from '@/lib/diaryService'
+import { fetchDiaryEntries, upsertDiaryEntry, deleteDiaryEntry } from '@/lib/diaryService'
 import type { DiaryEntry } from '@/types/diary'
 
 function todayStr(): string {
@@ -55,6 +55,15 @@ export function DiaryPage() {
     setEditing(true)
   }
 
+  const handleDelete = async () => {
+    if (!selectedEntry) return
+    if (!confirm(`确定删除 ${selectedEntry.entry_date}${selectedEntry.title ? `「${selectedEntry.title}」` : ''} 的日记吗？`)) return
+    await deleteDiaryEntry(selectedEntry.id)
+    setSelectedDate(todayStr())
+    setEditing(false)
+    await loadEntries()
+  }
+
   if (!isSupabaseConfigured()) {
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground">
@@ -75,10 +84,22 @@ export function DiaryPage() {
             year: 'numeric', month: 'long', day: 'numeric', weekday: 'long',
           })}
         </p>
-        {!editing && (
+        {!editing && selectedEntry && (
           <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setEditing(true)}>
             <PenLine className="mr-1 h-3.5 w-3.5" />
-            {selectedEntry ? '编辑' : '写日记'}
+            编辑
+          </Button>
+        )}
+        {!editing && !selectedEntry && (
+          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setEditing(true)}>
+            <PenLine className="mr-1 h-3.5 w-3.5" />
+            写日记
+          </Button>
+        )}
+        {selectedEntry && (
+          <Button variant="outline" size="sm" className="h-7 text-xs text-destructive hover:text-destructive" onClick={handleDelete}>
+            <Trash2 className="mr-1 h-3.5 w-3.5" />
+            删除
           </Button>
         )}
         <Button size="sm" className="h-7 text-xs" onClick={handleNew}>
