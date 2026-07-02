@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Settings, Cpu, Server, Trash2, Plus, RefreshCw, Check, Wrench, FolderOpen, MessageSquare, Play, ChevronDown, Loader2, X, ArrowLeft, Info, Bot, Globe, Zap, Search, Code, Pencil } from 'lucide-react'
+import { Settings, Cpu, Server, Trash2, Plus, RefreshCw, Check, Wrench, FolderOpen, MessageSquare, Play, ChevronDown, Loader2, X, ArrowLeft, Info, Bot, Zap, Search, Code, Pencil } from 'lucide-react'
 // import { APP_VERSION } from '@/lib/version'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,7 +20,6 @@ import {
   getModelTier, setModelTier,
   getAgentMaxSteps, saveAgentMaxSteps,
   getCompressThreshold, saveCompressThreshold, getTokenLimit, saveTokenLimit,
-  getA2AEnabled, saveA2AEnabled, getA2APort, saveA2APort, getA2AToken, saveA2AToken,
   getJSSandboxEnabled, saveJSSandboxEnabled,
   getPythonSandboxEnabled, savePythonSandboxEnabled,
   getDuckDuckGoEnabled, saveDuckDuckGoEnabled,
@@ -54,7 +53,7 @@ function NumberField({ label, value, setValue, min, max, unit }: {
   )
 }
 
-type Tab = 'general' | 'ai' | 'mcp' | 'capabilities' | 'agent' | 'a2a' | 'about'
+type Tab = 'general' | 'ai' | 'mcp' | 'capabilities' | 'agent' | 'about'
 
 export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; initialTab?: Tab }) {
   const { user } = useAuth()
@@ -90,9 +89,6 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
   const [maxSteps, setMaxSteps] = useState(getAgentMaxSteps)
   const [compressThreshold, setCompressThreshold] = useState(getCompressThreshold)
   const [tokenLimit, setTokenLimit] = useState(getTokenLimit)
-  const [a2aEnabled, setA2AEnabled] = useState(getA2AEnabled)
-  const [a2aPort, setA2APortState] = useState(getA2APort)
-  const [a2aToken, setA2AToken] = useState(getA2AToken)
   const [sandboxJS, setSandboxJS] = useState(getJSSandboxEnabled)
   const [sandboxPython, setSandboxPython] = useState(getPythonSandboxEnabled)
   const [ddgEnabled, setDdgEnabled] = useState(getDuckDuckGoEnabled)
@@ -429,7 +425,6 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
             { id: 'mcp' as const, label: 'MCP 服务器', icon: Server },
             { id: 'capabilities' as const, label: '能力', icon: Zap },
             { id: 'agent' as const, label: 'Agent', icon: Bot },
-            { id: 'a2a' as const, label: 'A2A', icon: Globe },
             { id: 'about' as const, label: '关于', icon: Info },
           ]).map((t) => (
             <button
@@ -453,8 +448,6 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
 
         {/* ===== Agent 设置 ===== */}
         {tab === 'agent' && <AgentTab />}
-
-        {/* ===== A2A 设置 ===== */}
 
         {/* ===== AI 模型设置 ===== */}
         {tab === 'ai' && (

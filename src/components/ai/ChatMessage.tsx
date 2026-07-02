@@ -133,9 +133,22 @@ function ChatMessageInner({ msg }: ChatMessageProps) {
             <div className="px-3 py-2">
               <ThinkingBlock thinking={msg.thinking || ''} loading={msg.thinkingLoading} content={msg.content || ''} duration={msg.thinkingDuration} />
               {msg.streaming && !msg.content && !msg.agentTimeline?.length && !msg.thinking && (
-                <p className="text-sm text-muted-foreground/40 py-2 select-none">
-                  <span className="animate-dots"><span>.</span><span>.</span><span>.</span></span>
-                </p>
+                <div className="py-3 select-none">
+                  <div className="flex gap-[3px]">
+                    {Array.from({ length: 4 }, (_, i) => (
+                      <span
+                        key={i}
+                        className={`inline-block ${i % 2 === 0 ? 'bg-foreground' : 'bg-muted-foreground/50'}`}
+                        style={{
+                          width: '3px', height: '3px',
+                          animation: 'pixel-flicker 2s ease-in-out infinite',
+                          animationDelay: `${i * 0.18}s`,
+                          borderRadius: '0.5px',
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
               )}
               {/* 时间线模式：文字和工具调用按顺序穿插 */}
               {msg.agentTimeline && msg.agentTimeline.length > 0 ? (
@@ -200,9 +213,22 @@ function ChatMessageInner({ msg }: ChatMessageProps) {
               <>
                 <ThinkingBlock thinking={msg.thinking || ''} loading={msg.thinkingLoading} content={msg.content || ''} duration={msg.thinkingDuration} />
                 {msg.streaming && !msg.content && !msg.thinking && (
-                  <p className="text-sm text-muted-foreground/40 py-2 select-none">
-                    <span className="animate-dots"><span>.</span><span>.</span><span>.</span></span>
-                  </p>
+                  <div className="py-3 select-none">
+                    <div className="flex gap-[3px]">
+                      {Array.from({ length: 4 }, (_, i) => (
+                        <span
+                          key={i}
+                          className={`inline-block ${i % 2 === 0 ? 'bg-foreground' : 'bg-muted-foreground/50'}`}
+                          style={{
+                            width: '3px', height: '3px',
+                            animation: 'pixel-flicker 2s ease-in-out infinite',
+                            animationDelay: `${i * 0.18}s`,
+                            borderRadius: '0.5px',
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
                 )}
                 {(!msg.streaming || msg.content) && (
                   <ContentBlock

@@ -36,6 +36,8 @@ import {
   detectToolType,
 } from '@/types/chat'
 import { TokenUsageBar } from './TokenUsageBar'
+import WelcomeHero from './WelcomeHero'
+import Strands from './Strands'
 import { addTrace } from '@/lib/traceStore'
 
 /** 从 tool input 提取简要描述，用于区分同名调用 */
@@ -1037,7 +1039,7 @@ dispatch({ type: 'TOOL_BATCH_CREATE', textBeforeTool: '', tools: toolBatchRef.cu
 
       {/* 输入行 */}
       <div
-        className={`rounded-lg border bg-background transition-all ${dragOver ? 'border-primary ring-1 ring-primary/30 bg-primary/5' : 'border-input focus-within:ring-1 focus-within:ring-ring'}`}
+        className={`rounded-2xl border bg-background shadow-md transition-all ${dragOver ? 'border-primary ring-1 ring-primary/30 bg-primary/5' : 'border-input focus-within:ring-1 focus-within:ring-ring'}`}
         onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
         onDragLeave={(e) => { e.preventDefault(); setDragOver(false) }}
         onDrop={handleDrop}
@@ -1275,16 +1277,41 @@ dispatch({ type: 'TOOL_BATCH_CREATE', textBeforeTool: '', tools: toolBatchRef.cu
       />
 
       {messages.length === 0 ? (
-        /* 空状态：欢迎语 + 输入框居中 */
-        <div className="flex-1 flex flex-col items-center justify-center gap-8 px-3 pb-12">
-          <div className="flex flex-col items-center gap-3 text-muted-foreground">
-            <Bot className="h-16 w-16 opacity-20" />
-            <p className="text-lg font-medium">AI 助手</p>
-            <p className="text-sm">{configuredModels.length === 0 ? '请先在设置中配置模型' : activeModel ? `当前模型: ${activeModel.selectedModel}` : '选择一个模型'}</p>
+        /* 空状态：文字压丝带 → 丝带 → 输入框压丝带 */
+        <div className="flex-1 flex flex-col items-center px-3 pb-12">
+          {/* 顶部留白 */}
+          <div className="h-44" />
+          {/* 问候文字 — 压住丝带上边缘 */}
+          <div className="relative z-10 mb-[-280px]">
+            <WelcomeHero
+              modelName={activeModel?.selectedModel}
+              hasModels={configuredModels.length > 0}
+            />
           </div>
-          <div className="w-full max-w-2xl">
+          {/* 丝带装饰带 */}
+          <div className="h-[600px] w-full shrink-0 relative pointer-events-none">
+            <Strands
+              colors={['#9CA3AF', '#6B7280', '#374151', '#1F2937']}
+              count={3}
+              speed={0.2}
+              amplitude={0.7}
+              waviness={0.8}
+              thickness={0.5}
+              glow={1.8}
+              taper={2}
+              spread={2.5}
+              intensity={0.6}
+              saturation={1.2}
+              opacity={0.9}
+              scale={1.5}
+            />
+          </div>
+          {/* 输入框 — 压住丝带下边缘 */}
+          <div className="relative z-10 w-full max-w-2xl shrink-0 -mt-[310px]">
             {inputArea}
           </div>
+          {/* 底部留白 */}
+          <div className="flex-[3]" />
         </div>
       ) : (
         /* 有消息：消息区 + 底部输入框 */

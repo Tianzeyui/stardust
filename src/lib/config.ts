@@ -204,41 +204,6 @@ export function thinkingBudget(level: ThinkingLevel): number | undefined {
   }
 }
 
-// ========== A2A Server ==========
-
-const A2A_ENABLED_KEY = 'stardust_a2a_enabled'
-const A2A_PORT_KEY = 'stardust_a2a_port'
-
-export function getA2AEnabled(): boolean {
-  return localStorage.getItem(A2A_ENABLED_KEY) !== 'false'  // 默认开启
-}
-
-export function saveA2AEnabled(enabled: boolean): void {
-  localStorage.setItem(A2A_ENABLED_KEY, String(enabled))
-}
-
-export function getA2APort(): number {
-  try {
-    const v = localStorage.getItem(A2A_PORT_KEY)
-    if (v) { const n = parseInt(v); if (n >= 1024 && n <= 65535) return n }
-  } catch {}
-  return 9090
-}
-
-export function saveA2APort(port: number): void {
-  localStorage.setItem(A2A_PORT_KEY, String(port))
-}
-
-const A2A_TOKEN_KEY = 'stardust_a2a_token'
-
-export function getA2AToken(): string {
-  return localStorage.getItem(A2A_TOKEN_KEY) || ''
-}
-
-export function saveA2AToken(token: string): void {
-  localStorage.setItem(A2A_TOKEN_KEY, token)
-}
-
 // ========== 上下文压缩阈值 ==========
 
 const COMPRESS_THRESHOLD_KEY = 'stardust_compress_threshold'

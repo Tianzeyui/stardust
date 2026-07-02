@@ -380,7 +380,7 @@ export async function chat(
     'mcp_list', 'mcp_read', 'mcp_get',                          // MCP 网关
     'ask_user', 'show_progress', 'notify_complete', 'update_task_list', // Agent UI
     'delegate_task', 'delegate_batch', 'delegate_chain',       // Agent 路由
-    'plugin__',                                                 // A2A Agent + 插件
+    'plugin__',                                                 // 插件
     'read_skill', 'search_tools', 'use_tool',                  // 技能 + 按需激活
     'memory_',                                                   // 记忆
   ]

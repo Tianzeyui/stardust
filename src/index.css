@@ -102,6 +102,13 @@
 .animate-dots span:nth-child(2) { animation-delay: 0.2s; }
 .animate-dots span:nth-child(3) { animation-delay: 0.4s; }
 
+/* 像素方格闪烁 */
+@keyframes pixel-flicker {
+  0%, 100% { opacity: 0.25; }
+  30% { opacity: 0.85; }
+  60% { opacity: 0.25; }
+}
+
 @keyframes ask-slide-up {
   from { opacity: 0; transform: translateY(12px); max-height: 0; }
   to { opacity: 1; transform: translateY(0); max-height: 500px; }
